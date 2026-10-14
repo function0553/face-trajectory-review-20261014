@@ -36,6 +36,11 @@ def load_config(path: str | Path) -> dict[str, Any]:
     if any(key not in config for key in required):
         raise ValueError(f"Configuration requires: {', '.join(required)}")
 
+    device = config["device"]
+    valid_cuda_id = isinstance(device, str) and device.startswith("cuda:") and device[5:].isdigit()
+    if device not in ("cpu", "cuda") and not valid_cuda_id:
+        raise ValueError("device must be 'cpu', 'cuda', or 'cuda:<id>'")
+
     low = config["matching"]["low_threshold"]
     high = config["matching"]["high_threshold"]
     if not (-1 <= low < high <= 1):

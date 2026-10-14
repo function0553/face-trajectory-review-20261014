@@ -5,6 +5,7 @@
 #include <limits>
 #include <set>
 #include <stdexcept>
+#include <tuple>
 
 namespace face_trajectory {
 namespace {
@@ -51,6 +52,87 @@ std::pair<std::int64_t,std::int64_t> Bounds(std::int64_t at, std::int64_t error)
     if (error < 0 || at < std::numeric_limits<std::int64_t>::min() + error ||
         at > std::numeric_limits<std::int64_t>::max() - error) throw std::invalid_argument("monitoring time bound overflow");
     return {at-error,at+error};
+}
+
+// HOLD observations are intentionally kept separate from confirmed sightings.
+// Their durable monitoring receipt still contains the candidate list and the
+// original non-biometric capture metadata, which is enough for a command UI to
+// show a review bubble and later call association_correct.  Never expose the
+// embedding or the complete candidate list from this query.
+json HeldCandidates(State* state, const std::string& target, const AssociationStore& associations,
+                    std::optional<std::int64_t> before) {
+    auto result = json::array();
+    state->Scan("monitoring_observation", [&](const auto& id, const auto& text) {
+        const auto record = ObservationRecord(state, text, true);
+        const auto& response = record.at("response");
+        if (response.value("status", "") == "ACCEPTED" ||
+            !response.contains("association") || response.at("association").is_null()) return;
+        const auto& association = response.at("association");
+        if (association.contains("sighting") && !association.at("sighting").is_null()) return;
+        const auto& candidates = association.value("candidates", json::array());
+        bool target_candidate = false;
+        for (const auto& candidate : candidates) {
+            if (candidate.value("target_id", "") == target) {
+                target_candidate = true;
+                break;
+            }
+        }
+        if (!target_candidate) return;
+
+        const auto payload = record.value("payload", json::object());
+        const auto observation = payload.value("observation", json::object());
+        const auto observation_id = observation.value("observation_id", id);
+        // Corrections/reconsiderations update the authoritative association
+        // row; do not leave a stale review bubble after it becomes confirmed.
+        if (const auto current = associations.Result(observation_id);
+            current && (current->sighting || current->target_id)) return;
+        const auto normalization = response.value("normalization", json::object());
+        if (before && normalization.contains("captured_at_unix_ms") &&
+            normalization.at("captured_at_unix_ms").is_number_integer() &&
+            normalization.at("captured_at_unix_ms").template get<std::int64_t>() >= *before) return;
+        const auto policy = payload.value("policy", json::object());
+        bool quality_passed = false;
+        if (observation.contains("detection_score") && observation.contains("face_size_px") &&
+            policy.contains("min_detection_score") && policy.contains("min_face_size_px")) {
+            quality_passed = observation.at("detection_score").is_number() &&
+                observation.at("face_size_px").is_number() &&
+                observation.at("detection_score").template get<double>() >= policy.at("min_detection_score").template get<double>() &&
+                observation.at("face_size_px").template get<double>() >= policy.at("min_face_size_px").template get<double>();
+        } else {
+            quality_passed = association.value("decision", "") != "UNASSIGNED";
+        }
+        json top1 = nullptr;
+        if (!candidates.empty() && candidates.front().contains("similarity"))
+            top1 = candidates.front().at("similarity");
+        auto reasons = response.value("reason_codes", json::array());
+        std::string hold_reason;
+        if (reasons.is_array() && !reasons.empty() && reasons.front().is_string())
+            hold_reason = reasons.front().template get<std::string>();
+        if (hold_reason.empty()) hold_reason = association.value("reason", "HOLD");
+        const auto captured = normalization.contains("captured_at_unix_ms")
+            ? normalization.at("captured_at_unix_ms") : json(nullptr);
+        result.push_back({
+            {"observation_id", observation_id},
+            {"source_id", observation.value("source_id", "")},
+            {"camera_id", observation.value("camera_id", "")},
+            {"captured_at_unix_ms", captured},
+            {"hold_reason", hold_reason},
+            {"status_reason", association.value("reason", hold_reason)},
+            {"top1_similarity", top1},
+            {"quality_passed", quality_passed},
+            {"status", "HOLD"},
+            {"included_in_confirmed_trajectory", false}
+        });
+    });
+    std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
+        const auto at = a.at("captured_at_unix_ms").is_number_integer()
+            ? a.at("captured_at_unix_ms").template get<std::int64_t>() : std::numeric_limits<std::int64_t>::max();
+        const auto bt = b.at("captured_at_unix_ms").is_number_integer()
+            ? b.at("captured_at_unix_ms").template get<std::int64_t>() : std::numeric_limits<std::int64_t>::max();
+        return std::tie(at, a.at("observation_id").template get_ref<const std::string&>()) <
+            std::tie(bt, b.at("observation_id").template get_ref<const std::string&>());
+    });
+    return result;
 }
 }
 
@@ -342,6 +424,7 @@ json MonitoringStore::Get(const std::string& target, const AssociationStore& ass
         {"status",status},{"continue_monitoring",status=="ACTIVE" || status=="AMBIGUOUS"},
         {"possible_statuses",status=="AMBIGUOUS"?json::array({"ACTIVE","CLOSED"}):json::array({status})},
         {"sessions",sessions},{"event_groups",groups},{"ignored_unqualified_gate_events",ignored},
+        {"held_candidates",HeldCandidates(state_,target,associations,before)},
         {"session_scope","CONSERVATIVE_REPLAY_OF_QUALIFIED_OBSERVATIONS_AND_EXPLICIT_GATE_BINDINGS"}};
 }
 void MonitoringStore::CheckpointRuntime(std::int64_t cutoff,const AssociationStore& associations) {

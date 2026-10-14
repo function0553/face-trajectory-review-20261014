@@ -841,7 +841,11 @@ def main():
             return
         model_config = load_config(config['model_config'])
         extractor = TrajectoryExtractor.from_config(model_config)
-        if model_config['device'] == 'cuda' and any(getattr(model, 'backend', None) != 'CUDA' for model in (extractor.detector, extractor.recognizer)):
+        # Treat explicit cuda:<id> exactly like cuda for the fail-fast
+        # production guard; otherwise a failed CUDA initialization could be
+        # accepted silently when a worker is pinned to the second GPU.
+        if str(model_config['device']).startswith('cuda') and any(
+                getattr(model, 'backend', None) != 'CUDA' for model in (extractor.detector, extractor.recognizer)):
             raise RuntimeError('requested CUDA models did not initialize on CUDA; use device: cpu explicitly after measuring the intended load')
         if args.enroll:
             print(encoded(dict(queued=enroll_manifest(args.enroll, extractor, store))))

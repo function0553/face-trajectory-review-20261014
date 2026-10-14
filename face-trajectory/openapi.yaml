@@ -1927,6 +1927,11 @@ components:
           type: object
           additionalProperties: true
           description: Optional scene, graph, frame and topology qualifications for point_connections.
+        held_candidates:
+          type: array
+          description: Optional review-only face candidates. These records remain HOLD and are never part of confirmed points or connections.
+          items:
+            $ref: '#/components/schemas/HeldMonitoringCandidate'
         target_id:
           type: string
         category:
@@ -2000,6 +2005,45 @@ components:
           - POST /v1/monitoring/get
         session_scope:
           type: string
+    HeldMonitoringCandidate:
+      type: object
+      required:
+      - observation_id
+      - source_id
+      - camera_id
+      - captured_at_unix_ms
+      - hold_reason
+      - status_reason
+      - top1_similarity
+      - quality_passed
+      - status
+      - included_in_confirmed_trajectory
+      properties:
+        observation_id:
+          type: string
+        source_id:
+          type: string
+        camera_id:
+          type: string
+        captured_at_unix_ms:
+          type: integer
+          format: int64
+          nullable: true
+        hold_reason:
+          type: string
+        status_reason:
+          type: string
+        top1_similarity:
+          type: number
+          nullable: true
+        quality_passed:
+          type: boolean
+        status:
+          type: string
+          enum: [HOLD]
+        included_in_confirmed_trajectory:
+          type: boolean
+          enum: [false]
     MonitoringObserveReply:
       anyOf:
       - $ref: '#/components/schemas/QualifiedMonitoringObserveReply'
@@ -2451,6 +2495,17 @@ components:
                   description: Scene-local XYZ topology reference bends, never observed continuous person positions.
                   items:
                     $ref: '#/components/schemas/RouteWaypoint'
+                model_path_local_xyz:
+                  type: array
+                  minItems: 2
+                  maxItems: 4096
+                  description: NavMesh straight-path points in scene-local [x,y,z] coordinates; diagnostic geometry only, never a measured person route.
+                  items:
+                    type: array
+                    minItems: 3
+                    maxItems: 3
+                    items:
+                      type: number
                 route_coordinate_frame:
                   type: string
                   description: Must equal the graph coordinate_frame when supplied.
@@ -2460,6 +2515,12 @@ components:
                 travel_time_bound_verified:
                   type: boolean
                   default: false
+                geometry_role:
+                  type: string
+                  enum: [GENERAL_CONNECTIVITY_DIAGNOSTIC_NOT_PERSON_ROUTE]
+                real_pedestrian_route_verified:
+                  type: boolean
+                  enum: [false]
                 from_annotation_id:
                   type: string
                   minLength: 1

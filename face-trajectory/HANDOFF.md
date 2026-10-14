@@ -1,10 +1,12 @@
 # P2 摄像头点位时空算法交接
 
-**2026-10-14修复后当前状态：** D-01～D-07与可选拓扑参考折线已完成本地验证，见[统一修复交接](docs/repair-topology-2026-10-14.md)及P2本轮validation-summary.json。旧ZIP/旧SHA代表修复前快照；真实业务、生产、现场准确率和容量未验收。
+**GitHub同步已核对：** [d0c4813](https://github.com/function0553/face-trajectory-review-20261014/commit/d0c48139b6ed5707f04326eb5df215813859d32e)，远端main与本地HEAD一致，231个文件的清单与远端内容核验通过。
 
-**当前审核包（2026-10-14）：** `D:\人脸算法\时空算法-审核包-20261014.zip`，说明见[第33节](#review-package-20261014)。
+**当前本地修复（2026-10-14）：** D-01～D-07与3D拓扑参考折线已实现并完成本地回归，见[修复与拓扑交接](docs/repair-topology-2026-10-14.md)。新worker为`cpp/build-repair20/Release/face_trajectory_worker.exe`（另有17构建），配套daemon位于`evidence/2026-10-14-repair-topology/face-trajectoryd.exe`；既有服务未切换。GitHub同步到现有审核仓库；下方旧ZIP与旧源码摘要仅代表当时快照。
 
-**当前本地交付（2026-10-13）：** 普通摄像头点到点连接接口与只读本地查看已完成，见[第32节](#point-connections-20261013)。当前新worker在`cpp/build-point-connections/Release`；既有服务未自动切换。鹰眼单镜连续轨迹后置。
+**修复前审核包（2026-10-14）：** `D:\人脸算法\时空算法-审核包-20261014.zip`，说明见[第33节](#review-package-20261014)。
+
+**前次本地交付（2026-10-13）：** 普通摄像头点到点连接接口与只读本地查看已完成，见[第32节](#point-connections-20261013)。当前新worker在`cpp/build-point-connections/Release`；既有服务未自动切换。鹰眼单镜连续轨迹后置。
 
 **2026-10-13调研：** GTR、ByteTrack及YOLO/SCRFD/ArcFace组合的论文/源码核查、适配判断和下一步实验见[第31节](#gtr-bytetrack-20261013)。本次只更新文档，候选算法尚未接入；下方2026-10-12实施状态和证据保留原日期。
 
@@ -606,3 +608,27 @@ $identityRun = 'face-trajectory/evidence/2026-10-12-no-downgrade-reuse/recheck-'
 坑与处理：旧打包器会排除HANDOFF和全部evidence/tests，只识别build而漏掉build-activity等目录；改为保留当前审核入口及现有复跑材料，排除所有构建目录，显式加入此次三个exe。运行SQLite/WAL/SHM/锁全部排除，不把当前人员状态带进审核包；历史大模型/CAD、原始服务器快照、环境/缓存和旧二进制也排除。历史报告与SHA代表当时快照，保持原文件而不伪装本次重测；独立新清单确定本包版本。
 
 交接：审核者按根README审核活动隔离、身份/时间准入、纠错/版本、点位方向与坐标不确定性、168小时清理/恢复、推送事务和模型版本来源。现有测试驱动及可选复跑脚本随包交付，由审核者按需执行；不要给脚本提供已有运行库。真实后端/相机全链、现场标签、生产部署/清理、目标Linux与600路/3090容量仍未验收，鹰眼单镜连续轨迹后置。本次没有远程访问或部署，没有修改算法业务源码。
+
+## 34. 2026-10-14 Gemini审核材料及公开GitHub上传
+
+用户说明Gemini把ZIP当二进制读取，随后明确授权新建公开仓库并要求时空算法完整上传。已发布：[function0553/face-trajectory-review-20261014](https://github.com/function0553/face-trajectory-review-20261014)，默认main，远端与本地提交均为`cfbacd7458795b4b7776aefa13f3fd7dfca053cb`，GitHub实际private=false。
+
+内容：完整当前P2 C++/Go源代码、全部自有头文件、内置SQLite/JSON供应源码与许可、构建文件、全部当前docs/OpenAPI/collection/tools及现有测试和本交接第33节为止的原文；另附P1自有Python源码、配置示例和运行合同用于端到端审核。根目录README、GEMINI_REVIEW_PROMPT.md与HANDOFF.md说明算法开发交付方立场、完整入口、当前边界和审核输出要求。124个P2文件包含当前项目及选定合成证据，仓库合计180个文件；179个清单载荷逐项用Git实际blob核对SHA256/大小，清单本身为第180个。原始历史服务器数据/人员图像/运行库/模型/程序/环境排除；不是完整运行部署包。
+
+怎么做和踩坑：未发现适用GitHub MCP，使用已登录function0553的gh与Git。新建独立导出目录，按明确范围逐文件原字节复制、检查明显私钥/凭证URL，再提交/创建/推送。Gemini原PowerShell命令漏.cpp/.hpp，修正为保留完整C++核心；audit_bundle.txt逐文件记录路径/SHA和原行号，仅在合并文本中跳过第三方vendor，仓库仍完整保留vendor。Git Windows默认换行转换会破坏原文件SHA，添加`.gitattributes * -text`与core.autocrlf=false后重新索引，验证Git blob字节而不只验证工作区副本。远端main实际SHA与本地匹配，未新增算法测试或改动业务源码。
+
+接手：将仓库链接与GEMINI_REVIEW_PROMPT.md交给Gemini，先确认实际正文已读取，再要求严重性/文件行号/触发条件/证据/复现/最小修复。无法直接读取GitHub时使用仓库audit_bundle.txt，或本机`D:\人脸算法\outputs\时空算法-Gemini-纯文本审核-20261014.txt`（UTF-8，约2MB）。完整导出目录为`D:\人脸算法\outputs\时空算法-GitHub审核-20261014`；校验记录为`D:\人脸算法\workspace-docs\时空算法-GitHub审核-20261014-校验.json`，生成器为同目录prepare_github_trajectory_review_20261014.py。公开副本封存后本机追加本节，不回写已封存源码快照。本次发布不代表Gemini已审完、实际算法无缺陷、现场准确率/容量或生产验收完成。
+
+## 2026-10-14：双卡服务器配套的 SQLite、3D 折点与 HOLD 查询交接
+
+**如何做的：** `cpp/src/state.cpp` 将 WAL 默认页缓存从 8 MiB 提升到 256 MiB，`FACE_TRAJECTORY_SQLITE_CACHE_KB` 可调并封顶 1 GiB；新增 `temp_store=MEMORY`、`mmap_size=268435456`，保留 `secure_delete=ON`。WAL 常规同步默认为 `NORMAL`，`FACE_TRAJECTORY_SQLITE_SYNCHRONOUS=FULL` 可切回强同步。非法、负值和超限缓存输入回退或封顶，不把环境变量直接拼成未校验 SQL。
+
+`collection/check_model_coverage.mjs` 在 Recast/Detour 完整 `findStraightPath` 成功时保存 `points.map(localPoint)` 到 `model_path_local_xyz`；`collection/build_point_graph.py` 对非空字段校验 2～4096 个有限三维点后原样透传，仍保留 `geometry_role=GENERAL_CONNECTIVITY_DIAGNOSTIC_NOT_PERSON_ROUTE`、`real_pedestrian_route_verified=false` 等诚实声明。根目录 `openapi.yaml` 补充了该诊断字段的数组坐标契约。
+
+`cpp/src/monitoring.cpp` 的 `MonitoringStore::Get` 新增 `held_candidates`：扫描 durable monitoring receipt，只选候选列表中包含指定 target 且没有 confirmed sighting 的记录，返回 observation/source/camera/time、hold/status reason、top1 similarity、quality_passed、`status=HOLD` 和 `included_in_confirmed_trajectory=false`。查询前通过 `AssociationStore::Result` 重新读取权威结果，人工 correction/reconsideration 后不会遗留旧气泡；不输出 embedding、原始图片或完整候选列表。`openapi.yaml` 新增 `HeldMonitoringCandidate`。
+
+**验证：** WSL g++ 对全部 C++ 源（含 worker）执行 C++17 `-fsyntax-only` 通过，并单独编译了 `monitoring.cpp` 和 worker；Node `--check check_model_coverage.mjs`、Python `py_compile build_point_graph.py`、OpenAPI YAML 解析均通过。NavMesh 合成折点透传、旧 coverage 878 edges 和 checks 一致性由构图验证通过。SQLite 运行时探针验证默认 cache/synchronous/temp/mmap/secure_delete、FULL、超限和非法/负值回退；本机没有 CMake/CTest，因此未宣称 CTest 通过。
+
+**踩坑与经验：** 泛型 lambda 内调用 nlohmann JSON 的 `get<T>()`/`get_ref<T>()` 需要显式 `template` 关键字，否则 Linux g++ 会在监控文件编译时报语法错误；旧 coverage 没有折点时不写 `model_path_local_xyz: null`，避免改变旧边形状。实际 NavMesh 几何仍是一般连通性诊断，不能当作人员实测路线或现场防穿墙验收。
+
+**交接边界：** 本地 C++/Python/Node/API 契约已更新；未在生产 P2 或 64G/128G 主机应用环境变量，未做磁盘/崩溃/并发吞吐实测，未调用真实 `/v1/associations/correct`，也未接入 3D 前端。部署时先用隔离 SQLite 和 dry-run 验证缓存/同步读回，再做有界多 source_id 写入；`held_candidates` 只能作为指挥员核验辅助层，绝不合并进 confirmed points/connections。

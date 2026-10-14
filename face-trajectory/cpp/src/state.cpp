@@ -2,6 +2,9 @@
 #include "face_trajectory/path_utf8.hpp"
 #include <sqlite/sqlite3.h>
 #include <nlohmann/json.hpp>
+#include <cerrno>
+#include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <algorithm>
 #include <stdexcept>
@@ -15,6 +18,40 @@
 #endif
 namespace face_trajectory {
 namespace {
+constexpr std::uint64_t kDefaultSqliteCacheKb = 262144; // 256 MiB
+constexpr std::uint64_t kMaxSqliteCacheKb = 1048576;    // 1 GiB
+
+std::uint64_t SqliteCacheSizeKb() {
+    // SQLite interprets a negative cache_size as kibibytes. Keep the
+    // environment value positive and bounded before interpolating it into SQL.
+    const char* raw = std::getenv("FACE_TRAJECTORY_SQLITE_CACHE_KB");
+    if (raw == nullptr || *raw == '\0') return kDefaultSqliteCacheKb;
+    const char* first = raw;
+    while (*first != '\0' && std::isspace(static_cast<unsigned char>(*first))) ++first;
+    if (*first == '-') return kDefaultSqliteCacheKb;
+
+    errno = 0;
+    char* end = nullptr;
+    const auto parsed = std::strtoull(raw, &end, 10);
+    if (errno != 0 || end == raw) return kDefaultSqliteCacheKb;
+    while (*end != '\0' && std::isspace(static_cast<unsigned char>(*end))) ++end;
+    if (*end != '\0' || parsed == 0) return kDefaultSqliteCacheKb;
+    return std::min<std::uint64_t>(parsed, kMaxSqliteCacheKb);
+}
+
+const char* SqliteSynchronousMode() {
+    // NORMAL is the throughput-oriented WAL default; FULL remains available
+    // for deployments that need the stronger per-transaction sync guarantee.
+    const char* raw = std::getenv("FACE_TRAJECTORY_SQLITE_SYNCHRONOUS");
+    if (raw == nullptr) return "NORMAL";
+    std::string mode(raw);
+    std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char c) {
+        return static_cast<char>(std::toupper(c));
+    });
+    if (mode == "FULL") return "FULL";
+    return "NORMAL";
+}
+
 struct Statement {
     sqlite3* db;
     sqlite3_stmt* value = nullptr;
@@ -57,7 +94,11 @@ State::State(const std::string& path,std::uint64_t max_bytes) {
         if (sqlite3_open_v2(path_.c_str(),&db_,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,nullptr)!=SQLITE_OK)
             throw std::runtime_error("cannot open SQLite state");
         sqlite3_busy_timeout(db_,5000);
-        Sql("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA cache_size=-8192; PRAGMA secure_delete=ON;");
+        const auto cache_size_kb = SqliteCacheSizeKb();
+        const auto pragmas = std::string("PRAGMA journal_mode=WAL; PRAGMA synchronous=") +
+            SqliteSynchronousMode() + "; PRAGMA cache_size=-" + std::to_string(cache_size_kb) +
+            "; PRAGMA temp_store=MEMORY; PRAGMA mmap_size=268435456; PRAGMA secure_delete=ON;";
+        Sql(pragmas.c_str());
         {Statement version(db_,"PRAGMA user_version");version.Step();
         if (sqlite3_column_int(version.value,0)>1) throw std::runtime_error("unsupported newer state schema");}
         std::uint64_t page_size;

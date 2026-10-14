@@ -10,7 +10,44 @@
     绝不让使用者误以为自己跑在 GPU 上。
 """
 
+import os
 from pathlib import Path
+
+
+def _resolve_device(device: str) -> tuple[str, int | None]:
+    """Normalize a requested device and resolve an optional CUDA device id.
+
+    ``cuda`` keeps ONNX Runtime's default device selection unless
+    ``FACE_ENGINE_CUDA_DEVICE_ID`` is set.  An explicit ``cuda:<id>`` always
+    wins over the environment variable.
+    """
+    if not isinstance(device, str):
+        raise ValueError("device must be 'cuda', 'cuda:<id>', or 'cpu'")
+
+    if device == "cpu":
+        return device, None
+
+    if device == "cuda":
+        env_device_id = os.getenv("FACE_ENGINE_CUDA_DEVICE_ID")
+        if env_device_id is None or not env_device_id.strip():
+            return device, None
+        return device, _parse_device_id(env_device_id, "FACE_ENGINE_CUDA_DEVICE_ID")
+
+    if device.startswith("cuda:"):
+        return "cuda", _parse_device_id(device[5:], "device")
+
+    raise ValueError("device must be 'cuda', 'cuda:<id>', or 'cpu'")
+
+
+def _parse_device_id(raw_device_id: str, source: str) -> int:
+    """Parse a non-negative CUDA device id from a config or environment value."""
+    try:
+        device_id = int(raw_device_id.strip(), 10)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{source} CUDA device id must be a non-negative integer") from exc
+    if device_id < 0:
+        raise ValueError(f"{source} CUDA device id must be a non-negative integer")
+    return device_id
 
 
 def create_session(model_path: str | Path, device: str = "cuda", cpu_threads: int | None = None):
@@ -18,8 +55,9 @@ def create_session(model_path: str | Path, device: str = "cuda", cpu_threads: in
 
     参数：
         model_path: ONNX 模型文件路径，不存在直接抛 FileNotFoundError。
-        device: "cuda" 表示优先尝试 GPU；"cpu" 表示直接用 CPU。
-        cpu_threads: 限制 CPU 推理时的线程数；None 表示交给 ONNX Runtime 自行决定。
+        device: ``"cuda"``、``"cuda:<id>`` 或 ``"cpu"``。
+            ``FACE_ENGINE_CUDA_DEVICE_ID`` 为 ``"cuda"`` 提供设备编号兜底。
+        cpu_threads: 限制 ORT CPU 线程数；未提供时默认使用 2 个 intra-op 线程。
     返回：
         (session, backend)：session 是推理会话，backend 是 "CUDA" 或 "CPU" 字符串。
     """
@@ -31,8 +69,7 @@ def create_session(model_path: str | Path, device: str = "cuda", cpu_threads: in
     except ImportError as exc:
         raise RuntimeError("Install onnxruntime-gpu or onnxruntime") from exc
     available = ort.get_available_providers()
-    if device not in ("cuda", "cpu"):
-        raise ValueError("device must be 'cuda' or 'cpu'")
+    device, device_id = _resolve_device(device)
     if cpu_threads is not None and cpu_threads <= 0:
         raise ValueError("cpu_threads must be positive")
 
@@ -44,15 +81,21 @@ def create_session(model_path: str | Path, device: str = "cuda", cpu_threads: in
         if hasattr(ort, "preload_dlls"):
             ort.preload_dlls()
         # 同时给出 CPU 作为兜底 provider，GPU 初始化失败时 ONNX Runtime 会自己接上。
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        if device_id is not None:
+            providers = [
+                ("CUDAExecutionProvider", {"device_id": str(device_id)}),
+                "CPUExecutionProvider",
+            ]
+        else:
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     else:
         if device == "cuda":
             print("CUDA provider unavailable; falling back to ONNX Runtime CPU")
         providers = ["CPUExecutionProvider"]
 
     options = ort.SessionOptions()
-    if cpu_threads is not None:
-        options.intra_op_num_threads = cpu_threads
+    options.intra_op_num_threads = cpu_threads if cpu_threads is not None else 2
+    options.inter_op_num_threads = 1
     session = ort.InferenceSession(str(path), sess_options=options, providers=providers)
 
     # 以实际生效的第一个 provider 为准，而不是以"请求了什么"为准。
@@ -61,5 +104,9 @@ def create_session(model_path: str | Path, device: str = "cuda", cpu_threads: in
     # 请求了 CUDA、provider 也在列表里，但最终没用上 → 说明初始化失败，明确告知。
     if device == "cuda" and backend != "CUDA" and "CUDAExecutionProvider" in available:
         print("CUDA provider initialization failed; falling back to ONNX Runtime CPU")
-    print(f"ONNX Runtime Backend: {backend}")
+    if backend == "CUDA":
+        resolved_device_id = "default" if device_id is None else str(device_id)
+        print(f"ONNX Runtime Backend: CUDA (device_id={resolved_device_id})")
+    else:
+        print("ONNX Runtime Backend: CPU")
     return session, backend
