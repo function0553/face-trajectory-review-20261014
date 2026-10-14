@@ -1,0 +1,116 @@
+{
+  "passed": true,
+  "version": "0.13.0",
+  "paths": 38,
+  "resolved_references": 569,
+  "strict_duplicate_keys": true,
+  "full_openapi_spec_validation": true,
+  "actual_go_operations_matched": 38,
+  "authorization_actions_and_scopes_match_source": true,
+  "workflow_request_examples": 9,
+  "unsigned_claim_proof_examples": 2,
+  "p1_config_schema_examples": [
+    "D:\\人脸算法\\face-recognition-engine\\examples\\monitoring.example.json",
+    "D:\\人脸算法\\face-recognition-engine\\examples\\monitoring-cameras.example.json",
+    "D:\\人脸算法\\face-recognition-engine\\examples\\monitoring-persons.example.json"
+  ],
+  "p1_actual_runtime_config_checks": [
+    {
+      "command": [
+        "D:\\人脸算法\\face-recognition-engine\\.venv\\Scripts\\python.exe",
+        "-m",
+        "face_engine.monitoring_service",
+        "--config",
+        "D:\\人脸算法\\face-recognition-engine\\examples\\monitoring.example.json",
+        "--validate"
+      ],
+      "result": {
+        "ok": true,
+        "status": "CONFIG_VALIDATED_ONLY"
+      }
+    },
+    {
+      "command": [
+        "D:\\人脸算法\\face-recognition-engine\\.venv\\Scripts\\python.exe",
+        "-m",
+        "face_engine.monitoring_service",
+        "--config",
+        "D:\\人脸算法\\face-recognition-engine\\examples\\monitoring.example.json",
+        "--capacity-report"
+      ],
+      "result": {
+        "acceptable_result_latency_seconds": 3,
+        "assessment": {
+          "missing": [
+            "source_evidence_id",
+            "peak_native_capture_images_per_second",
+            "qualified_faces_per_image",
+            "sustained_images_per_second",
+            "sustained_p2_events_per_second",
+            "result_p95_seconds"
+          ],
+          "status": "UNMEASURED"
+        },
+        "configured_cameras": 1,
+        "configured_decoder_output_frames_per_second": 10,
+        "configured_live_sampling_images_per_second_if_all_in_class": {
+          "NORMAL": 2,
+          "PRIORITY": 6,
+          "UNREGISTERED": 1
+        },
+        "continuous_streams": 1,
+        "dual_input_cameras": 0,
+        "illustrative_ppm_pipe_bytes_per_second": {
+          "1280x720": 27648000,
+          "640x360": 6912000
+        },
+        "illustrative_sizes_are_not_measured": true,
+        "inactive_cameras": 0,
+        "live_queue_slots": 128,
+        "native_capture_cameras": 0,
+        "notes": [
+          "Camera count does not determine face-event rate; native captures and live streams must be counted separately.",
+          "The live FFmpeg path decodes before applying its output FPS filter.",
+          "Class quotas and fresh queued frames do not guarantee every camera is inspected within the result latency target.",
+          "Measurements must include the intended gallery size, face density, graph, CPU/GPU, decoding and durable P2 writes.",
+          "Maximum live queue age already consumes the target latency budget before inference and P2 processing."
+        ],
+        "placeholder_cameras": 1,
+        "scope": "configuration arithmetic only; not a 3090 or 600-camera benchmark",
+        "site_camera_target": 600,
+        "target_result_latency_seconds": 2,
+        "unconfigured_cameras": 599,
+        "whole_site_sampling_images_per_second_if_all_continuously_streamed": {
+          "NORMAL": 1200,
+          "PRIORITY": 3600,
+          "UNREGISTERED": 600
+        }
+      }
+    }
+  ],
+  "recorded_http_schema_checks": [
+    {
+      "calls": "D:\\人脸算法\\face-trajectory\\evidence\\2026-10-13-point-connections\\http-final\\calls.json",
+      "successful_request_response_pairs": 51,
+      "all_response_schemas": 54,
+      "error_response_schemas": 3
+    },
+    {
+      "calls": "D:\\人脸算法\\face-trajectory\\evidence\\2026-10-13-point-connections\\service-final\\calls.json",
+      "successful_request_response_pairs": 52,
+      "all_response_schemas": 62,
+      "error_response_schemas": 10
+    }
+  ],
+  "openapi_sha256": "6d1cabc00df22104128d155f1f08ab8a90b7024b10bcdcbef8c59cf3004582f6",
+  "validator_python": "C:\\Users\\function\\AppData\\Local\\Temp\\face-activity-openapi-venv-20261010\\Scripts\\python.exe",
+  "validator_package_versions": {
+    "PyYAML": "6.0.3",
+    "openapi-spec-validator": "0.7.2",
+    "openapi-schema-validator": "0.6.3",
+    "jsonschema": "4.26.0"
+  },
+  "validator_sha256": "b52b8d4a3434f8d340ffcc70737b84c2dff71151116705904173f39a0a23a4cc",
+  "go_route_source_sha256": "2f6315f0a54c798b6edd1dd586ac2e5b2c35954cca8b3d2965e980a5fbc7042f",
+  "limitations": "Recorded local signed-client contracts; real backend/frontend authentication and production remain unverified."
+}

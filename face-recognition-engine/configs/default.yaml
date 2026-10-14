@@ -1,0 +1,33 @@
+device: cuda
+detector:
+  model_path: models/scrfd.onnx
+  input_size: [640, 640]
+  small_image_input_size: [320, 320]
+  small_image_max_side: 576
+  confidence_threshold: 0.5
+  nms_threshold: 0.4
+recognizer:
+  model_path: models/arcface.onnx
+  batch_size: 32
+face_index:
+  backend: faiss
+  use_gpu: true
+  top_k: 5
+matching:
+  min_top1_top2_margin: 0.05 # development placeholder; same for all personnel classes
+  low_threshold: 0.35  # development placeholder; calibrate on real data
+  high_threshold: 0.50 # development placeholder; calibrate on real data
+quality:
+  min_face_size_px: 64
+  min_inter_eye_distance_px: 20
+  min_detection_score: 0.6
+  min_laplacian_variance: 40
+  max_clipped_fraction: 0.08
+  max_yaw_proxy: 0.6
+  min_pitch_proxy: 0.1
+  max_pitch_proxy: 0.9
+video:
+  detection_interval: 1
+  recognition_interval: 15
+  cache_enabled: false
+  cache_ttl_frames: 30

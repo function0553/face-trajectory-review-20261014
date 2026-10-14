@@ -1,0 +1,1 @@
+observation_id,target_id,camera_id,captured_at_unix_ms,clock_uncertainty_ms,link_status,time_source,source_id,clock_domain,attribution_evidence_id,reentry_evidence_id,original_record_id,original_time_value,original_time_unit,image_file,video_file,frame_pts_ms,notes

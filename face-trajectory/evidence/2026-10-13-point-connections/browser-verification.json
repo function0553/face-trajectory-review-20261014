@@ -1,0 +1,30 @@
+{
+  "verification_date": "2026-10-13",
+  "timezone": "Asia/Singapore",
+  "url": "http://127.0.0.1:8793/",
+  "input_kind": "SYNTHETIC_INTERFACE_EXAMPLE",
+  "input_source": "http-final/synthetic-example.json",
+  "checks": {
+    "initial_empty": true,
+    "explicit_example_load": true,
+    "read_local_json_via_file_chooser": true,
+    "clear_removes_previous_result": true,
+    "projection_selection": true,
+    "narrow_viewport_legible_labels": true
+  },
+  "observations": 8,
+  "connection_records": 5,
+  "rendered_lines": 3,
+  "dashed_lines": 3,
+  "camera_markers": 3,
+  "unresolved_connections_not_drawn": 2,
+  "final_axes": "X/Z",
+  "screenshot": "point-viewer-final.jpg",
+  "limitations": "Synthetic inputs; exported snapshot only, no live site or identity accuracy validation",
+  "final_svg_viewbox": "0 0 313 350",
+  "camera_labels": [
+    "A",
+    "B",
+    "C"
+  ]
+}

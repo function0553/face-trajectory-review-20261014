@@ -1,0 +1,83 @@
+{
+  "purpose": "Unsigned local contract examples; replace authoritative identities and obtain signed backend credentials separately",
+  "request_steps": [
+    {
+      "name": "create_stopped",
+      "method": "POST",
+      "path": "/v1/activities/sync",
+      "body": {"activity_id":"REPLACE_WITH_SECURITY_ACTIVITY_ID","activity_num":"REPLACE_WITH_UNIQUE_ACTIVITY_NUM","venue_id":"REPLACE_WITH_VENUE_ID","config_version":1,"expected_config_version":0,"configuration":{}}
+    },
+    {
+      "name": "bind_explicit_enabled_device_range",
+      "method": "POST",
+      "path": "/v1/activities/bindings",
+      "body": {"activity_id":"REPLACE_WITH_SECURITY_ACTIVITY_ID","config_version":1,"binding_version":1,"expected_binding_version":0,"bindings":[{"source_id":"REPLACE_WITH_CAMERA_SOURCE","device_id":"REPLACE_WITH_CAMERA_ID","kind":"CAMERA","route_rule_id":"REPLACE_WITH_VERSIONED_CAMERA_ROUTE"},{"source_id":"REPLACE_WITH_GATE_SOURCE","device_id":"REPLACE_WITH_GATE_ID","kind":"GATE","route_rule_id":"REPLACE_WITH_VERSIONED_GATE_ROUTE"}]}
+    },
+    {
+      "name": "register_person_category_while_stopped",
+      "method": "POST",
+      "path": "/v1/monitoring/persons",
+      "body": {"activity_id":"REPLACE_WITH_SECURITY_ACTIVITY_ID","activity_num":"REPLACE_WITH_UNIQUE_ACTIVITY_NUM","config_version":1,"binding_version":1,"monitoring_version":0,"source_id":"REPLACE_WITH_ROSTER_SOURCE","event_id":"REPLACE_WITH_STABLE_PERSON_SYNC_EVENT","person_id":"REPLACE_WITH_PERSON_ID","category":"PRIORITY","revision":1,"expected_revision":0,"evidence_id":"REPLACE_WITH_ROSTER_SOURCE_EVIDENCE"}
+    },
+    {
+      "name": "explicitly_start_monitoring",
+      "method": "POST",
+      "path": "/v1/activities/monitoring",
+      "body": {"activity_id":"REPLACE_WITH_SECURITY_ACTIVITY_ID","config_version":1,"binding_version":1,"monitoring_version":1,"expected_monitoring_version":0,"enabled":true}
+    },
+    {
+      "name": "read_monitoring_in_selected_context",
+      "method": "POST",
+      "path": "/v1/monitoring/get",
+      "body": {"activity_id":"REPLACE_WITH_SECURITY_ACTIVITY_ID","config_version":1,"binding_version":1,"monitoring_version":1,"target_id":"REPLACE_WITH_PERSON_ID"}
+    },
+    {
+      "name": "open_user_subscription",
+      "method": "POST",
+      "path": "/v1/subscriptions/open",
+      "body": {"activity_id":"REPLACE_WITH_SECURITY_ACTIVITY_ID","config_version":1,"binding_version":1,"monitoring_version":1}
+    },
+    {
+      "name": "revise_binding_range_using_cas",
+      "method": "POST",
+      "path": "/v1/activities/bindings",
+      "body": {"activity_id":"REPLACE_WITH_SECURITY_ACTIVITY_ID","config_version":1,"binding_version":2,"expected_binding_version":1,"bindings":[{"source_id":"REPLACE_WITH_CAMERA_SOURCE","device_id":"REPLACE_WITH_CAMERA_ID","kind":"CAMERA","route_rule_id":"REPLACE_WITH_REVISED_CAMERA_ROUTE"}]}
+    },
+    {
+      "name": "explicit_stop_independent_of_logout",
+      "method": "POST",
+      "path": "/v1/activities/monitoring",
+      "body": {"activity_id":"REPLACE_WITH_SECURITY_ACTIVITY_ID","config_version":1,"binding_version":2,"monitoring_version":2,"expected_monitoring_version":1,"enabled":false}
+    },
+    {
+      "name": "retention_statistics_only",
+      "method": "POST",
+      "path": "/v1/retention/run",
+      "body": {"dry_run":true}
+    }
+  ],
+  "authorization_claims": {
+    "issuer":"REPLACE_WITH_TRUSTED_BACKEND_ISSUER",
+    "key_id":"REPLACE_WITH_BACKEND_KEY_ID",
+    "subject":"REPLACE_WITH_USER_ID",
+    "session":"REPLACE_WITH_LOGIN_SESSION",
+    "context_id":"REPLACE_WITH_ACTIVITY_SELECTION_CONTEXT",
+    "context_generation":1,
+    "authz_revision":1,
+    "not_before_unix_ms":1791626300000,
+    "expires_unix_ms":1791627300000,
+    "grants":[{"activity_id":"REPLACE_WITH_SECURITY_ACTIVITY_ID","actions":["query","subscribe","config","monitor","ingest","identity"]}],
+    "global_actions":["retention"]
+  },
+  "clock_authority_proof": {
+    "issuer":"REPLACE_WITH_TRUSTED_UTC_AUTHORITY_ISSUER",
+    "key_id":"REPLACE_WITH_UTC_KEY_ID",
+    "challenge":"REPLACE_WITH_CURRENT_HEALTH_CHALLENGE",
+    "now_unix_ms":1791626400000,
+    "uncertainty_ms":10,
+    "valid_for_ms":120000,
+    "source_verified":true,
+    "source":"REPLACE_WITH_ACTUALLY_VERIFIED_UTC_REFERENCE",
+    "evidence_id":"REPLACE_WITH_CURRENT_REFERENCE_VERIFICATION"
+  }
+}

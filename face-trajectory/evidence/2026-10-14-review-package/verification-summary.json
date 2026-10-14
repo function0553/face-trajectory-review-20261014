@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-14",
+  "timezone": "Asia/Singapore",
+  "purpose": "repackage current source for another reviewer",
+  "completed": {
+    "cpp_release_build": true,
+    "go_build": true,
+    "go_vet": true,
+    "go_test_count_1": true
+  },
+  "go_test_packages": {
+    "cmd/face-trajectoryd": "no test files",
+    "internal/api": "passed",
+    "internal/push": "passed",
+    "internal/retention": "passed",
+    "internal/trust": "passed",
+    "internal/worker": "passed"
+  },
+  "go_version": "go version go1.26.5 windows/amd64",
+  "binaries": {
+    "face-trajectoryd.exe": {
+      "bytes": 10089984,
+      "sha256": "c7f7e2b59dceb915579d671bd0665164d133eb12da07539a9c6e8bba8bc53daf"
+    },
+    "face_trajectory_worker.exe": {
+      "bytes": 2520576,
+      "sha256": "967482bd08cbb82a4c0b3ff95afa07d6cc51b559ca43bbbbdcfde9f270362f02"
+    },
+    "point_connections_test.exe": {
+      "bytes": 1666048,
+      "sha256": "2144b960f1a656164a03c7f28b860ba49c32662b9206081b156626579d050d86"
+    }
+  },
+  "not_rerun": [
+    "CTest/C++ point checks",
+    "viewer tests and browser QA",
+    "signed Go/C++ HTTP tests",
+    "OpenAPI validator",
+    "field accuracy",
+    "capacity"
+  ],
+  "reason": "User requested immediate packaging and no additional testing",
+  "historical_evidence_dates_preserved": true,
+  "production_accessed": false,
+  "algorithm_source_changed": false
+}

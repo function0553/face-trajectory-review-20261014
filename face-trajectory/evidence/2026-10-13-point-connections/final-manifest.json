@@ -1,0 +1,155 @@
+{
+  "date": "2026-10-13",
+  "timezone": "Asia/Singapore",
+  "scope": "Ordinary camera direct point connections; EagleEye continuous tracking deferred",
+  "production_accessed": false,
+  "field_accuracy_claim": false,
+  "new_database_schema": false,
+  "checks": {
+    "cpp_point_checks": 23,
+    "viewer_data_checks": 8,
+    "signed_http_point_checks": 20,
+    "activity_core_regression": 40,
+    "service_regression": 31,
+    "go_build_vet_test": true,
+    "openapi_recorded_responses": 116
+  },
+  "files": [
+    {
+      "file": "cpp/src/point_trajectory.cpp",
+      "sha256": "77431bb6ad7a0f0fccb77602c931a172fa6f47eae621e92df0c578a10d7be209"
+    },
+    {
+      "file": "cpp/src/activity.cpp",
+      "sha256": "3c6093967d452691081b0aea5db01adb4b517497c58e918895677fa1858ca25f"
+    },
+    {
+      "file": "cpp/CMakeLists.txt",
+      "sha256": "c3466f7d746e3737c1b8340c6f576458ac7c4800885e91a05b31c1f68780b709"
+    },
+    {
+      "file": "cpp/tests/point_connections_test.cpp",
+      "sha256": "a013b774d2d7f06fd288e38f8b5ee82fb4793ca1ca3518b32a92ee17bcc4e25d"
+    },
+    {
+      "file": "openapi.yaml",
+      "sha256": "6d1cabc00df22104128d155f1f08ab8a90b7024b10bcdcbef8c59cf3004582f6"
+    },
+    {
+      "file": "tools/verify_point_connections.py",
+      "sha256": "d8bd0bd88ef539a2605fcda460219d404a2c295899a28777c7431d67d807206a"
+    },
+    {
+      "file": "tools/point-viewer/index.html",
+      "sha256": "8b320ad0d0179d04c60c933f194007ab807e38e67d8677a58f9e86b94cd04783"
+    },
+    {
+      "file": "tools/point-viewer/style.css",
+      "sha256": "90251acb7a7ea9031a0fd044a04e130c3e06bd95b1d8123c8273e97fbf4c0db6"
+    },
+    {
+      "file": "tools/point-viewer/trace.mjs",
+      "sha256": "76c9bc0f59e92d46fab7e14d8fc944f92d495ef9d7174e1f1912da804a5641e3"
+    },
+    {
+      "file": "tools/point-viewer/trace.test.mjs",
+      "sha256": "dd197d4bd74b6f0b5819204eec6a1e20836a26fd265d666901329b46ab3b74ae"
+    },
+    {
+      "file": "tools/point-viewer/viewer.mjs",
+      "sha256": "cac640403d62f9f8e09db83355594a0e38bb82bdb78696b1f4f72529641025a1"
+    },
+    {
+      "file": "tools/point-viewer/serve_viewer.py",
+      "sha256": "6c9a04f6493040f43fb93ee13ab06b7f3a903bf249c8ac2800f3d693821df2f1"
+    },
+    {
+      "file": "tools/point-viewer/sample.json",
+      "sha256": "de7a0df79bc4376e859bb20ec67ad47018976b3711983ce957a14bb17ccaacdb"
+    },
+    {
+      "file": "cpp/build-point-connections/Release/face_trajectory_worker.exe",
+      "sha256": "2e2b33aad3b8f99fcc0c224e6d63977d114fc9d81c400dea6141a4074705718f"
+    },
+    {
+      "file": "cpp/build-point-connections/Release/face-trajectoryd.exe",
+      "sha256": "c7f7e2b59dceb915579d671bd0665164d133eb12da07539a9c6e8bba8bc53daf"
+    },
+    {
+      "file": "cpp/build-point-connections/Release/point_connections_test.exe",
+      "sha256": "b7b0f7f8631a3ae458a4195cd57fc944e8376e01caa18f26ebb56914f5d79cfe"
+    },
+    {
+      "file": "docs/point-connections.md",
+      "sha256": "1df7175754f086105c81456ae68dbac4dce17ab94bb559190f293c29d46f31b7"
+    },
+    {
+      "file": "docs/point-trajectories.md",
+      "sha256": "73acfa41db9fe94a99d0207c09682f0792fad22cfff2119e61b608c3cf0cb117"
+    },
+    {
+      "file": "docs/gtr-bytetrack-optimization-2026-10-13.md",
+      "sha256": "03a059e5dfa23a30fe449029c39c295a59cbc6e3cf6b6ed207c1b254c12e804d"
+    },
+    {
+      "file": "docs/README.md",
+      "sha256": "2e61b2a5cf4d8f95ca7c3b33712aff00e9de4cc21b419c43250da48cc28c868b"
+    },
+    {
+      "file": "README.md",
+      "sha256": "84cb84d04eee118ca0ab35f3c4f28aa61262a1787f0f2db95515d57ad64c8936"
+    },
+    {
+      "file": "HANDOFF.md",
+      "sha256": "3a2f7707a9b9730e4a9e13c0292f9d3d68d4d1538299b69365e30614600e327c"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/http-final/summary.json",
+      "sha256": "205f2003a189157febb09d67b0a3eaa7328e174fd2662d7d9c80d268bc6309c7"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/http-final/calls.json",
+      "sha256": "80e5de91d4e22ec86577b118bee374c5365bbb307d7e71337a00ffbc9ff43fa3"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/core-final/summary.json",
+      "sha256": "603afaa0580dbc14313e62b42b6fe4e9d0403418041fa8e7e55129d0e974ed22"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/core-final/calls.json",
+      "sha256": "e99d4bb5f451a7da261fee9b989b955b3fd86ebd4df26774c3056401eece5cfc"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/service-final/summary.json",
+      "sha256": "da949d43fae812e6f8e1f11a84aeb490fc8a04fb6e1377fca0a782145cceda27"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/service-final/calls.json",
+      "sha256": "3df03732ea36d10c16d71f08bcde47adaa3ac803982fd4b1bab3f6375a67ff48"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/browser-verification.json",
+      "sha256": "2e2ca91bdf94acfdd7b3f30952edb8d143b6e1e9f06caafafa1fe1e0b5756b6d"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/point-viewer.jpg",
+      "sha256": "ef40a03e9bb844d6e5f97cdbdbd92300ff8713bf7aec76e39419b62c71b3b053"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/openapi-final.json",
+      "sha256": "38cf76450de9d51916655632c95b363fe995eae09234eb1d3f10f457bc957467"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/cpp-checks.log",
+      "sha256": "16a0dcb5f834da069996f264c26db9813dc168c815257bc8f28a426ecd3e7d4c"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/viewer-checks.log",
+      "sha256": "239fff4d4aa92c904b98a0bf73d8ad6a0bb598cf532bc2eff87cbabf5c35dc67"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connections/point-viewer-final.jpg",
+      "sha256": "e588d80846f219ccf4301502d5db44fe17f7374efd2ee81557948fc638371c61"
+    }
+  ]
+}

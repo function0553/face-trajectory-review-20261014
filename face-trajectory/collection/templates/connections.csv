@@ -1,0 +1,1 @@
+edge_id,from_camera,to_camera,passage_name,floor_from,floor_to,direction,measured_distance_m,min_travel_ms,max_travel_ms,cost,open_from_unix_ms,open_until_unix_ms,measurement_evidence_file,map_file,notes

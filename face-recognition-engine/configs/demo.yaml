@@ -1,0 +1,24 @@
+# Local, non-commercial research demo only. Production weights remain in default.yaml.
+device: cuda
+detector:
+  model_path: models/demo/det_10g.onnx
+  input_size: [640, 640]
+  small_image_input_size: [320, 320]
+  small_image_max_side: 576
+  confidence_threshold: 0.5
+  nms_threshold: 0.4
+recognizer:
+  model_path: models/demo/w600k_r50.onnx
+  batch_size: 32
+face_index:
+  backend: numpy
+  use_gpu: false
+  top_k: 1
+matching:
+  low_threshold: 0.35  # demo placeholder, not a validated threshold
+  high_threshold: 0.50 # demo placeholder, not a validated threshold
+video:
+  detection_interval: 1
+  recognition_interval: 1
+  cache_enabled: false
+  cache_ttl_frames: 30

@@ -1,0 +1,24 @@
+✔ uncertain forward and return records retain both nominal directions (0.9157ms)
+✔ selecting record three keeps C-to-B only, without asserting confirmed time order (0.7749ms)
+✔ confirmed and uncertain directions have independent certainty (0.2489ms)
+✔ individually selecting a confirmed direction does not inherit another record uncertainty (0.2081ms)
+✔ actual sample keeps three records but draws two unique camera chords (2.5028ms)
+✔ minimal forward and return pair remains two independently selectable records (0.1856ms)
+✔ distinct camera pairs are not merged merely because coordinates coincide (0.1356ms)
+✔ same camera pair with different actual endpoints retains separate geometry (0.1706ms)
+✔ different sources with equal original IDs remain distinct (1.3612ms)
+✔ unresolved positions cannot carry a manufactured line (0.3134ms)
+✔ endpoint coordinates must match evidence (0.8448ms)
+✔ duplicate event keys and unknown endpoints rejected (0.2411ms)
+✔ error replies and legacy contracts rejected (0.2207ms)
+✔ clock uncertainty and historical freshness preserved (0.1533ms)
+✔ nonfinite coordinates and unsafe clock values rejected (0.2279ms)
+✔ projection keeps ordinary and extreme finite coordinates finite (0.3473ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 182.0528

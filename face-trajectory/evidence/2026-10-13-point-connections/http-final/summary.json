@@ -1,0 +1,89 @@
+{
+  "scope": "Local signed Go/C++/fresh SQLite with independent synthetic points and events; no field accuracy claim",
+  "passed": 20,
+  "checks": [
+    {
+      "name": "query_requires_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "other_activity_query_denied",
+      "passed": true
+    },
+    {
+      "name": "one_confirmed_point_no_line",
+      "passed": true
+    },
+    {
+      "name": "same_camera_repeat_no_self_loop",
+      "passed": true
+    },
+    {
+      "name": "two_point_direct_line",
+      "passed": true
+    },
+    {
+      "name": "cross_source_ids_are_original",
+      "passed": true
+    },
+    {
+      "name": "uncertain_clock_line_retained",
+      "passed": true
+    },
+    {
+      "name": "held_event_stays_out",
+      "passed": true
+    },
+    {
+      "name": "late_event_updates_boundary",
+      "passed": true
+    },
+    {
+      "name": "unresolved_positions_not_drawn",
+      "passed": true
+    },
+    {
+      "name": "no_inferred_route_or_person_coordinates",
+      "passed": true
+    },
+    {
+      "name": "only_confirmed_events_in_trace",
+      "passed": true
+    },
+    {
+      "name": "same_person_two_activities_isolated",
+      "passed": true
+    },
+    {
+      "name": "retry_keeps_version",
+      "passed": true
+    },
+    {
+      "name": "view_query_keeps_identity_trajectory_and_notifications",
+      "passed": true
+    },
+    {
+      "name": "restart_preserves_point_connections",
+      "passed": true
+    },
+    {
+      "name": "correction_invalidates_current_trace",
+      "passed": true
+    },
+    {
+      "name": "historical_trace_marks_changed_attribution",
+      "passed": true
+    },
+    {
+      "name": "rebuild_removes_corrected_source_event",
+      "passed": true
+    },
+    {
+      "name": "other_activity_unchanged_after_correction",
+      "passed": true
+    }
+  ],
+  "failure": null,
+  "worker_sha256": "2e2b33aad3b8f99fcc0c224e6d63977d114fc9d81c400dea6141a4074705718f",
+  "service_sha256": "c7f7e2b59dceb915579d671bd0665164d133eb12da07539a9c6e8bba8bc53daf"
+}

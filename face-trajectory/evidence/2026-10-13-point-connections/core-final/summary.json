@@ -1,0 +1,169 @@
+{
+  "scope": "SYNTHETIC local C++ and isolated SQLite; stage1 only",
+  "checks": [
+    {
+      "name": "explicit_activity_required",
+      "passed": true
+    },
+    {
+      "name": "create_stopped_A",
+      "passed": true
+    },
+    {
+      "name": "creation_not_start_A",
+      "passed": true
+    },
+    {
+      "name": "create_stopped_B",
+      "passed": true
+    },
+    {
+      "name": "creation_not_start_B",
+      "passed": true
+    },
+    {
+      "name": "same_person_cross_activity",
+      "passed": true
+    },
+    {
+      "name": "query_authoritative_mapping_conflict_rejected",
+      "passed": true
+    },
+    {
+      "name": "independent_categories",
+      "passed": true
+    },
+    {
+      "name": "same_event_other_source",
+      "passed": true
+    },
+    {
+      "name": "same_key_retry",
+      "passed": true
+    },
+    {
+      "name": "same_key_changed_conflict",
+      "passed": true
+    },
+    {
+      "name": "time_over60_hold",
+      "passed": true
+    },
+    {
+      "name": "unverified_time_hold",
+      "passed": true
+    },
+    {
+      "name": "unknown_time_hold",
+      "passed": true
+    },
+    {
+      "name": "shared_device_no_fanout",
+      "passed": true
+    },
+    {
+      "name": "unknown_activity_reject",
+      "passed": true
+    },
+    {
+      "name": "A_exit_closes_A",
+      "passed": true
+    },
+    {
+      "name": "A_exit_leaves_B",
+      "passed": true
+    },
+    {
+      "name": "late_exit_not_close_new_session",
+      "passed": true
+    },
+    {
+      "name": "admitted_overlap_preserved",
+      "passed": true
+    },
+    {
+      "name": "stopped_late_intake_hold",
+      "passed": true
+    },
+    {
+      "name": "stop_A_not_B",
+      "passed": true
+    },
+    {
+      "name": "restart_isolated_monitoring",
+      "passed": true
+    },
+    {
+      "name": "restart_stopped_state",
+      "passed": true
+    },
+    {
+      "name": "restart_retry",
+      "passed": true
+    },
+    {
+      "name": "activity_trajectory_only_B",
+      "passed": true
+    },
+    {
+      "name": "planned_end_not_stop",
+      "passed": true
+    },
+    {
+      "name": "stale_config_isolated",
+      "passed": true
+    },
+    {
+      "name": "mapping_immutable",
+      "passed": true
+    },
+    {
+      "name": "physical_activity_namespaces",
+      "passed": true
+    },
+    {
+      "name": "no_legacy_observation_write",
+      "passed": true
+    },
+    {
+      "name": "raw_replay_bypass_denied",
+      "passed": true
+    },
+    {
+      "name": "stopped_activity_no_anonymous",
+      "passed": true
+    },
+    {
+      "name": "unregistered_anonymous_trajectory",
+      "passed": true
+    },
+    {
+      "name": "anonymous_context_retains_business_id",
+      "passed": true
+    },
+    {
+      "name": "old_binding_new_event_quarantined",
+      "passed": true
+    },
+    {
+      "name": "new_binding_ingests_without_code_change",
+      "passed": true
+    },
+    {
+      "name": "event_authoritative_mapping_conflict_hold",
+      "passed": true
+    },
+    {
+      "name": "untrusted_server_reference_denied",
+      "passed": true
+    },
+    {
+      "name": "sha256_tombstone_fingerprint",
+      "passed": true
+    }
+  ],
+  "passed": 40,
+  "failure": null,
+  "state_path": "D:\\人脸算法\\face-trajectory\\evidence\\2026-10-13-point-connections\\core-final\\isolated.sqlite",
+  "worker_sha256": "2e2b33aad3b8f99fcc0c224e6d63977d114fc9d81c400dea6141a4074705718f"
+}

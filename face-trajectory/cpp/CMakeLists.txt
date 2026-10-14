@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.20)
+project(face_trajectory_core LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_library(sqlite_state STATIC vendor/sqlite/sqlite3.c)
+target_compile_definitions(sqlite_state PRIVATE SQLITE_THREADSAFE=1 SQLITE_DEFAULT_MEMSTATUS=0)
+add_library(face_trajectory_core src/gallery.cpp src/visits.cpp src/trajectory.cpp src/association.cpp src/time_constraints.cpp src/state.cpp src/geometry.cpp src/site_context.cpp src/clock_adapter.cpp src/reachability.cpp src/point_trajectory.cpp src/monitoring.cpp src/activity.cpp src/retention.cpp src/p1_retention.cpp)
+# geometry.hpp exposes the fixed JSON type; consumers need its headers too.
+target_include_directories(face_trajectory_core PUBLIC include vendor)
+target_link_libraries(face_trajectory_core PUBLIC sqlite_state)
+find_package(OpenMP QUIET)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(face_trajectory_core PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
+add_executable(face_trajectory_worker src/worker.cpp)
+target_include_directories(face_trajectory_worker PRIVATE vendor)
+target_link_libraries(face_trajectory_worker PRIVATE face_trajectory_core)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(point_connections_test tests/point_connections_test.cpp)
+    target_link_libraries(point_connections_test PRIVATE face_trajectory_core)
+    add_test(NAME point_connections COMMAND point_connections_test)
+endif()

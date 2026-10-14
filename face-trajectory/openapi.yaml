@@ -1,0 +1,5519 @@
+openapi: 3.0.3
+info:
+  title: Face Trajectory Algorithm API
+  version: 0.13.0
+  description: C++17 activity-isolated algorithm core with Go HTTP transport. Every activity-scoped operation requires explicit
+    activity_id and applicable CAS versions plus backend-signed action authorization. Activity creation, user selection and
+    monitoring enablement are independent. Only qualified monitoring intake admits sightings; legacy raw bypass routes are
+    rejected. Verified UTC comes from fresh challenge-bound external authority proofs, never host wall time alone. Configured
+    C++ cleanup prunes the 168-hour rolling window including shared historical snapshots, replay and optional P1 SQLite adapters.
+    Deletion is disabled by default; local verification is distinct from backend integration, production deployment and capacity
+    acceptance.
+x-backend-result-push:
+  urlConfiguration: daemon flag push-url
+  authorizationConfiguration: FACE_TRAJECTORY_PUSH_AUTHORIZATION environment variable
+  payloadSchema: '#/components/schemas/BackendResultEvent'
+  delivery: at-least-once within the original retention deadline; receiver must validate scope, versions and deadline before
+    durable acceptance
+  idempotency: SHA-256 of JSON [activity_id,event_id]
+  ordering: FIFO inside each activity; eligible activity heads round-robin; failed activity has independent backoff and cannot
+    block another activity
+  queueLimits:
+    global: 10000
+    perActivity: 256
+    mutation: Checked only when enqueueing a nonduplicate committed result; quota failure rolls back the whole algorithm transaction
+paths:
+  /v1/monitoring/persons:
+    post:
+      operationId: registerMonitoringPerson
+      description: Durable, versioned person category and optional same-person templates in one transaction. Categories affect
+        scheduling, never recognition thresholds. Templates are added or replaced by ID; omission preserves existing templates.
+        Revision reuse requires identical contents and updates use CAS. Explicit current activity_id/config_version/binding_version/monitoring_version
+        and signed monitor grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/MonitoringPersonRequest'
+      responses:
+        '200':
+          description: Category and all templates committed, or identical historical revision acknowledged.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/MonitoringPersonReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          description: Stale expected revision or conflicting immutable revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReply'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+      x-authorization-action: monitor
+      x-activity-scope: activity
+  /v1/monitoring/observe:
+    post:
+      operationId: observeMonitoringFace
+      description: Clock-qualified immutable face intake within one explicit activity/device route. Full compatible activity
+        gallery comparison, original transaction receipt and automatic affected trajectory rebuild are atomic. Unknown/unverified/>60s
+        camera time, stopped/stale/unbound scope return durable HOLD; over-window input returns minimal EXPIRED. Same activity/source/observation
+        ID plus identical content retries without business effects; changed content (including reconsider context) is 409.
+        Ordinary receipts may later be compacted to remove expired dependent history. Nominal capture more than 60000 ms into
+        the future of trusted UTC is HOLD with the fixed first-quarantine deadline; equality at 60000 ms is allowed. Old offline
+        captures keep their original capture deadline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityEventScope'
+              - $ref: '#/components/schemas/MonitoringObserveRequest'
+      responses:
+        '200':
+          description: Atomic accepted observation or durable HOLD, including original retry receipt.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/MonitoringObserveReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          description: Conflicting observation ID or unapproved change to intake context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReply'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+      x-authorization-action: ingest
+      x-activity-scope: activity
+  /v1/monitoring/gate-event:
+    post:
+      operationId: recordMonitoringGateEvent
+      description: 'Immutable activity-scoped ENTRY/EXIT evidence. Ticket history maps authoritative activity_num to activity_id
+        and never proves face identity. Optional same-passage face binding requires source_id/observation_id/evidence_id within
+        this activity. Missing identity remains UNBOUND/BINDING_PENDING; no guessed identity. Same event key changed binding/time/content
+        is 409. Qualified EXIT affects only this activity and cannot close a later unambiguously newer session; overlapping
+        intervals remain ambiguous. Future capture guard and immutable event retry rules are identical to face intake. A still-window
+        qualified gate retains its confirmed identity/effect when its referenced face expires: the core freezes the current
+        confirmed target and scrubs original face ID/proof details, retaining only irreversible provenance. The gate expires
+        on its own original capture deadline.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityEventScope'
+              - $ref: '#/components/schemas/MonitoringGateRequest'
+      responses:
+        '200':
+          description: Gate saved; HOLD, UNBOUND, BINDING_PENDING or BOUND.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/MonitoringGateReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          description: Conflicting immutable gate event or binding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReply'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+      x-authorization-action: ingest
+      x-activity-scope: activity
+  /v1/monitoring/get:
+    post:
+      operationId: getMonitoringPerson
+      description: Replay current qualified managed face evidence and explicitly bound gates for a target. Missing entry still
+        starts ACTIVE with UNKNOWN entry. Uncertain ordering remains AMBIGUOUS and continue_monitoring=true. Identity corrections
+        move gate effects with the referenced face. Session records are conservative projections and may change after late
+        evidence; they are not independently observed entry/exit truth or a permanent fixed count of physical visits. Explicit
+        current activity_id/config_version/binding_version/monitoring_version and signed query grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - type: object
+                required:
+                - target_id
+                properties:
+                  target_id:
+                    type: string
+                    minLength: 1
+      responses:
+        '200':
+          description: Current class, conservative monitoring status, sessions and complete event groups.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - type: object
+                  required:
+                  - ok
+                  - monitoring
+                  properties:
+                    ok:
+                      type: boolean
+                    monitoring:
+                      $ref: '#/components/schemas/MonitoringProjection'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+      x-authorization-action: query
+      x-activity-scope: activity
+  /v1/push/status:
+    get:
+      operationId: getBackendPushStatus
+      description: Inspect queuing enablement and pending count. receiver_configured reports URL configuration, not receiver
+        availability. Without push-url queued results remain pending. Queries never enqueue backend events. Queue exhaustion
+        rejects new push-producing writes with 503.
+      responses:
+        '200':
+          description: Local durable outbox status; not proof of backend business acceptance.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/BackendPushStatusReply'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: push_status
+      x-activity-scope: global
+  /v1/clocks/profiles:
+    post:
+      operationId: putCameraClockProfile
+      description: Register an immutable camera_id plus profile_version calibration profile. This stores local conversion
+        metadata and never sets a server or camera clock. Production diagnostics without verified capture semantics and calibration
+        remain unverified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClockProfileRequest'
+      responses:
+        '200':
+          description: Profile stored or identical version acknowledged.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/AlgorithmReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: global_config
+      x-activity-scope: global
+  /v1/clocks/normalize:
+    post:
+      operationId: normalizeExistingCaptureTime
+      description: Normalize an existing raw capture timestamp using the exact registered camera profile. Unknown, unverified,
+        expired or ambiguous calibration returns HOLD without UTC_CAPTURE fields. No capture, feature extraction, identity
+        association or server write occurs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClockNormalizeRequest'
+      responses:
+        '200':
+          description: NORMALIZED result or explicit HOLD with provenance.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ClockNormalizeReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: global_config
+      x-activity-scope: global
+  /v1/point-graphs:
+    post:
+      operationId: putCameraPointGraph
+      description: Register an immutable general camera connectivity graph against an already registered scene. Every operational
+        edge endpoint must resolve to one BOUND_MARKER in that scene and coordinate frame; unresolved or conflicting camera
+        locations are rejected as operational edges and remain scene candidates. topology_verified true additionally requires
+        every edge travel_time_bound_verified true. Metadata qualifies this graph only; registration does not verify physical
+        access onsite.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointGraphRequest'
+      responses:
+        '200':
+          description: Graph stored or identical version acknowledged; reply includes graph_version.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/AlgorithmReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: global_config
+      x-activity-scope: global
+  /v1/point-graphs/get:
+    post:
+      operationId: getCameraPointGraph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointGraphGetRequest'
+      responses:
+        '200':
+          description: Exact registered point graph packet including stored qualification metadata.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/PointGraphReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: global_config
+      x-activity-scope: global
+  /v1/point-trajectories/rebuild:
+    post:
+      operationId: rebuildCameraPointTrajectory
+      description: 0.13 rejects this legacy raw admission route with SOURCE_CONFLICT/409. Submit camera sightings through
+        clock-qualified /v1/monitoring/observe; caller-asserted UTC or raw histories cannot bypass admission. Explicit current
+        activity_id/config_version/binding_version/monitoring_version and signed ingest grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/PointTrajectoryRebuildRequest'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      deprecated: true
+      x-authorization-action: ingest
+      x-activity-scope: activity
+  /v1/point-trajectories/get:
+    post:
+      operationId: getCameraPointTrace
+      description: Return qualified observed camera events, published position candidates and clock-order uncertainty. Links
+        mean observation sequence only; camera mounting coordinates are not measured person footpoints. Explicit current activity_id/config_version/binding_version/monitoring_version
+        and signed query grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/GetRequest'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '200':
+          description: Camera point trace for the requested snapshot; version zero or omission selects latest.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/PointTraceReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-authorization-action: query
+      x-activity-scope: activity
+  /v1/point-trajectories/predict:
+    post:
+      operationId: predictReachableCameraPoints
+      description: Return possible cameras and connecting edges after the latest qualified observation candidates, using only
+        accepted evidence in the selected snapshot at or before the nominal as_of cutoff. Waiting at cameras is allowed. Output
+        is a conservative reachable set, without calibrated probabilities or an exact moving position. Graph qualification
+        is loaded from the stored point graph; request fields cannot upgrade topology_verified or topology_is_complete. Use
+        an earlier immutable snapshot to test prior knowledge; ingestion-time history is not available. Explicit current activity_id/config_version/binding_version/monitoring_version
+        and signed query grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/PointPredictionRequest'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '200':
+          description: Reachability candidates, conditional/truncated results or explicit UNKNOWN.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/PointPredictionReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-authorization-action: query
+      x-activity-scope: activity
+  /v1/point-trajectories/compare:
+    post:
+      operationId: comparePointPredictionWithNewObservation
+      description: Compare a new accepted observation with reachability from an earlier immutable snapshot. The observation
+        must be absent from previous_version and accepted in version, with version greater than previous_version. A late observation,
+        changed graph, absent prior evidence or incomplete prediction can leave the result UNRESOLVED. An excluded camera
+        is INCONSISTENT_WITH_PRIOR_MODEL only for a complete search on a stored verified complete graph. The new observation
+        is never discarded by this comparison. The worker derives forecast times from snapshot evidence; only resource and
+        horizon options are caller supplied. Explicit current activity_id/config_version/binding_version/monitoring_version
+        and signed query grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/PointPredictionCompareRequest'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '200':
+          description: Comparison status and prior prediction when available.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/PointPredictionCompareReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-authorization-action: query
+      x-activity-scope: activity
+  /v1/site-scenes:
+    post:
+      operationId: putPublishedSiteScene
+      description: Register an immutable scene of published camera and site annotations. This does not register a navigation
+        graph, identity evidence, or person locations. Local coordinates are metres, with a rigid column-major local-to-ECEF
+        matrix.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteSceneRequest'
+      responses:
+        '200':
+          description: Scene stored or identical version acknowledged.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/AlgorithmReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: global_config
+      x-activity-scope: global
+  /v1/site-scenes/camera-context:
+    post:
+      operationId: queryCameraSiteContext
+      description: Resolve an explicitly namespaced camera reference and return every visible published camera marker and
+        nearby site annotation within a 3D radius. Conflicting markers remain AMBIGUOUS_POSITION; nearby polygons are measured
+        to their boundary, not classified as containing the camera. BOUND_MARKER is a model annotation, not a confirmed person
+        observation or camera FOV.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteCameraContextRequest'
+      responses:
+        '200':
+          description: Camera binding, candidates and semantic site context.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/SiteCameraContextReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: global_config
+      x-activity-scope: global
+  /health:
+    get:
+      operationId: trajectoryHealth
+      responses:
+        '200':
+          description: Worker is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlgorithmReply'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+      security: []
+  /v1/templates:
+    post:
+      operationId: addEnrolledFaceTemplate
+      description: 'Add an externally verified template to the gallery shared with association. template_id must not start
+        with assoc-template: and person_entity_id must not start with auto:. Enrolled person_entity_id is used as the association
+        target ID. Explicit current activity_id/config_version/binding_version/monitoring_version and signed identity grant
+        are required.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/FaceTemplateRequest'
+      responses:
+        '200':
+          description: Template added.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/GalleryReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: identity
+      x-activity-scope: activity
+  /v1/templates/{id}:
+    delete:
+      operationId: removeEnrolledFaceTemplate
+      description: Remove an externally enrolled template. Association-owned templates require attribution correction. Explicit
+        current activity_id/config_version/binding_version/monitoring_version and signed identity grant are required.
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: Template removed.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/GalleryReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: identity
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityVersions'
+  /v1/search:
+    post:
+      operationId: searchPersonCandidates
+      description: Search the existing multi-template gallery using an extracted face embedding. Hits are candidates, not
+        confirmed identities. After selecting a person, Java maps enrolled person_entity_id to target_id before querying a
+        trajectory. Association-generated auto IDs are already trajectory target IDs. Explicit current activity_id/config_version/binding_version/monitoring_version
+        and signed identity grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/PersonSearchRequest'
+      responses:
+        '200':
+          description: Ranked person candidates, matched templates and gallery version.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/PersonSearchReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: identity
+      x-activity-scope: activity
+  /v1/associations/observe:
+    post:
+      operationId: associateFaceObservation
+      description: 0.13 rejects this legacy raw admission route with SOURCE_CONFLICT/409. Submit camera sightings through
+        clock-qualified /v1/monitoring/observe; caller-asserted UTC or raw histories cannot bypass admission. Explicit current
+        activity_id/config_version/binding_version/monitoring_version and signed ingest grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/AssociationObserveRequest'
+      responses:
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      deprecated: true
+      x-authorization-action: ingest
+      x-activity-scope: activity
+  /v1/associations/correct:
+    post:
+      operationId: correctFaceAttribution
+      description: Apply independently verified attribution to one stored observation. This overrides automatic face/camera
+        decisions; it does not repair downstream observations automatically. Capture time and face eligibility still apply.
+        Rebuild both affected targets explicitly; old trajectory versions stay immutable. Explicit current activity_id/config_version/binding_version/monitoring_version
+        and signed identity grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/AssociationCorrectRequest'
+              - type: object
+                required:
+                - source_id
+                properties:
+                  source_id:
+                    type: string
+                    minLength: 1
+                    maxLength: 1024
+      responses:
+        '200':
+          description: Corrected attribution with evidence and affected target IDs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/AssociationReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: identity
+      x-activity-scope: activity
+  /v1/associations/rebuild:
+    post:
+      operationId: rebuildAssociatedTrajectory
+      description: Rebuild one target from the association store's complete current confirmed sighting set. No caller grouping
+        or sightings array is needed. An old target emptied by corrections may be rebuilt to clear its latest trajectory.
+        Explicit current activity_id/config_version/binding_version/monitoring_version and signed identity grant are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/AssociationRebuildRequest'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '200':
+          description: Same snapshot/revision contract as trajectories/rebuild.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/TrajectoryReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-authorization-action: identity
+      x-activity-scope: activity
+  /v1/trajectories/rebuild:
+    post:
+      operationId: rebuildTrajectory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/RebuildRequest'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      deprecated: true
+      description: 0.13 rejects this legacy raw admission route with SOURCE_CONFLICT/409. Submit camera sightings through
+        clock-qualified /v1/monitoring/observe; caller-asserted UTC or raw histories cannot bypass admission. Explicit current
+        activity_id/config_version/binding_version/monitoring_version and signed ingest grant are required.
+      x-authorization-action: ingest
+      x-activity-scope: activity
+  /v1/trajectories/get:
+    post:
+      operationId: getTrajectory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/GetRequest'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '200':
+          description: Requested snapshot; version 0 or omission means latest.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/TrajectoryReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-authorization-action: query
+      x-activity-scope: activity
+      description: ' Explicit current activity_id/config_version/binding_version/monitoring_version and signed query grant
+        are required.'
+  /v1/timeline/query:
+    post:
+      operationId: queryTimeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/TimelineRequest'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '200':
+          description: State, anchors and trajectory segments around one UTC time.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/TimelineReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-authorization-action: query
+      x-activity-scope: activity
+      description: ' Explicit current activity_id/config_version/binding_version/monitoring_version and signed query grant
+        are required.'
+  /v1/geometry:
+    post:
+      operationId: registerTrajectoryGeometry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - geometry
+              properties:
+                geometry:
+                  $ref: '#/components/schemas/GeometryModel'
+      responses:
+        '200':
+          description: Versioned geometry saved. Reusing a version with changed content is rejected.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/AlgorithmReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+      x-authorization-action: global_config
+      x-activity-scope: global
+  /v1/trajectories/geometry:
+    post:
+      operationId: renderTrajectoryGeometry
+      description: Bind each retained route to directed calibrated polylines and edge time envelopes. Missing/discontinuous
+        geometry returns an empty combined polyline and an explicit status. No constant-speed position or vertex timestamps
+        are fabricated. Explicit current activity_id/config_version/binding_version/monitoring_version and signed query grant
+        are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - allOf:
+                - $ref: '#/components/schemas/GetRequest'
+                - type: object
+                  required:
+                  - geometry_version
+                  properties:
+                    geometry_version:
+                      type: string
+                      minLength: 1
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '200':
+          description: Geometry for the requested immutable trajectory version.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/GeometryReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-authorization-action: query
+      x-activity-scope: activity
+  /v1/activities/sync:
+    post:
+      operationId: syncActivity
+      description: Synchronize authoritative activity identity/configuration. A new activity is stopped. No historical activity
+        scan or latest-activity assignment.
+      x-authorization-action: config
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivitySyncRequest'
+      responses:
+        '200':
+          description: Committed result or documented retained/held receipt.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/ActivityReply'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+  /v1/activities/bindings:
+    post:
+      operationId: syncActivityBindings
+      description: Replace the complete enabled device scope using binding CAS. Shared devices require an explicit route per
+        activity; ambiguous duplicates are rejected.
+      x-authorization-action: config
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityBindingsRequest'
+      responses:
+        '200':
+          description: Committed result or documented retained/held receipt.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/ActivityReply'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+  /v1/activities/monitoring:
+    post:
+      operationId: setActivityMonitoring
+      description: Explicit versioned start/stop, independent of users, page selection and planned dates. Stops affect this
+        activity only.
+      x-authorization-action: monitor
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityMonitoringRequest'
+      responses:
+        '200':
+          description: Committed result or documented retained/held receipt.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/ActivityReply'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+  /v1/activities/get:
+    post:
+      operationId: getActivity
+      description: Return current authoritative identity, versions and enabled state. Full binding/configuration contents
+        remain backend-owned.
+      x-authorization-action: query
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityID'
+      responses:
+        '200':
+          description: Committed result or documented retained/held receipt.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/ActivityReply'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+  /v1/subscriptions/open:
+    post:
+      operationId: openActivitySubscription
+      description: Open viewer access at the current committed result cursor. Returns no historical backlog; use scoped queries
+        for current data. Never starts/stops monitoring.
+      x-authorization-action: subscribe
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityVersions'
+      responses:
+        '200':
+          description: Committed result or documented retained/held receipt.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/SubscriptionReply'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '410':
+          $ref: '#/components/responses/SubscriptionGone'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+  /v1/subscriptions/poll:
+    post:
+      operationId: pollActivitySubscription
+      description: Read up to 100 committed algorithm result notifications after the saved cursor. Identity/session/context,
+        generation and activity grants must match. Changed activity versions require reopen.
+      x-authorization-action: subscribe
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+      responses:
+        '200':
+          description: Committed result or documented retained/held receipt.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/ActivityReplyContext'
+                - $ref: '#/components/schemas/SubscriptionReply'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '410':
+          $ref: '#/components/responses/SubscriptionGone'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+  /v1/subscriptions/close:
+    post:
+      operationId: closeActivitySubscription
+      description: End this viewer subscription only. Logout/close/switch never stops background activity monitoring.
+      x-authorization-action: subscribe
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+      responses:
+        '200':
+          description: Committed result or documented retained/held receipt.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/SubscriptionReply'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '410':
+          $ref: '#/components/responses/SubscriptionGone'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+  /v1/retention/run:
+    post:
+      operationId: runTrajectoryRetention
+      description: Run C++ retention across configured local algorithm/P1 stores. Accepts only dry_run; database paths and
+        deletion enablement are startup configuration. dry_run changes no database data, UTC watermark or tombstones. Exact
+        dry-run plans are computed in an in-memory State copy, including snapshot rewrite and shared-object reachability,
+        then discarded. Source database rows, watermark and tombstones remain unchanged. Deletion requires retention-enabled
+        at startup; absent enablement is 409.
+      x-authorization-action: retention
+      x-activity-scope: global
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetentionRequest'
+      responses:
+        '200':
+          description: Committed result or documented retained/held receipt.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/RetentionReply'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '400':
+          description: Invalid request or an incomplete P1/physical maintenance report; inspect complete and per-store status
+            before claiming cleanup.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/ErrorReply'
+                - allOf:
+                  - $ref: '#/components/schemas/AuthorizedReply'
+                  - $ref: '#/components/schemas/RetentionReply'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+  /v1/retention/status:
+    get:
+      operationId: getTrajectoryRetentionStatus
+      description: Inspect scheduler counters and last C++ report. Physical cleanup pending or P1 adapter incomplete remains
+        observable; success counters alone are not physical proof.
+      x-authorization-action: retention
+      x-activity-scope: global
+      responses:
+        '200':
+          description: Scheduler status.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/RetentionStatusReply'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+  /v1/visits/build:
+    post:
+      operationId: rejected_v1_visits_build
+      description: 0.13 rejects this legacy raw admission route with SOURCE_CONFLICT/409. Submit camera sightings through
+        clock-qualified /v1/monitoring/observe; caller-asserted UTC or raw histories cannot bypass admission. Explicit current
+        activity_id/config_version/binding_version/monitoring_version and signed ingest grant are required.
+      x-authorization-action: ingest
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/ActivityVersions'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+      deprecated: true
+  /v1/trajectories/raw:
+    post:
+      operationId: rejected_v1_trajectories_raw
+      description: 0.13 rejects this legacy raw admission route with SOURCE_CONFLICT/409. Submit camera sightings through
+        clock-qualified /v1/monitoring/observe; caller-asserted UTC or raw histories cannot bypass admission. Explicit current
+        activity_id/config_version/binding_version/monitoring_version and signed ingest grant are required.
+      x-authorization-action: ingest
+      x-activity-scope: activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/ActivityVersions'
+              - $ref: '#/components/schemas/ActivityVersions'
+      responses:
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+      deprecated: true
+components:
+  schemas:
+    TrajectoryFreshness:
+      type: object
+      required:
+      - snapshot_association_revision
+      - current_association_revision
+      - latest_version
+      - association_matches_current
+      - requested_scope
+      - valid_for_current_use
+      - status
+      properties:
+        snapshot_association_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        current_association_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        latest_version:
+          type: integer
+          format: int64
+          minimum: 0
+        association_matches_current:
+          type: boolean
+        requested_scope:
+          type: string
+          enum:
+          - CURRENT
+          - HISTORICAL
+        valid_for_current_use:
+          type: boolean
+          description: Snapshot is the latest head and its association binding is current. Field accuracy and topology acceptance
+            remain separate.
+        status:
+          type: string
+          enum:
+          - CURRENT
+          - HISTORICAL
+          - STALE_ASSOCIATION
+    AssociationTrajectoryEffect:
+      type: object
+      required:
+      - target_id
+      - current_association_revision
+      - latest_trajectory_version
+      - rebuild_required
+      properties:
+        target_id:
+          type: string
+        current_association_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        latest_trajectory_version:
+          type: integer
+          format: int64
+          minimum: 0
+        rebuild_required:
+          type: boolean
+    BackendResultEvent:
+      type: object
+      required:
+      - schema_version
+      - event_id
+      - sequence
+      - operation
+      - created_at_unix_ms
+      - result
+      - activity_id
+      - activity_num
+      - config_version
+      - binding_version
+      - monitoring_version
+      - retention_deadline_unix_ms
+      properties:
+        schema_version:
+          type: string
+          enum:
+          - '1'
+        event_id:
+          type: string
+          description: Stable per delivery retry; receiver deduplicates (activity_id,event_id). Idempotency-Key is SHA-256
+            of canonical JSON [activity_id,event_id].
+        sequence:
+          type: integer
+          format: int64
+          minimum: 1
+        operation:
+          type: string
+          enum:
+          - association_observe
+          - association_correct
+          - association_rebuild
+          - trajectory_rebuild
+          - point_trajectory_rebuild
+          - monitoring_observe
+          - monitoring_gate_event
+          - monitoring_person_put
+        created_at_unix_ms:
+          type: integer
+          format: int64
+          description: Verified UTC enqueue time, never camera capture time or a retention reset.
+        result:
+          $ref: '#/components/schemas/AlgorithmReply'
+        activity_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        activity_num:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        config_version:
+          type: integer
+          format: int64
+          minimum: 0
+        binding_version:
+          type: integer
+          format: int64
+          minimum: 0
+        monitoring_version:
+          type: integer
+          format: int64
+          minimum: 0
+        retention_deadline_unix_ms:
+          type: integer
+          format: int64
+      description: Committed original result, compacted when dependent historical evidence expires. Receiver independently
+        rejects delivery after retention_deadline_unix_ms and applies activity/version-aware updates. No input image, embedding
+        or credentials are attached.
+    BackendPushStatusReply:
+      type: object
+      required:
+      - ok
+      - push
+      properties:
+        ok:
+          type: boolean
+        push:
+          type: object
+          required:
+          - enabled
+          - durable
+          - pending
+          - max_pending
+          - receiver_configured
+          properties:
+            enabled:
+              type: boolean
+              description: Result queuing is enabled for new writes.
+            durable:
+              type: boolean
+            pending:
+              type: integer
+              minimum: 0
+            max_pending:
+              type: integer
+              enum:
+              - 10000
+            receiver_configured:
+              type: boolean
+            max_pending_per_activity:
+              type: integer
+              enum:
+              - 256
+              description: Per-activity durable result quota; separate from the global maximum
+    MonitoringPersonRequest:
+      type: object
+      required:
+      - person_id
+      - category
+      - revision
+      - expected_revision
+      - evidence_id
+      properties:
+        person_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        category:
+          type: string
+          enum:
+          - PRIORITY
+          - NORMAL
+          - UNREGISTERED
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+        expected_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        evidence_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        templates:
+          type: array
+          maxItems: 64
+          items:
+            type: object
+            required:
+            - template_id
+            - feature_space
+            - embedding
+            properties:
+              template_id:
+                type: string
+                minLength: 1
+                maxLength: 1024
+              feature_space:
+                $ref: '#/components/schemas/FeatureSpaceContract'
+              embedding:
+                $ref: '#/components/schemas/FaceObservation/properties/embedding'
+    MonitoringPersonReply:
+      type: object
+      required:
+      - ok
+      - person
+      - submitted_revision
+      - duplicate
+      - gallery_version
+      properties:
+        ok:
+          type: boolean
+        person:
+          type: object
+          required:
+          - person_id
+          - category
+          - revision
+          - evidence_id
+          properties:
+            person_id:
+              type: string
+            category:
+              type: string
+              enum:
+              - PRIORITY
+              - NORMAL
+              - UNREGISTERED
+            revision:
+              type: integer
+              format: int64
+              minimum: 0
+            evidence_id:
+              type: string
+              nullable: true
+        submitted_revision:
+          type: integer
+          format: int64
+          minimum: 1
+        duplicate:
+          type: boolean
+        gallery_version:
+          type: integer
+          format: int64
+          minimum: 0
+    MonitoringTimeRecord:
+      type: object
+      nullable: true
+      description: Missing, null or incomplete evidence produces durable HOLD; registered profile is camera-specific.
+      properties:
+        profile_version:
+          type: string
+        camera_id:
+          type: string
+          description: Required for gates; taken from the face observation for observe.
+        source_id:
+          type: string
+          description: If supplied for observe, must match the observation source.
+        raw_time:
+          type: string
+        time_policy:
+          type: string
+          enum:
+          - CAMERA_CAPTURE_60S
+          default: CAMERA_CAPTURE_60S
+    MonitoringFaceObservation:
+      type: object
+      required:
+      - observation_id
+      - source_id
+      - camera_id
+      - frame_id
+      - feature_space
+      - embedding
+      - detection_score
+      - face_size_px
+      description: Image extraction is performed by P1. Use actual original image/frame pixel dimensions. All fields in this
+        object remain immutable across retries and evidence reconsideration. Existing normalized clock fields, if present,
+        do not override the time_record adapter.
+      properties:
+        observation_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        source_id:
+          type: string
+          minLength: 1
+        camera_id:
+          type: string
+          minLength: 1
+        frame_id:
+          type: string
+          minLength: 1
+        feature_space:
+          $ref: '#/components/schemas/FeatureSpaceContract'
+        embedding:
+          $ref: '#/components/schemas/FaceObservation/properties/embedding'
+        detection_score:
+          type: number
+          minimum: 0
+          maximum: 1
+        face_size_px:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+        local_track_id:
+          type: string
+        track_session_id:
+          type: string
+        reentry_evidence_id:
+          type: string
+    MonitoringAssociationPolicy:
+      allOf:
+      - $ref: '#/components/schemas/AssociationPolicy'
+      - type: object
+        properties:
+          max_clock_uncertainty_ms:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 60000
+            default: 60000
+    MonitoringObserveRequest:
+      type: object
+      required:
+      - observation
+      - policy
+      - graph
+      properties:
+        observation:
+          $ref: '#/components/schemas/MonitoringFaceObservation'
+        time_record:
+          $ref: '#/components/schemas/MonitoringTimeRecord'
+        policy:
+          $ref: '#/components/schemas/MonitoringAssociationPolicy'
+        graph:
+          $ref: '#/components/schemas/CameraGraph'
+        options:
+          $ref: '#/components/schemas/PointTrajectoryOptions'
+        reconsider:
+          type: boolean
+          default: false
+        evidence_id:
+          type: string
+          description: Required independent provenance for reconsidering held time/policy context.
+      description: All original event content including activity versions, route, face, clock context and gate binding is
+        immutable for the same activity/source/event key. Any changed retry is 409. reconsider is a reserved legacy field
+        and does not authorize changed content in 0.13.
+    MonitoringTrajectoryReference:
+      type: object
+      required:
+      - revision
+      - target_id
+      - version
+      - association_revision
+      - observation_count
+      - anchor_count
+      - graph_version
+      - detail_query
+      properties:
+        revision:
+          $ref: '#/components/schemas/TrajectoryRevision'
+        target_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        association_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        observation_count:
+          type: integer
+          minimum: 0
+        anchor_count:
+          type: integer
+          minimum: 0
+        graph_version:
+          type: string
+        detail_query:
+          type: string
+          enum:
+          - POST /v1/trajectories/get
+    MonitoringProjection:
+      type: object
+      required:
+      - target_id
+      - category
+      - person_revision
+      - association_revision
+      - gate_revision
+      - status
+      - entry_status
+      - continue_monitoring
+      - possible_statuses
+      properties:
+        target_id:
+          type: string
+        category:
+          type: string
+          enum:
+          - PRIORITY
+          - NORMAL
+          - UNREGISTERED
+        person_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        association_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        gate_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        status:
+          type: string
+          enum:
+          - NOT_STARTED
+          - ACTIVE
+          - CLOSED
+          - AMBIGUOUS
+        entry_status:
+          type: string
+          enum:
+          - KNOWN
+          - UNKNOWN
+        continue_monitoring:
+          type: boolean
+        possible_statuses:
+          type: array
+          items:
+            type: string
+            enum:
+            - NOT_STARTED
+            - ACTIVE
+            - CLOSED
+        current_session_id:
+          type: string
+          nullable: true
+          description: Present in compact intake replies.
+        session_record_count:
+          type: integer
+          minimum: 0
+          description: Conservative projected records, not a guaranteed physical visit count.
+        event_group_count:
+          type: integer
+          minimum: 0
+        sessions:
+          type: array
+          description: Complete projection returned by get, omitted from compact intake receipts.
+          items:
+            type: object
+        event_groups:
+          type: array
+          description: Interval-connected groups retain explicit order ambiguity and original evidence references.
+          items:
+            type: object
+        ignored_unqualified_gate_events:
+          type: array
+          items:
+            type: string
+        detail_query:
+          type: string
+          enum:
+          - POST /v1/monitoring/get
+        session_scope:
+          type: string
+    MonitoringObserveReply:
+      anyOf:
+      - $ref: '#/components/schemas/QualifiedMonitoringObserveReply'
+      - $ref: '#/components/schemas/HeldOrExpiredIntakeReply'
+      - $ref: '#/components/schemas/CompactIntakeReceipt'
+    MonitoringGateRequest:
+      type: object
+      required:
+      - event_id
+      - source_id
+      - gate_id
+      - direction
+      properties:
+        event_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        source_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        gate_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        direction:
+          type: string
+          enum:
+          - ENTRY
+          - EXIT
+        ticket_reference:
+          type: string
+        time_record:
+          $ref: '#/components/schemas/MonitoringTimeRecord'
+        binding:
+          type: object
+          nullable: true
+          required:
+          - observation_id
+          - evidence_id
+          - source_id
+          properties:
+            observation_id:
+              type: string
+              minLength: 1
+              maxLength: 1024
+            evidence_id:
+              type: string
+              minLength: 1
+              maxLength: 1024
+            source_id:
+              type: string
+              minLength: 1
+              maxLength: 1024
+            activity_id:
+              type: string
+              minLength: 1
+              maxLength: 1024
+        reconsider:
+          type: boolean
+          default: false
+        evidence_id:
+          type: string
+          description: Independent evidence when explicitly reconsidering a held gate clock context.
+      description: All original event content including activity versions, route, face, clock context and gate binding is
+        immutable for the same activity/source/event key. Any changed retry is 409. reconsider is a reserved legacy field
+        and does not authorize changed content in 0.13.
+    MonitoringGateReply:
+      anyOf:
+      - $ref: '#/components/schemas/QualifiedMonitoringGateReply'
+      - $ref: '#/components/schemas/HeldOrExpiredIntakeReply'
+      - $ref: '#/components/schemas/CompactIntakeReceipt'
+    ClockProfileRequest:
+      type: object
+      required:
+      - profile
+      properties:
+        profile:
+          $ref: '#/components/schemas/ClockProfile'
+    ClockProfile:
+      type: object
+      required:
+      - profile_version
+      - camera_id
+      - verified
+      - source_evidence_id
+      - capture_semantics
+      - calibrations
+      description: Immutable per-camera calibration. verified true requires DEVICE_CAPTURE semantics and at least one calibration.
+        Unverified profiles may retain an empty calibration array and always normalize to HOLD. A new source or changed calibration
+        requires a new profile_version.
+      properties:
+        profile_version:
+          type: string
+          minLength: 1
+        camera_id:
+          type: string
+          minLength: 1
+        verified:
+          type: boolean
+        source_evidence_id:
+          type: string
+          minLength: 1
+        capture_semantics:
+          type: string
+          enum:
+          - DEVICE_CAPTURE
+          - UNKNOWN
+        fixed_utc_offset_minutes:
+          type: integer
+          minimum: -840
+          maximum: 840
+          description: Required only to interpret a naive raw timestamp; never applied again to a timestamp with explicit
+            UTC offset.
+        calibrations:
+          type: array
+          maxItems: 10000
+          items:
+            $ref: '#/components/schemas/ClockCalibration'
+    ClockCalibration:
+      type: object
+      required:
+      - calibration_id
+      - source_evidence_id
+      - valid_from_utc_ms
+      - valid_until_utc_ms
+      - offset_ms
+      - uncertainty_ms
+      - time_resolution_ms
+      description: Unique calibration ID within the profile. Validity is a nonempty half-open corrected-UTC interval [from,until);
+        declared intervals must not overlap. The entire corrected uncertainty interval must fit within validity. Different
+        offset periods that explain the same raw time return ambiguous HOLD.
+      properties:
+        calibration_id:
+          type: string
+          minLength: 1
+        source_evidence_id:
+          type: string
+          minLength: 1
+        valid_from_utc_ms:
+          type: integer
+          format: int64
+        valid_until_utc_ms:
+          type: integer
+          format: int64
+        offset_ms:
+          type: integer
+          format: int64
+          description: Positive means camera ahead; corrected UTC equals parsed device UTC minus offset_ms.
+        uncertainty_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Calibration error bound covering the declared validity period, including drift and calibration measurement
+            error.
+        time_resolution_ms:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 86400000
+    ClockNormalizeRequest:
+      type: object
+      required:
+      - profile_version
+      - camera_id
+      - raw_time
+      properties:
+        time_policy:
+          type: string
+          enum:
+          - CORRECTED_UTC
+          - CAMERA_CAPTURE_60S
+          default: CORRECTED_UTC
+          description: Standalone legacy normalization defaults to corrected UTC. Point trajectory rebuild always uses CAMERA_CAPTURE_60S
+            regardless of caller overrides.
+        profile_version:
+          type: string
+          minLength: 1
+        camera_id:
+          type: string
+          minLength: 1
+        raw_time:
+          type: string
+          minLength: 1
+          description: Existing capture timestamp YYYY-MM-DDTHH:mm:ss with optional 1-3 fractional digits and Z or explicit
+            +/-HH:MM offset. A space may replace T. Naive timestamps require the configured fixed offset. Unknown -00:00,
+            invalid Gregorian dates, leap seconds and greater-than-millisecond fractions yield HOLD. Signed epoch times before
+            1970 are supported.
+          example: '2026-10-07T10:00:48.123+08:00'
+    ClockNormalization:
+      type: object
+      required:
+      - status
+      - reason_codes
+      - provenance
+      description: Only NORMALIZED includes captured_at_unix_ms, clock_uncertainty_ms, time_source and clock_domain. HOLD
+        omits those fields. Final error equals calibration uncertainty plus max(configured resolution, input text resolution)
+        minus one millisecond in CORRECTED_UTC mode. CAMERA_CAPTURE_60S keeps the parsed camera timestamp and adds absolute
+        offset to that error; a total above 60000ms yields HOLD with CAMERA_CLOCK_ERROR_EXCEEDS_60S. Normalization does not
+        establish identity or satisfy a trajectory's possibly stricter maximum clock error automatically.
+      properties:
+        status:
+          type: string
+          enum:
+          - NORMALIZED
+          - HOLD
+        reason_codes:
+          type: array
+          items:
+            type: string
+        captured_at_unix_ms:
+          type: integer
+          format: int64
+        clock_uncertainty_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        time_source:
+          type: string
+          enum:
+          - UTC_CAPTURE
+        clock_domain:
+          type: string
+          enum:
+          - UTC
+        provenance:
+          type: object
+          required:
+          - camera_id
+          - profile_version
+          - raw_time
+          - offset_convention
+          properties:
+            camera_id:
+              type: string
+            profile_version:
+              type: string
+            raw_time:
+              type: string
+            offset_convention:
+              type: string
+              enum:
+              - POSITIVE_CAMERA_AHEAD
+            time_policy:
+              type: string
+              enum:
+              - CORRECTED_UTC
+              - CAMERA_CAPTURE_60S
+            applied_offset_ms:
+              type: integer
+              format: int64
+            max_device_time_error_ms:
+              type: integer
+              enum:
+              - 60000
+            device_time_error_bound_ms:
+              type: integer
+              format: int64
+              minimum: 0
+              maximum: 60000
+            profile_source_evidence_id:
+              type: string
+            profile_verified:
+              type: boolean
+            capture_semantics:
+              type: string
+              enum:
+              - DEVICE_CAPTURE
+              - UNKNOWN
+            timezone_source:
+              type: string
+              enum:
+              - EXPLICIT_TIMESTAMP_OFFSET
+              - PROFILE_FIXED_OFFSET
+            timezone_offset_minutes:
+              type: integer
+            device_utc_unix_ms:
+              type: integer
+              format: int64
+            text_resolution_ms:
+              type: integer
+            calibration_id:
+              type: string
+            calibration_source_evidence_id:
+              type: string
+            offset_ms:
+              type: integer
+              format: int64
+            calibration_uncertainty_ms:
+              type: integer
+              format: int64
+              minimum: 0
+            configured_time_resolution_ms:
+              type: integer
+              format: int64
+              minimum: 1
+            valid_from_utc_ms:
+              type: integer
+              format: int64
+            valid_until_utc_ms:
+              type: integer
+              format: int64
+            parse_error:
+              type: string
+    ClockNormalizeReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - normalization
+        properties:
+          normalization:
+            $ref: '#/components/schemas/ClockNormalization'
+    PointGraphRequest:
+      type: object
+      required:
+      - point_graph
+      properties:
+        point_graph:
+          $ref: '#/components/schemas/PointGraph'
+    PointGraphGetRequest:
+      type: object
+      required:
+      - graph_version
+      properties:
+        graph_version:
+          type: string
+          minLength: 1
+    PointGraph:
+      type: object
+      required:
+      - graph_version
+      - scene_version
+      - source_evidence_id
+      - coordinate_frame
+      - topology_verified
+      - topology_is_complete
+      - edges
+      description: General directed camera-point topology, independent of any requested person route. Scene version and coordinate
+        frame must match a registered site scene. Edge order is canonicalized by stable edge_id. Reusing a graph_version with
+        different packet contents is rejected. Scene conflicts remain available as position candidates and cannot be silently
+        resolved by adding operational edges. Any supplied unit, transform, model metadata, camera positions and edge annotation
+        bindings are checked against that immutable scene. The camera-point-candidate-graph@1 schema requires unit, to_world_matrix,
+        all bound cameras with their complete source position_candidates, and edge source annotation IDs. A model candidate
+        packet targeting a scene with model_revision also requires model_binding. Legacy minimal graphs may omit model provenance;
+        acceptance does not verify external model content.
+      properties:
+        graph_version:
+          type: string
+          minLength: 1
+        scene_version:
+          type: string
+          minLength: 1
+        source_evidence_id:
+          type: string
+          minLength: 1
+        coordinate_frame:
+          type: string
+          minLength: 1
+        schema:
+          type: string
+          description: camera-point-candidate-graph@1 enables required model spatial binding checks.
+        unit:
+          type: string
+          enum:
+          - m
+        to_world_matrix:
+          type: array
+          minItems: 16
+          maxItems: 16
+          items:
+            type: number
+          description: Must equal the registered scene transform when supplied.
+        model_binding:
+          type: object
+          required:
+          - model_id
+          - scene_url
+          - tileset_id
+          - calibration_profile
+          description: Source metadata must match the registered scene exactly. model_revision must be present iff it exists
+            on the scene. This checks declared provenance, not remote files or actual 3D content.
+          properties:
+            model_id:
+              type: string
+              minLength: 1
+            scene_url:
+              type: string
+              minLength: 1
+            tileset_id:
+              type: string
+              minLength: 1
+            calibration_profile:
+              type: string
+              minLength: 1
+            model_revision:
+              type: string
+              minLength: 1
+        cameras:
+          type: array
+          description: Supplied camera IDs, channel bindings and source positions must agree with the scene; model candidate
+            packets preserve all bound cameras and all conflicting markers.
+          items:
+            type: object
+            required:
+            - camera_id
+            properties:
+              camera_id:
+                type: string
+                minLength: 1
+              position_candidates:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - annotation_id
+                  description: Requires points or local_xyz matching the source annotation. Model candidate packets require
+                    the full source spatial binding fields.
+                  properties:
+                    annotation_id:
+                      type: string
+                      minLength: 1
+                    local_xyz:
+                      $ref: '#/components/schemas/SiteXYZ'
+                    points:
+                      type: array
+                      minItems: 1
+                      maxItems: 1
+                      items:
+                        $ref: '#/components/schemas/SiteXYZ'
+        topology_verified:
+          type: boolean
+          description: Explicit stored qualification; true requires verified time bounds on every edge.
+        topology_is_complete:
+          type: boolean
+          description: Explicit stored assertion of graph coverage; incomplete graphs cannot justify exclusion of all other
+            locations.
+        edges:
+          type: array
+          items:
+            allOf:
+            - $ref: '#/components/schemas/CameraEdge'
+            - type: object
+              properties:
+                travel_time_bound_verified:
+                  type: boolean
+                  default: false
+                from_annotation_id:
+                  type: string
+                  minLength: 1
+                  description: Must identify a source CAMERA annotation bound to from_camera.
+                to_annotation_id:
+                  type: string
+                  minLength: 1
+                  description: Must identify a source CAMERA annotation bound to to_camera.
+      additionalProperties: true
+    PointGraphReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - point_graph
+        properties:
+          point_graph:
+            $ref: '#/components/schemas/PointGraph'
+    RawCameraPassageRecord:
+      type: object
+      required:
+      - observation_id
+      - camera_id
+      - source_id
+      - link_status
+      - attribution_evidence_id
+      - clock_profile_version
+      - raw_time
+      description: Reuses existing identity linkage and capture data. Only CONFIRMED with nonempty attribution evidence can
+        be admitted. target_id, when supplied, must equal the rebuild target. Duplicate observation IDs must have identical
+        complete contents. No face crop or embedding is required.
+      properties:
+        observation_id:
+          type: string
+          minLength: 1
+        target_id:
+          type: string
+          minLength: 1
+        camera_id:
+          type: string
+          minLength: 1
+        source_id:
+          type: string
+          minLength: 1
+        link_status:
+          type: string
+          enum:
+          - CONFIRMED
+          - PROVISIONAL
+          - UNASSIGNED
+          - CONFLICT
+        attribution_evidence_id:
+          type: string
+        clock_profile_version:
+          type: string
+          minLength: 1
+        raw_time:
+          type: string
+          minLength: 1
+        reentry_evidence_id:
+          type: string
+    PointTrajectoryRebuildRequest:
+      type: object
+      required:
+      - target_id
+      - graph_version
+      - records
+      - reason
+      description: 'Complete authoritative rebuild. Always uses CAMERA_CAPTURE_60S: nominal device capture time, verified
+        total error at most 60000ms, otherwise HOLD. Options default to 60000ms here and may only tighten that limit. Existing
+        corrected-time histories require explicit authoritative replay.'
+      properties:
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 'Optimistic precondition: 0 for creation; current trajectory version for a changed rebuild. Omission
+            on an existing changed target returns 409. An identical current-input retry may use an older expected version.'
+        target_id:
+          type: string
+          minLength: 1
+        graph_version:
+          type: string
+          minLength: 1
+        records:
+          type: array
+          description: COMPLETE authoritative evidence set for this target; held and omitted records are absent from the new
+            snapshot.
+          items:
+            $ref: '#/components/schemas/RawCameraPassageRecord'
+        reason:
+          type: string
+          minLength: 1
+        options:
+          $ref: '#/components/schemas/PointTrajectoryOptions'
+    PointTrajectoryOptions:
+      type: object
+      properties:
+        max_clock_uncertainty_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 60000
+          default: 60000
+        max_visit_gap_ms:
+          $ref: '#/components/schemas/TrajectoryOptions/properties/max_visit_gap_ms'
+        session_gap_ms:
+          $ref: '#/components/schemas/TrajectoryOptions/properties/session_gap_ms'
+        max_hops:
+          $ref: '#/components/schemas/TrajectoryOptions/properties/max_hops'
+        max_expansions:
+          $ref: '#/components/schemas/TrajectoryOptions/properties/max_expansions'
+        max_candidates:
+          $ref: '#/components/schemas/TrajectoryOptions/properties/max_candidates'
+        backup_score_margin:
+          $ref: '#/components/schemas/TrajectoryOptions/properties/backup_score_margin'
+        travel_time_weight_per_second:
+          $ref: '#/components/schemas/TrajectoryOptions/properties/travel_time_weight_per_second'
+        non_overlapping_cameras:
+          $ref: '#/components/schemas/TrajectoryOptions/properties/non_overlapping_cameras'
+    PointRecordAdmission:
+      type: object
+      required:
+      - observation_id
+      - status
+      - reason_codes
+      properties:
+        observation_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACCEPTED
+          - HOLD
+        reason_codes:
+          type: array
+          items:
+            type: string
+        normalization:
+          $ref: '#/components/schemas/ClockNormalization'
+        sighting:
+          $ref: '#/components/schemas/Sighting'
+    PointTrace:
+      type: object
+      required:
+      - target_id
+      - version
+      - scene_version
+      - graph_version
+      - coordinate_frame
+      - topology_verified
+      - topology_is_complete
+      - observations
+      - observation_order
+      - drawing_mode
+      - connections
+      - detailed_walk_path_observed
+      properties:
+        freshness:
+          $ref: '#/components/schemas/TrajectoryFreshness'
+        target_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        scene_version:
+          type: string
+        graph_version:
+          type: string
+        coordinate_frame:
+          type: string
+        topology_verified:
+          type: boolean
+        topology_is_complete:
+          type: boolean
+        detailed_walk_path_observed:
+          type: boolean
+          enum:
+          - false
+        drawing_mode:
+          type: string
+          enum: [CAMERA_POINT_CONNECTIONS]
+        connections:
+          type: array
+          description: Direct nominal observation-sequence connections between different camera markers. Repeated same-camera
+            observations produce no self-loop. Separate sessions and missing or multiple marker positions are not drawable.
+            Clock-overlap groups retain uncertain order. Display chords never represent inferred walking routes.
+          items:
+            $ref: '#/components/schemas/CameraPointConnection'
+        observations:
+          type: array
+          items:
+            type: object
+            required:
+            - observation_id
+            - camera_id
+            - captured_at_unix_ms
+            - clock_uncertainty_ms
+            - attribution_evidence_id
+            - status
+            - position_status
+            - position_candidates
+            - position_semantics
+            - source_id
+            properties:
+              observation_id:
+                type: string
+              camera_id:
+                type: string
+              captured_at_unix_ms:
+                type: integer
+                format: int64
+              clock_uncertainty_ms:
+                type: integer
+                format: int64
+                minimum: 0
+              attribution_evidence_id:
+                type: string
+              status:
+                type: string
+                enum:
+                - OBSERVED
+              position_status:
+                type: string
+                description: Published camera binding status; conflicts retain all candidates.
+              position_semantics:
+                type: string
+                enum:
+                - CAMERA_MARKER_NOT_PERSON_FOOTPOINT
+              source_id:
+                type: string
+              position_candidates:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - annotation_id
+                  - source_scene_id
+                  - name
+                  - local_xyz
+                  properties:
+                    annotation_id:
+                      type: string
+                    source_scene_id:
+                      type: string
+                    name:
+                      type: string
+                    local_xyz:
+                      type: array
+                      minItems: 3
+                      maxItems: 3
+                      items:
+                        type: number
+        observation_order:
+          type: array
+          items:
+            type: object
+            required:
+            - from_observation_id
+            - to_observation_id
+            - order_status
+            - physical_path_observed
+            - meaning
+            properties:
+              from_observation_id:
+                type: string
+              to_observation_id:
+                type: string
+              order_status:
+                type: string
+                enum:
+                - ORDERED
+                - UNCERTAIN_CLOCK_ORDER
+              physical_path_observed:
+                type: boolean
+                enum:
+                - false
+              meaning:
+                type: string
+                enum:
+                - OBSERVATION_SEQUENCE_ONLY
+    CameraPointConnection:
+      type: object
+      oneOf:
+      - properties:
+          drawing_status:
+            enum: [DRAWABLE]
+          coordinates:
+            minItems: 2
+            maxItems: 2
+      - properties:
+          drawing_status:
+            enum: [UNRESOLVED_POSITION, SESSION_BREAK]
+          coordinates:
+            maxItems: 0
+      required: [from_observation_id, to_observation_id, from_source_id, to_source_id, from_camera_id, to_camera_id, order_status, drawing_status,
+        coordinates, physical_path_observed, meaning]
+      properties:
+        from_observation_id:
+          type: string
+        to_observation_id:
+          type: string
+        from_source_id:
+          type: string
+        to_source_id:
+          type: string
+        from_camera_id:
+          type: string
+        to_camera_id:
+          type: string
+        order_status:
+          type: string
+          enum: [ORDERED, UNCERTAIN_CLOCK_ORDER]
+        drawing_status:
+          type: string
+          enum: [DRAWABLE, UNRESOLVED_POSITION, SESSION_BREAK]
+        coordinates:
+          type: array
+          maxItems: 2
+          description: Exactly two local xyz endpoints for DRAWABLE; empty otherwise. Uses PointTrace.coordinate_frame.
+          items:
+            type: array
+            minItems: 3
+            maxItems: 3
+            items:
+              type: number
+        physical_path_observed:
+          type: boolean
+          enum: [false]
+        meaning:
+          type: string
+          enum: [DIRECT_CAMERA_POINT_CONNECTION]
+    PointTraceReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - point_trace
+        properties:
+          point_trace:
+            $ref: '#/components/schemas/PointTrace'
+    PointTrajectoryRebuildReply:
+      allOf:
+      - $ref: '#/components/schemas/TrajectoryReply'
+      - type: object
+        required:
+        - revision
+        - trajectory
+        - admissions
+        - point_trace
+        properties:
+          admissions:
+            type: array
+            items:
+              $ref: '#/components/schemas/PointRecordAdmission'
+          point_trace:
+            $ref: '#/components/schemas/PointTrace'
+    PointPredictionLimits:
+      type: object
+      description: Resource and horizon limits; topology qualification always comes from the registered graph.
+      properties:
+        max_horizon_ms:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 86400000
+          default: 300000
+        max_expansions:
+          type: integer
+          minimum: 1
+          maximum: 1000000
+          default: 10000
+        max_candidates:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          default: 10000
+        max_graph_edges:
+          type: integer
+          minimum: 1
+          maximum: 1000000
+          default: 100000
+        max_evidence:
+          type: integer
+          minimum: 1
+          maximum: 1000000
+          default: 100000
+        allow_edge_wait:
+          type: boolean
+          default: true
+          description: Allow staying on a traversed edge; waiting at cameras is always allowed. False applies max_travel_ms
+            as an edge occupancy bound.
+    PointPredictionOptions:
+      allOf:
+      - $ref: '#/components/schemas/PointPredictionLimits'
+      - type: object
+        required:
+        - as_of_unix_ms
+        - at_unix_ms
+        properties:
+          as_of_unix_ms:
+            type: integer
+            format: int64
+            description: Nominal capture cutoff within the explicitly selected snapshot, not a historical ingestion-time query.
+          at_unix_ms:
+            type: integer
+            format: int64
+            description: Requested forecast time; must be at or after as_of_unix_ms and within the horizon from possible latest
+              capture.
+    PointPredictionRequest:
+      allOf:
+      - $ref: '#/components/schemas/GetRequest'
+      - type: object
+        required:
+        - prediction
+        properties:
+          prediction:
+            $ref: '#/components/schemas/PointPredictionOptions'
+    PointPrediction:
+      type: object
+      required:
+      - target_id
+      - version
+      - graph_version
+      - as_of_unix_ms
+      - at_unix_ms
+      - status
+      - reason
+      - search_complete
+      - coverage_complete
+      - topology_verified
+      - topology_is_complete
+      - candidate_cameras
+      - candidate_edges
+      - based_on_observation_ids
+      - latest_observation_candidates
+      properties:
+        freshness:
+          $ref: '#/components/schemas/TrajectoryFreshness'
+        target_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+        graph_version:
+          type: string
+        as_of_unix_ms:
+          type: integer
+          format: int64
+        at_unix_ms:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+          - UNKNOWN
+          - CANDIDATE
+          - CONDITIONAL_CANDIDATE
+          - TRUNCATED
+        reason:
+          type: string
+        search_complete:
+          type: boolean
+        coverage_complete:
+          type: boolean
+        topology_verified:
+          type: boolean
+        topology_is_complete:
+          type: boolean
+        waiting_at_camera_allowed:
+          type: boolean
+          enum:
+          - true
+        allow_edge_wait:
+          type: boolean
+        has_calibrated_probabilities:
+          type: boolean
+          enum:
+          - false
+        point_position_estimated:
+          type: boolean
+          enum:
+          - false
+        knowledge_basis:
+          type: string
+          enum:
+          - SNAPSHOT_VERSION_AND_NOMINAL_CAPTURE_CUTOFF
+        ingestion_time_history_available:
+          type: boolean
+          enum:
+          - false
+        max_horizon_ms:
+          type: integer
+          format: int64
+        expansions:
+          type: integer
+          minimum: 0
+        based_on_observation_ids:
+          type: array
+          items:
+            type: string
+        excluded_future_observation_count:
+          type: integer
+          minimum: 0
+        origins_without_graph_edges:
+          type: array
+          items:
+            type: string
+        candidate_cameras:
+          type: array
+          items:
+            type: object
+            required:
+            - camera_id
+            - earliest_arrival_unix_ms
+            properties:
+              camera_id:
+                type: string
+              earliest_arrival_unix_ms:
+                type: integer
+                format: int64
+        candidate_edges:
+          type: array
+          items:
+            type: object
+            required:
+            - edge_id
+            - from_camera
+            - to_camera
+            - earliest_departure_unix_ms
+            - latest_departure_unix_ms
+            - possible_at_unix_ms
+            properties:
+              edge_id:
+                type: string
+              from_camera:
+                type: string
+              to_camera:
+                type: string
+              earliest_departure_unix_ms:
+                type: integer
+                format: int64
+              latest_departure_unix_ms:
+                type: integer
+                format: int64
+              possible_at_unix_ms:
+                type: integer
+                format: int64
+        latest_observation_candidates:
+          type: array
+          items:
+            type: object
+            required:
+            - observation_id
+            - camera_id
+            - captured_at_unix_ms
+            - earliest_unix_ms
+            - latest_unix_ms
+            properties:
+              observation_id:
+                type: string
+              camera_id:
+                type: string
+              captured_at_unix_ms:
+                type: integer
+                format: int64
+              earliest_unix_ms:
+                type: integer
+                format: int64
+              latest_unix_ms:
+                type: integer
+                format: int64
+      additionalProperties: true
+    PointPredictionReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - prediction
+        properties:
+          prediction:
+            $ref: '#/components/schemas/PointPrediction'
+    PointPredictionCompareRequest:
+      type: object
+      required:
+      - target_id
+      - previous_version
+      - version
+      - observation_id
+      properties:
+        target_id:
+          type: string
+          minLength: 1
+        previous_version:
+          type: integer
+          format: int64
+          minimum: 1
+        version:
+          type: integer
+          format: int64
+          minimum: 2
+          description: Must be strictly greater than previous_version.
+        observation_id:
+          type: string
+          minLength: 1
+        prediction:
+          $ref: '#/components/schemas/PointPredictionLimits'
+    PointPredictionCompareReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - comparison
+        properties:
+          comparison:
+            type: object
+            required:
+            - previous_version
+            - version
+            - observation_id
+            - observed_camera_id
+            - status
+            - observation_discarded
+            properties:
+              freshness:
+                $ref: '#/components/schemas/TrajectoryFreshness'
+              previous_version:
+                type: integer
+                format: int64
+              version:
+                type: integer
+                format: int64
+              observation_id:
+                type: string
+              observed_camera_id:
+                type: string
+              status:
+                type: string
+                enum:
+                - UNRESOLVED
+                - CONSISTENT_WITH_PRIOR_CANDIDATES
+                - INCONSISTENT_WITH_PRIOR_MODEL
+              reason:
+                type: string
+              observation_discarded:
+                type: boolean
+                enum:
+                - false
+              prior_prediction:
+                $ref: '#/components/schemas/PointPrediction'
+    SiteSceneRequest:
+      type: object
+      required:
+      - site
+      properties:
+        site:
+          $ref: '#/components/schemas/SiteScene'
+    SiteScene:
+      type: object
+      required:
+      - scene_version
+      - model_id
+      - scene_url
+      - tileset_id
+      - calibration_profile
+      - coordinate_frame
+      - world_coordinate_frame
+      - unit
+      - source_evidence_id
+      - to_world_matrix
+      - duplicate_tolerance_m
+      - cameras
+      - annotations
+      properties:
+        scene_version:
+          type: string
+          minLength: 1
+        model_id:
+          type: string
+          minLength: 1
+        model_revision:
+          type: string
+          minLength: 1
+          description: Optional externally supplied model evidence identifier; not proof that remote 3D asset content has
+            been verified.
+        scene_url:
+          type: string
+          minLength: 1
+        tileset_id:
+          type: string
+          minLength: 1
+        calibration_profile:
+          type: string
+          minLength: 1
+        coordinate_frame:
+          type: string
+          minLength: 1
+        world_coordinate_frame:
+          type: string
+          enum:
+          - ECEF_WGS84
+        unit:
+          type: string
+          enum:
+          - m
+        source_evidence_id:
+          type: string
+          minLength: 1
+        to_world_matrix:
+          type: array
+          minItems: 16
+          maxItems: 16
+          items:
+            type: number
+          description: Column-major rigid affine transform from local metres to ECEF metres.
+        duplicate_tolerance_m:
+          type: number
+          minimum: 0
+        cameras:
+          type: array
+          items:
+            type: object
+            required:
+            - camera_id
+            - vcl_channel_id
+            properties:
+              camera_id:
+                type: string
+                minLength: 1
+              vcl_channel_id:
+                type: string
+                nullable: true
+        annotations:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteAnnotation'
+    SiteAnnotation:
+      type: object
+      required:
+      - annotation_id
+      - source_scene_id
+      - name
+      - kind_id
+      - role
+      - shape
+      - points
+      - visible
+      - camera_id
+      properties:
+        annotation_id:
+          type: string
+          minLength: 1
+        source_scene_id:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        kind_id:
+          type: string
+          minLength: 1
+        role:
+          type: string
+          enum:
+          - CAMERA
+          - LANDMARK
+          - BARRIER
+          - ROUTE_CANDIDATE
+        shape:
+          type: string
+          enum:
+          - point
+          - polyline
+          - polygon
+        points:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SiteXYZ'
+          description: Absolute coordinates in the declared local frame. Point has one vertex; polyline needs two; polygon
+            needs three.
+        visible:
+          type: boolean
+        camera_id:
+          type: string
+          description: Empty means no explicit device binding.
+    SiteXYZ:
+      type: array
+      minItems: 3
+      maxItems: 3
+      items:
+        type: number
+    SiteCameraContextRequest:
+      type: object
+      required:
+      - scene_version
+      - camera_ref
+      - id_namespace
+      - radius_m
+      properties:
+        scene_version:
+          type: string
+          minLength: 1
+        camera_ref:
+          type: string
+          minLength: 1
+        id_namespace:
+          type: string
+          enum:
+          - CAMERA_ID
+          - VCL_CHANNEL_ID
+        radius_m:
+          type: number
+          minimum: 0
+    SiteCameraContextReply:
+      type: object
+      required:
+      - ok
+      - context
+      properties:
+        ok:
+          type: boolean
+        context:
+          type: object
+          required:
+          - scene_version
+          - status
+          - candidate_markers
+          - person_position_observed
+          - navigation_verified
+          properties:
+            scene_version:
+              type: string
+            camera_id:
+              type: string
+            status:
+              type: string
+              enum:
+              - UNKNOWN_CAMERA
+              - AMBIGUOUS_DEVICE
+              - NO_PUBLISHED_CAMERA_MARKER
+              - AMBIGUOUS_POSITION
+              - BOUND_MARKER
+            person_position_observed:
+              type: boolean
+              enum:
+              - false
+            navigation_verified:
+              type: boolean
+              enum:
+              - false
+            max_marker_separation_m:
+              type: number
+              minimum: 0
+            candidate_markers:
+              type: array
+              items:
+                allOf:
+                - $ref: '#/components/schemas/SiteAnnotation'
+                - type: object
+                  properties:
+                    local_xyz:
+                      $ref: '#/components/schemas/SiteXYZ'
+                    world_ecef_xyz:
+                      $ref: '#/components/schemas/SiteXYZ'
+                    nearby_annotations:
+                      type: array
+                      items:
+                        allOf:
+                        - $ref: '#/components/schemas/SiteAnnotation'
+                        - type: object
+                          properties:
+                            distance_to_geometry_m:
+                              type: number
+                              minimum: 0
+                            nearest_local_xyz:
+                              $ref: '#/components/schemas/SiteXYZ'
+    FaceTemplateRequest:
+      type: object
+      required:
+      - template_id
+      - person_entity_id
+      - feature_space
+      - embedding
+      properties:
+        template_id:
+          type: string
+          minLength: 1
+        person_entity_id:
+          type: string
+          minLength: 1
+        feature_space:
+          $ref: '#/components/schemas/FeatureSpaceContract'
+        embedding:
+          type: array
+          minItems: 512
+          maxItems: 512
+          items:
+            type: number
+            format: float
+    GalleryReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - gallery_version
+        properties:
+          gallery_version:
+            type: integer
+            format: int64
+    FaceObservation:
+      type: object
+      description: One camera face crop with a compatible existing 512D extractor result. observation_id is globally unique
+        across sources and immutable. frame_id names the original source frame, shared by its different face detections. This
+        endpoint does not decode images/video or run extraction.
+      required:
+      - observation_id
+      - source_id
+      - camera_id
+      - frame_id
+      - captured_at_unix_ms
+      - clock_uncertainty_ms
+      - time_source
+      - clock_domain
+      - feature_space
+      - embedding
+      - detection_score
+      - face_size_px
+      properties:
+        observation_id:
+          type: string
+          minLength: 1
+        source_id:
+          type: string
+          minLength: 1
+        camera_id:
+          type: string
+          minLength: 1
+        frame_id:
+          type: string
+          minLength: 1
+        captured_at_unix_ms:
+          type: integer
+          format: int64
+        clock_uncertainty_ms:
+          type: integer
+          format: int64
+          description: Negative means unavailable and yields UNASSIGNED; never guess zero.
+        time_source:
+          type: string
+          enum:
+          - UTC_CAPTURE
+          - MEDIA_OFFSET
+          - RECEIVED_AT
+          - UNKNOWN
+        clock_domain:
+          type: string
+          minLength: 1
+        feature_space:
+          $ref: '#/components/schemas/FeatureSpaceContract'
+        embedding:
+          type: array
+          minItems: 512
+          maxItems: 512
+          items:
+            type: number
+            format: float
+          description: Finite nonzero vector; normalized by the shared gallery.
+        detection_score:
+          type: number
+          minimum: 0
+          maximum: 1
+        face_size_px:
+          type: number
+          exclusiveMinimum: true
+          minimum: 0
+          description: Minimum side length of the detected face bounding box in original-frame pixels.
+        local_track_id:
+          type: string
+        track_session_id:
+          type: string
+          description: Required together with a nonempty local_track_id. Change on tracker restart or ID recycling. Namespace
+            is source_id + camera_id + session + local ID. A local track never proves cross-camera identity by itself.
+        reentry_evidence_id:
+          type: string
+    AssociationPolicy:
+      type: object
+      description: Thresholds are explicit deployment inputs and require validation on the actual model/camera samples. No
+        universal identity threshold or probability is implied. Require new_target_threshold < match_threshold <= template_update_threshold
+        <= max_template_similarity. Reusing policy_id with changed values is rejected.
+      required:
+      - policy_id
+      - match_threshold
+      - new_target_threshold
+      - min_margin
+      - template_update_threshold
+      - max_template_similarity
+      properties:
+        policy_id:
+          type: string
+          minLength: 1
+        match_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        new_target_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Create an anonymous target only if all visual person scores are strictly below this value.
+        min_margin:
+          type: number
+          minimum: 0
+          maximum: 2
+          description: Difference between best and second camera-feasible person scores; all people in the space participate.
+        template_update_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        max_template_similarity:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Strict upper bound for automatic template addition, preventing near duplicates.
+        min_detection_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.5
+        min_face_size_px:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          default: 32
+        max_clock_uncertainty_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 1000
+        max_templates_per_target:
+          type: integer
+          minimum: 1
+          default: 8
+          description: Cap on association-owned templates; externally enrolled templates are managed separately.
+        require_topology:
+          type: boolean
+          default: false
+          description: Leave a visually matched identity PROVISIONAL if its cross-camera constraints are UNKNOWN.
+        topology_is_complete:
+          type: boolean
+          default: false
+          description: Set true only for verified complete directed connectivity, minimum times, opening windows and camera
+            overlap. Otherwise an absent feasible path is UNKNOWN rather than hard identity exclusion. Missing camera coverage
+            is always UNKNOWN. This is a caller assertion, not an algorithm completeness check.
+        overlapping_cameras:
+          type: array
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: string
+              minLength: 1
+          description: Unordered camera pairs with verified overlapping observation regions.
+    AssociationObserveRequest:
+      type: object
+      required:
+      - observation
+      - policy
+      - graph
+      properties:
+        observation:
+          $ref: '#/components/schemas/FaceObservation'
+        policy:
+          $ref: '#/components/schemas/AssociationPolicy'
+        graph:
+          $ref: '#/components/schemas/CameraGraph'
+        reconsider:
+          type: boolean
+          default: false
+          description: Reevaluate a previously unassigned observation; confirmed assignments require explicit correction.
+    AssociationCorrectRequest:
+      type: object
+      required:
+      - observation_id
+      - target_id
+      - evidence_id
+      properties:
+        observation_id:
+          type: string
+          minLength: 1
+        target_id:
+          type: string
+          minLength: 1
+        evidence_id:
+          type: string
+          minLength: 1
+          description: Reference to independent verified attribution; the algorithm cannot inspect external evidence.
+    AssociationRebuildRequest:
+      type: object
+      required:
+      - target_id
+      - reason
+      - graph
+      properties:
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 'Optimistic precondition: 0 for creation; current trajectory version for a changed rebuild. Omission
+            on an existing changed target returns 409. An identical current-input retry may use an older expected version.'
+        target_id:
+          type: string
+          minLength: 1
+        reason:
+          type: string
+          minLength: 1
+        graph:
+          $ref: '#/components/schemas/CameraGraph'
+        options:
+          $ref: '#/components/schemas/TrajectoryOptions'
+    AssociationCandidate:
+      type: object
+      required:
+      - target_id
+      - template_id
+      - similarity
+      - camera_compatibility
+      properties:
+        target_id:
+          type: string
+        template_id:
+          type: string
+        similarity:
+          type: number
+          description: Cosine score, not identity probability.
+        camera_compatibility:
+          type: string
+          enum:
+          - COMPATIBLE
+          - UNKNOWN
+          - CONFLICT
+    AssociationResult:
+      type: object
+      required:
+      - observation_id
+      - decision
+      - reason
+      - version
+      - policy_id
+      - graph_version
+      - target_id
+      - sighting
+      - candidates
+      - affected_target_ids
+      - template_added
+      properties:
+        trajectory_effects:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssociationTrajectoryEffect'
+        observation_id:
+          type: string
+        decision:
+          type: string
+          enum:
+          - CREATED
+          - MATCHED
+          - PROVISIONAL
+          - CONFLICT
+          - UNASSIGNED
+          - CORRECTED
+        reason:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Global association mutation sequence; distinct from trajectory version.
+        policy_id:
+          type: string
+        graph_version:
+          type: string
+        target_id:
+          type: string
+          nullable: true
+        sighting:
+          oneOf:
+          - $ref: '#/components/schemas/Sighting'
+          - type: object
+            nullable: true
+            enum:
+            - null
+        candidates:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/AssociationCandidate'
+          description: Visual Top8 plus decision-relevant feasible leaders if outside Top8. A proven lower-score bound can
+            replace further history checks. Correction retains original candidates.
+        remaining_similarity_upper_bound:
+          type: number
+          format: float
+          nullable: true
+          description: Exact gallery score upper bound for unclassified lower candidates when sufficient to prove the decision.
+            Not a measured runner-up or identity probability.
+        affected_target_ids:
+          type: array
+          items:
+            type: string
+        template_added:
+          type: boolean
+          description: Whether this decision added a managed template; exact retries return the original flag.
+    AssociationReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - association
+        - gallery_version
+        properties:
+          association:
+            $ref: '#/components/schemas/AssociationResult'
+          gallery_version:
+            type: integer
+            format: int64
+    FeatureSpaceContract:
+      type: object
+      description: The query and templates must use the same model and preprocessing contract. Detector hash and profile must
+        either both be populated or both be empty for externally aligned faces. Equal embedding dimensions alone do not imply
+        compatibility.
+      required:
+      - recognition_model_sha256
+      - alignment_version
+      - preprocessing_version
+      - output_version
+      properties:
+        recognition_model_sha256:
+          type: string
+          pattern: ^[a-fA-F0-9]{64}$
+        detector_model_sha256:
+          type: string
+          pattern: ^([a-fA-F0-9]{64})?$
+        detector_profile:
+          type: string
+        alignment_version:
+          type: string
+          minLength: 1
+        preprocessing_version:
+          type: string
+          minLength: 1
+        output_version:
+          type: string
+          minLength: 1
+    PersonSearchRequest:
+      type: object
+      required:
+      - feature_space
+      - embedding
+      - top_k
+      properties:
+        feature_space:
+          $ref: '#/components/schemas/FeatureSpaceContract'
+        embedding:
+          type: array
+          minItems: 512
+          maxItems: 512
+          items:
+            type: number
+            format: float
+          description: Finite nonzero 512D vector; normalized by the existing gallery.
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 100
+    PersonCandidate:
+      type: object
+      required:
+      - person_entity_id
+      - template_id
+      - similarity
+      properties:
+        person_entity_id:
+          type: string
+        template_id:
+          type: string
+        similarity:
+          type: number
+          format: float
+          description: Cosine similarity; candidate score rather than identity probability.
+    PersonSearchReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - hits
+        - gallery_version
+        properties:
+          hits:
+            type: array
+            items:
+              $ref: '#/components/schemas/PersonCandidate'
+          gallery_version:
+            type: integer
+            format: int64
+    Sighting:
+      type: object
+      required:
+      - observation_id
+      - target_id
+      - camera_id
+      - attribution_evidence_id
+      - captured_at_unix_ms
+      - clock_uncertainty_ms
+      - link_status
+      - time_source
+      - source_id
+      - clock_domain
+      properties:
+        observation_id:
+          type: string
+        target_id:
+          type: string
+        camera_id:
+          type: string
+        attribution_evidence_id:
+          type: string
+        captured_at_unix_ms:
+          type: integer
+          format: int64
+          description: UTC capture time in milliseconds.
+        clock_uncertainty_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        link_status:
+          type: string
+          enum:
+          - CONFIRMED
+          - PROVISIONAL
+          - UNASSIGNED
+          - CONFLICT
+        time_source:
+          type: string
+          enum:
+          - UTC_CAPTURE
+          - MEDIA_OFFSET
+          - RECEIVED_AT
+          - UNKNOWN
+        source_id:
+          type: string
+        clock_domain:
+          type: string
+          example: UTC
+        reentry_evidence_id:
+          type: string
+    CameraEdge:
+      type: object
+      required:
+      - edge_id
+      - from_camera
+      - to_camera
+      - min_travel_ms
+      - max_travel_ms
+      - cost
+      properties:
+        edge_id:
+          type: string
+          description: Stable directed topology edge ID used by the versioned geometry binding endpoint.
+        from_camera:
+          type: string
+        to_camera:
+          type: string
+        min_travel_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        max_travel_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Soft travel-time scoring reference; waiting is allowed.
+        cost:
+          type: number
+          format: double
+          minimum: 0
+        open_from_unix_ms:
+          type: integer
+          format: int64
+        open_until_unix_ms:
+          type: integer
+          format: int64
+    CameraGraph:
+      type: object
+      required:
+      - version
+      - edges
+      properties:
+        version:
+          type: string
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/CameraEdge'
+    TrajectoryOptions:
+      type: object
+      properties:
+        max_visit_gap_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 30000
+        max_clock_uncertainty_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 1000
+        session_gap_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 3600000
+        max_hops:
+          type: integer
+          minimum: 1
+          default: 8
+        max_expansions:
+          type: integer
+          minimum: 1
+          default: 10000
+        max_candidates:
+          type: integer
+          minimum: 1
+          default: 8
+        backup_score_margin:
+          type: number
+          format: double
+          minimum: 0
+          default: 1
+        travel_time_weight_per_second:
+          type: number
+          format: double
+          minimum: 0
+          default: 0
+        non_overlapping_cameras:
+          type: array
+          description: Verified disjoint observation-region pairs. Empty means unknown. A strictly intervening capture can
+            split a visit and is retained as boundary_observation_id.
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: string
+              minLength: 1
+    RebuildRequest:
+      type: object
+      required:
+      - target_id
+      - reason
+      - sightings
+      - graph
+      properties:
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 'Optimistic precondition: 0 for creation; current trajectory version for a changed rebuild. Omission
+            on an existing changed target returns 409. An identical current-input retry may use an older expected version.'
+        target_id:
+          type: string
+        reason:
+          type: string
+        sightings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sighting'
+        graph:
+          $ref: '#/components/schemas/CameraGraph'
+        options:
+          $ref: '#/components/schemas/TrajectoryOptions'
+    GetRequest:
+      type: object
+      required:
+      - target_id
+      properties:
+        target_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
+    TimelineRequest:
+      type: object
+      required:
+      - target_id
+      - at_unix_ms
+      properties:
+        target_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
+        at_unix_ms:
+          type: integer
+          format: int64
+        from_unix_ms:
+          type: integer
+          format: int64
+        to_unix_ms:
+          type: integer
+          format: int64
+    CaptureTimeBounds:
+      type: object
+      description: Bounds of actual first and last capture times over all accepted observations. Middle captures can extend
+        the envelope. Nominal endpoint error fields remain the errors of those endpoint captures and must not substitute for
+        this envelope.
+      required:
+      - first_earliest_unix_ms
+      - first_latest_unix_ms
+      - last_earliest_unix_ms
+      - last_latest_unix_ms
+      properties:
+        first_earliest_unix_ms:
+          type: integer
+          format: int64
+        first_latest_unix_ms:
+          type: integer
+          format: int64
+        last_earliest_unix_ms:
+          type: integer
+          format: int64
+        last_latest_unix_ms:
+          type: integer
+          format: int64
+    ObservedInterval:
+      type: object
+      required:
+      - first_seen_unix_ms
+      - last_seen_unix_ms
+      - first_seen_clock_uncertainty_ms
+      - last_seen_clock_uncertainty_ms
+      - time_bounds
+      properties:
+        first_seen_unix_ms:
+          type: integer
+          format: int64
+        last_seen_unix_ms:
+          type: integer
+          format: int64
+        first_seen_clock_uncertainty_ms:
+          type: integer
+          format: int64
+        last_seen_clock_uncertainty_ms:
+          type: integer
+          format: int64
+        time_bounds:
+          $ref: '#/components/schemas/CaptureTimeBounds'
+    Anchor:
+      allOf:
+      - $ref: '#/components/schemas/ObservedInterval'
+      - type: object
+        required:
+        - anchor_id
+        - visit_id
+        - camera_id
+        properties:
+          anchor_id:
+            type: string
+          visit_id:
+            type: string
+          camera_id:
+            type: string
+    CameraVisit:
+      allOf:
+      - $ref: '#/components/schemas/ObservedInterval'
+      - type: object
+        required:
+        - visit_id
+        - target_id
+        - camera_id
+        - observation_ids
+        properties:
+          visit_id:
+            type: string
+          target_id:
+            type: string
+          camera_id:
+            type: string
+          max_clock_uncertainty_ms:
+            type: integer
+            format: int64
+          observation_ids:
+            type: array
+            items:
+              type: string
+          attribution_evidence_ids:
+            type: array
+            items:
+              type: string
+          source_ids:
+            type: array
+            items:
+              type: string
+          reentry_evidence_ids:
+            type: array
+            items:
+              type: string
+          boundary_observation_id:
+            type: string
+            description: Intervening confirmed capture that proves a return through a verified disjoint region; empty when
+              unavailable.
+    TrajectorySession:
+      allOf:
+      - $ref: '#/components/schemas/ObservedInterval'
+      - type: object
+        required:
+        - session_id
+        - anchor_ids
+        - segment_ids
+        properties:
+          session_id:
+            type: string
+          anchor_ids:
+            type: array
+            items:
+              type: string
+          segment_ids:
+            type: array
+            items:
+              type: string
+    NodeStatus:
+      type: string
+      enum:
+      - OBSERVED
+      - INFERRED
+      - UNKNOWN
+    PathNode:
+      type: object
+      description: Possible time envelope conditional on this candidate route. A time inside the envelope is not a precise
+        position or a claim of continuous presence.
+      required:
+      - camera_id
+      - status
+      - earliest_unix_ms
+      - latest_unix_ms
+      properties:
+        camera_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/NodeStatus'
+        earliest_unix_ms:
+          type: integer
+          format: int64
+        latest_unix_ms:
+          type: integer
+          format: int64
+    PathTimeRange:
+      type: object
+      required:
+      - earliest_unix_ms
+      - latest_unix_ms
+      properties:
+        earliest_unix_ms:
+          type: integer
+          format: int64
+        latest_unix_ms:
+          type: integer
+          format: int64
+    PathCandidate:
+      type: object
+      required:
+      - nodes
+      - edge_ids
+      - edge_time_bounds
+      - score
+      - edge_cost
+      - time_penalty
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathNode'
+        edge_ids:
+          type: array
+          items:
+            type: string
+          description: Ordered directed passage IDs; edge_ids[i] connects nodes[i] and nodes[i+1]. Bind these IDs to traversable
+            3D navigation geometry when it is supplied.
+        edge_time_bounds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathTimeRange'
+          description: Possible passage occupancy envelopes conditional on this candidate route; bounds[i] belongs to edge_ids[i].
+            Includes permitted travel slack, but starts no earlier than the edge departure opening time. These bounds do not
+            imply a speed, precise position or observed presence.
+        score:
+          type: number
+          format: double
+          description: Ranking score, not a probability.
+        edge_cost:
+          type: number
+          format: double
+        time_penalty:
+          type: number
+          format: double
+    NullablePathCandidate:
+      type: object
+      nullable: true
+      required: [nodes, edge_ids, edge_time_bounds, score, edge_cost, time_penalty]
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathNode'
+        edge_ids:
+          type: array
+          items:
+            type: string
+        edge_time_bounds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathTimeRange'
+        score:
+          type: number
+          format: double
+        edge_cost:
+          type: number
+          format: double
+        time_penalty:
+          type: number
+          format: double
+    TrajectorySegment:
+      type: object
+      description: from/to times delimit the possible interval. A route is selected only when it is feasible between the latest
+        possible departure capture and earliest possible arrival capture. UNKNOWN can mean insufficient conservative time,
+        ambiguous ordering, or no route; it does not prove physical impossibility.
+      required:
+      - segment_id
+      - graph_version
+      - from_anchor_id
+      - to_anchor_id
+      - from_unix_ms
+      - to_unix_ms
+      - status
+      - search_complete
+      - unique_path
+      - primary
+      - backups
+      properties:
+        segment_id:
+          type: string
+        graph_version:
+          type: string
+        from_anchor_id:
+          type: string
+        to_anchor_id:
+          type: string
+        from_unix_ms:
+          type: integer
+          format: int64
+        to_unix_ms:
+          type: integer
+          format: int64
+        status:
+          $ref: '#/components/schemas/NodeStatus'
+        search_complete:
+          type: boolean
+        unique_path:
+          type: boolean
+          description: Unique among conservatively feasible bounded simple paths when search is complete.
+        primary:
+          $ref: '#/components/schemas/NullablePathCandidate'
+        backups:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathCandidate'
+    TrajectoryRevision:
+      type: object
+      required:
+      - target_id
+      - previous_version
+      - version
+      - reason
+      - affected_segment_ids
+      properties:
+        target_id:
+          type: string
+        previous_version:
+          type: integer
+          format: int64
+        version:
+          type: integer
+          format: int64
+        reason:
+          type: string
+        affected_segment_ids:
+          type: array
+          items:
+            type: string
+    TrajectorySnapshot:
+      type: object
+      required:
+      - target_id
+      - version
+      - graph
+      - options
+      - evidence
+      - visits
+      - anchors
+      - sessions
+      - segments
+      - revision
+      - rejected_observation_ids
+      properties:
+        association_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        freshness:
+          $ref: '#/components/schemas/TrajectoryFreshness'
+        target_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+        graph_version:
+          type: string
+        graph:
+          $ref: '#/components/schemas/CameraGraph'
+        options:
+          $ref: '#/components/schemas/TrajectoryOptions'
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sighting'
+        visits:
+          type: array
+          items:
+            $ref: '#/components/schemas/CameraVisit'
+        anchors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Anchor'
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrajectorySession'
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrajectorySegment'
+        revision:
+          $ref: '#/components/schemas/TrajectoryRevision'
+        rejected_observation_ids:
+          type: array
+          items:
+            type: string
+    TimelineObservation:
+      type: object
+      required:
+      - anchor_id
+      - observation
+      properties:
+        anchor_id:
+          type: string
+        observation:
+          $ref: '#/components/schemas/Sighting'
+    TimelinePathLocation:
+      type: object
+      required:
+      - segment_id
+      - route_index
+      - node_indices
+      - edge_indices
+      properties:
+        segment_id:
+          type: string
+        route_index:
+          type: integer
+          minimum: 0
+          description: 0 selects primary; n > 0 selects backups[n-1] in the matching segment.
+        node_indices:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+          description: Zero-based candidate node indices whose passage bounds contain the query time.
+        edge_indices:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+          description: Zero-based candidate edge indices whose occupancy bounds contain the query time.
+    Timeline:
+      type: object
+      description: OBSERVED requires a capture with nominal timestamp equal to the query. This is direct capture evidence
+        with its stated clock uncertainty, not zero-error positioning. Clock-only overlap of individual captures returns possible
+        anchor IDs with UNKNOWN status. Unobserved Visit interiors do not establish possible capture evidence. Range anchors
+        use full capture envelopes. Previous/next anchors follow actual nominal captures, including captures inside an extended
+        Visit; these are not uncertainty-order claims. Previous observation is at or before the query time; next is strictly
+        after. Simultaneous captures use deterministic observation ID order. Evidence belongs to the requested immutable snapshot.
+        Path locations enumerate possibilities for each retained candidate, not probabilities or exact coordinates. Multiple
+        active segments or a gap before a passage opens remain UNKNOWN unless a direct capture establishes OBSERVED evidence.
+      required:
+      - target_id
+      - version
+      - at_unix_ms
+      - status
+      - observed_anchor_ids
+      - possible_observed_anchor_ids
+      - previous_anchor_id
+      - next_anchor_id
+      - segment_id
+      - anchors_in_range
+      - segments_in_range
+      - previous_observation
+      - next_observation
+      - active_segment_ids
+      - path_locations
+      properties:
+        freshness:
+          $ref: '#/components/schemas/TrajectoryFreshness'
+        target_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+        at_unix_ms:
+          type: integer
+          format: int64
+        status:
+          $ref: '#/components/schemas/NodeStatus'
+        observed_anchor_ids:
+          type: array
+          items:
+            type: string
+        possible_observed_anchor_ids:
+          type: array
+          items:
+            type: string
+        previous_anchor_id:
+          type: string
+          nullable: true
+        next_anchor_id:
+          type: string
+          nullable: true
+        previous_observation:
+          type: object
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/TimelineObservation'
+        next_observation:
+          type: object
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/TimelineObservation'
+        segment_id:
+          type: string
+          nullable: true
+          description: Set only when exactly one segment covers the query time; otherwise null.
+        active_segment_ids:
+          type: array
+          items:
+            type: string
+          description: All segments covering the query time, including UNKNOWN segments.
+        path_locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimelinePathLocation'
+          description: Possible node and passage indices for each retained primary or backup route at the query time. Resolve
+            segment_id within segments_in_range. An empty result does not establish a physical position.
+        anchors_in_range:
+          type: array
+          items:
+            $ref: '#/components/schemas/Anchor'
+        segments_in_range:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrajectorySegment'
+    Point3D:
+      type: array
+      minItems: 3
+      maxItems: 3
+      items:
+        type: number
+        format: double
+    GeometryEdge:
+      type: object
+      required:
+      - edge_id
+      - from_camera
+      - to_camera
+      - points
+      properties:
+        edge_id:
+          type: string
+          minLength: 1
+        from_camera:
+          type: string
+          minLength: 1
+        to_camera:
+          type: string
+          minLength: 1
+        points:
+          type: array
+          minItems: 2
+          items:
+            $ref: '#/components/schemas/Point3D'
+    GeometryModel:
+      type: object
+      required:
+      - geometry_version
+      - graph_version
+      - coordinate_frame
+      - unit
+      - join_tolerance
+      - edges
+      properties:
+        geometry_version:
+          type: string
+          minLength: 1
+        graph_version:
+          type: string
+          minLength: 1
+        coordinate_frame:
+          type: string
+          minLength: 1
+        unit:
+          type: string
+          enum:
+          - m
+          - cm
+          - mm
+        join_tolerance:
+          type: number
+          format: double
+          minimum: 0
+          description: Explicit maximum route-join distance in the stated coordinate unit.
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeometryEdge'
+    GeometryRoute:
+      type: object
+      required:
+      - route_index
+      - status
+      - conditional_on_route
+      - polyline
+      - edges
+      - missing_edge_ids
+      properties:
+        route_index:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum:
+          - AVAILABLE_INFERRED
+          - MISSING_GEOMETRY
+          - DISCONTINUOUS_GEOMETRY
+        conditional_on_route:
+          type: boolean
+          enum:
+          - true
+        polyline:
+          type: array
+          items:
+            $ref: '#/components/schemas/Point3D'
+        missing_edge_ids:
+          type: array
+          items:
+            type: string
+        edges:
+          type: array
+          items:
+            type: object
+            required:
+            - edge_id
+            - points
+            - earliest_unix_ms
+            - latest_unix_ms
+            properties:
+              edge_id:
+                type: string
+              points:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Point3D'
+              earliest_unix_ms:
+                type: integer
+                format: int64
+              latest_unix_ms:
+                type: integer
+                format: int64
+    GeometryReply:
+      type: object
+      required:
+      - ok
+      - geometry
+      properties:
+        freshness:
+          $ref: '#/components/schemas/TrajectoryFreshness'
+        ok:
+          type: boolean
+          enum:
+          - true
+        geometry:
+          type: object
+          required:
+          - target_id
+          - version
+          - geometry_version
+          - graph_version
+          - coordinate_frame
+          - unit
+          - segments
+          properties:
+            freshness:
+              $ref: '#/components/schemas/TrajectoryFreshness'
+            target_id:
+              type: string
+            version:
+              type: integer
+              format: int64
+            geometry_version:
+              type: string
+            graph_version:
+              type: string
+            coordinate_frame:
+              type: string
+            unit:
+              type: string
+              enum:
+              - m
+              - cm
+              - mm
+            segments:
+              type: array
+              items:
+                type: object
+                required:
+                - segment_id
+                - status
+                - search_complete
+                - unique_path
+                - routes
+                properties:
+                  segment_id:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                    - INFERRED
+                    - UNKNOWN
+                  search_complete:
+                    type: boolean
+                  unique_path:
+                    type: boolean
+                  routes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GeometryRoute'
+    AlgorithmReply:
+      type: object
+      required:
+      - ok
+      properties:
+        freshness:
+          $ref: '#/components/schemas/TrajectoryFreshness'
+        ok:
+          type: boolean
+        error:
+          type: string
+      additionalProperties: true
+    ErrorReply:
+      type: object
+      required:
+      - ok
+      - error
+      properties:
+        error_code:
+          type: string
+          enum:
+          - VERSION_CONFLICT
+          - SOURCE_CONFLICT
+          - REBUILD_REQUIRED
+          - CLOCK_UNTRUSTED
+        conflict:
+          type: object
+          required:
+          - target_id
+          - latest_version
+          - current_association_revision
+          properties:
+            target_id:
+              type: string
+            latest_version:
+              type: integer
+              format: int64
+              minimum: 0
+            current_association_revision:
+              type: integer
+              format: int64
+              minimum: 0
+        ok:
+          type: boolean
+          enum:
+          - false
+        error:
+          type: string
+          minLength: 1
+        client_context:
+          $ref: '#/components/schemas/ClientContext'
+    TrajectoryReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        properties:
+          revision:
+            $ref: '#/components/schemas/TrajectoryRevision'
+          trajectory:
+            $ref: '#/components/schemas/TrajectorySnapshot'
+    TimelineReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        properties:
+          timeline:
+            $ref: '#/components/schemas/Timeline'
+    ActivityID:
+      type: object
+      required:
+      - activity_id
+      properties:
+        activity_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+    ActivityVersions:
+      type: object
+      required:
+      - activity_id
+      - config_version
+      - binding_version
+      - monitoring_version
+      properties:
+        activity_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        activity_num:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        config_version:
+          type: integer
+          format: int64
+          minimum: 0
+        binding_version:
+          type: integer
+          format: int64
+          minimum: 0
+        monitoring_version:
+          type: integer
+          format: int64
+          minimum: 0
+      description: Explicit current activity revisions. A supplied activity_num must match the authoritative mapping; it does
+        not replace activity_id.
+    ActivityEventScope:
+      allOf:
+      - $ref: '#/components/schemas/ActivityVersions'
+      - type: object
+        required:
+        - route_rule_id
+        properties:
+          route_rule_id:
+            type: string
+            minLength: 1
+            maxLength: 1024
+    ClientContext:
+      type: object
+      required:
+      - subject
+      - session
+      - context_id
+      - context_generation
+      - authz_revision
+      properties:
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        session:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        context_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        context_generation:
+          type: integer
+          format: int64
+          minimum: 1
+        authz_revision:
+          type: integer
+          format: int64
+          minimum: 1
+    AuthorizedReply:
+      type: object
+      required:
+      - client_context
+      properties:
+        client_context:
+          $ref: '#/components/schemas/ClientContext'
+    ActivityReplyContext:
+      type: object
+      required:
+      - activity_id
+      - activity_num
+      - venue_id
+      - config_version
+      - binding_version
+      - monitoring_version
+      properties:
+        activity_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        activity_num:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        venue_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        config_version:
+          type: integer
+          format: int64
+          minimum: 0
+        binding_version:
+          type: integer
+          format: int64
+          minimum: 0
+        monitoring_version:
+          type: integer
+          format: int64
+          minimum: 0
+    ActivityReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - $ref: '#/components/schemas/ActivityReplyContext'
+      - type: object
+        required:
+        - enabled
+        properties:
+          enabled:
+            type: boolean
+          duplicate:
+            type: boolean
+    ActivitySyncRequest:
+      type: object
+      required:
+      - activity_id
+      - activity_num
+      - venue_id
+      - config_version
+      - expected_config_version
+      properties:
+        activity_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        activity_num:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        venue_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        config_version:
+          type: integer
+          format: int64
+          minimum: 0
+        expected_config_version:
+          type: integer
+          format: int64
+          minimum: 0
+        configuration:
+          type: object
+          additionalProperties: true
+      description: Create stopped, or update configuration using CAS. activity_num and venue_id mapping are immutable; configuration
+        has no implicit monitoring effect.
+    DeviceActivityBinding:
+      type: object
+      required:
+      - source_id
+      - device_id
+      - kind
+      - route_rule_id
+      properties:
+        source_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        device_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        kind:
+          type: string
+          enum:
+          - CAMERA
+          - GATE
+        route_rule_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+    ActivityBindingsRequest:
+      type: object
+      required:
+      - activity_id
+      - config_version
+      - binding_version
+      - expected_binding_version
+      - bindings
+      properties:
+        activity_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        config_version:
+          type: integer
+          format: int64
+          minimum: 0
+        binding_version:
+          type: integer
+          format: int64
+          minimum: 0
+        expected_binding_version:
+          type: integer
+          format: int64
+          minimum: 0
+        bindings:
+          type: array
+          maxItems: 10000
+          items:
+            $ref: '#/components/schemas/DeviceActivityBinding'
+    ActivityMonitoringRequest:
+      allOf:
+      - $ref: '#/components/schemas/ActivityVersions'
+      - type: object
+        required:
+        - expected_monitoring_version
+        - enabled
+        properties:
+          expected_monitoring_version:
+            type: integer
+            format: int64
+            minimum: 0
+          enabled:
+            type: boolean
+      description: Explicit independent monitoring transition. New version must exceed expected; current config/binding must
+        match. Start requires nonempty explicit bindings. Planned end time never stops monitoring.
+    SubscriptionContext:
+      type: object
+      required:
+      - activity_id
+      - subscription_id
+      - generation
+      - after_sequence
+      - client_context
+      properties:
+        activity_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        subscription_id:
+          type: string
+          minLength: 1
+        generation:
+          type: integer
+          format: int64
+          minimum: 1
+        after_sequence:
+          type: integer
+          format: int64
+          minimum: 0
+        client_context:
+          $ref: '#/components/schemas/ClientContext'
+    SubscriptionRequest:
+      type: object
+      required:
+      - subscription_id
+      - generation
+      properties:
+        subscription_id:
+          type: string
+          minLength: 1
+        generation:
+          type: integer
+          format: int64
+          minimum: 1
+        activity_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+    ActivityResultEvent:
+      allOf:
+      - $ref: '#/components/schemas/ActivityReplyContext'
+      - type: object
+        required:
+        - sequence
+        - operation
+        - status
+        - retention_deadline_unix_ms
+        properties:
+          sequence:
+            type: integer
+            format: int64
+            minimum: 1
+          operation:
+            type: string
+            enum:
+            - monitoring_observe
+            - monitoring_gate_event
+          status:
+            type: string
+          retention_deadline_unix_ms:
+            type: integer
+            format: int64
+          route_rule_id:
+            type: string
+            minLength: 1
+            maxLength: 1024
+          client_context:
+            $ref: '#/components/schemas/ClientContext'
+          subscription_id:
+            type: string
+          subscription_generation:
+            type: integer
+            minimum: 1
+          association:
+            type: object
+            nullable: true
+          monitoring:
+            type: object
+            nullable: true
+          detail_query_required:
+            type: boolean
+    SubscriptionReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - $ref: '#/components/schemas/SubscriptionContext'
+      - type: object
+        properties:
+          latest_sequence:
+            type: integer
+            format: int64
+            minimum: 0
+          closed:
+            type: boolean
+          events:
+            type: array
+            maxItems: 100
+            items:
+              $ref: '#/components/schemas/ActivityResultEvent'
+    SignedAuthorizationClaims:
+      allOf:
+      - $ref: '#/components/schemas/ClientContext'
+      - type: object
+        required:
+        - issuer
+        - key_id
+        - not_before_unix_ms
+        - expires_unix_ms
+        - grants
+        - global_actions
+        properties:
+          issuer:
+            type: string
+            minLength: 1
+            maxLength: 1024
+          key_id:
+            type: string
+            minLength: 1
+            maxLength: 1024
+          not_before_unix_ms:
+            type: integer
+            format: int64
+          expires_unix_ms:
+            type: integer
+            format: int64
+          grants:
+            type: array
+            items:
+              type: object
+              required:
+              - activity_id
+              - actions
+              properties:
+                activity_id:
+                  type: string
+                  minLength: 1
+                  maxLength: 1024
+                actions:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                    - query
+                    - subscribe
+                    - config
+                    - monitor
+                    - ingest
+                    - identity
+          global_actions:
+            type: array
+            items:
+              type: string
+              enum:
+              - global_config
+              - push_status
+              - retention
+      description: Backend-signed claims; validity is checked against verified UTC including its uncertainty, maximum interval
+        24 hours. This JSON is encoded and signed, never accepted as a plain request body.
+    ClockAuthorityProof:
+      type: object
+      required:
+      - issuer
+      - key_id
+      - challenge
+      - now_unix_ms
+      - uncertainty_ms
+      - valid_for_ms
+      - source_verified
+      - source
+      - evidence_id
+      properties:
+        issuer:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        key_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        challenge:
+          type: string
+        now_unix_ms:
+          type: integer
+          format: int64
+          minimum: 604800000
+        uncertainty_ms:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        valid_for_ms:
+          type: integer
+          minimum: 1
+          maximum: 120000
+        source_verified:
+          type: boolean
+          enum:
+          - true
+        source:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        evidence_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      description: External verified UTC authority signs the current /health challenge and atomically replaces clock-proof-file.
+        Proof uncertainty plus challenge round-trip age must be <=1000 ms. Challenge expires after 30 s; accepted proof uses
+        monotonic elapsed time and rotates challenge. Synthetic test signer is not a production clock authority.
+    StorageStats:
+      type: object
+      required:
+      - page_size
+      - page_count
+      - freelist_count
+      - reusable_bytes
+      - main_bytes
+      - wal_bytes
+      - shm_bytes
+      properties:
+        rows:
+          type: integer
+          format: int64
+          minimum: 0
+        logical_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+        page_size:
+          type: integer
+          format: int64
+          minimum: 0
+        page_count:
+          type: integer
+          format: int64
+          minimum: 0
+        freelist_count:
+          type: integer
+          format: int64
+          minimum: 0
+        reusable_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+        main_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+        wal_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+        shm_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+      additionalProperties: true
+    RetentionRequest:
+      type: object
+      required:
+      - dry_run
+      properties:
+        dry_run:
+          type: boolean
+      additionalProperties: false
+    RetentionReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - dry_run
+        - trusted_now_unix_ms
+        - cutoff_unix_ms
+        - before
+        - activities
+        - p1
+        - complete
+        properties:
+          dry_run:
+            type: boolean
+          trusted_now_unix_ms:
+            type: integer
+            format: int64
+          cutoff_unix_ms:
+            type: integer
+            format: int64
+          before:
+            $ref: '#/components/schemas/StorageStats'
+          after_logical:
+            $ref: '#/components/schemas/StorageStats'
+          after_physical:
+            $ref: '#/components/schemas/StorageStats'
+          rows_deleted:
+            type: integer
+            minimum: 0
+          push_rows_removed:
+            type: integer
+            minimum: 0
+          activities:
+            type: array
+            items:
+              type: object
+              additionalProperties: true
+              description: Per-scope exact deletion/retained counts and snapshot/shared-object pruning. activity_id is null
+                for unassigned legacy scope.
+          p1:
+            type: object
+            required:
+            - status
+            - dry_run
+            - databases
+            properties:
+              status:
+                type: string
+                enum:
+                - COMPLETE
+                - INCOMPLETE
+              dry_run:
+                type: boolean
+              databases:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+          complete:
+            type: boolean
+          maintenance_status:
+            type: string
+            enum:
+            - COMPLETE
+            - PENDING
+          maintenance_error:
+            type: string
+          count_semantics:
+            type: string
+            enum:
+            - EXACT_IN_MEMORY_PLAN_NO_SOURCE_MUTATION
+            - EXACT_INITIAL_ROW_KEYS_REMOVED; REWRITTEN_VALUES_REPORTED_SEPARATELY
+            description: Dry-run uses exact in-memory planning without source mutation. Actual cleanup row deletion counts
+              are initial keys removed; rewritten values and GC are reported separately.
+        additionalProperties: true
+    RetentionStatusReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - type: object
+        required:
+        - retention
+        properties:
+          retention:
+            type: object
+            required:
+            - enabled
+            - interval_ms
+            - running
+            - attempts
+            - successes
+            - failures
+            - last_dry_run
+            - last_duration_ms
+            properties:
+              enabled:
+                type: boolean
+              interval_ms:
+                type: integer
+                minimum: 1000
+                maximum: 86400000
+              running:
+                type: boolean
+              attempts:
+                type: integer
+                minimum: 0
+              successes:
+                type: integer
+                minimum: 0
+              failures:
+                type: integer
+                minimum: 0
+              last_dry_run:
+                type: boolean
+              last_duration_ms:
+                type: integer
+                minimum: 0
+              last_error:
+                type: string
+              last_result:
+                $ref: '#/components/schemas/RetentionReply'
+            additionalProperties: true
+    CompactIntakeReceipt:
+      type: object
+      required:
+      - ok
+      - status
+      - detail_query_required
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+        detail_query_required:
+          type: boolean
+          enum:
+          - true
+        duplicate:
+          type: boolean
+        association:
+          type: object
+          nullable: true
+      description: A retained original receipt may be compacted when dependent older evidence expires. Fetch current details
+        using scoped queries; it cannot restore removed historical payloads.
+    HeldOrExpiredIntakeReply:
+      type: object
+      required:
+      - ok
+      - status
+      - reason_codes
+      properties:
+        ok:
+          type: boolean
+          enum:
+          - true
+        status:
+          type: string
+          enum:
+          - HOLD
+          - EXPIRED
+        reason_codes:
+          type: array
+          items:
+            type: string
+        duplicate:
+          type: boolean
+        association:
+          type: object
+          nullable: true
+        monitoring:
+          type: object
+          nullable: true
+        trajectories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonitoringTrajectoryReference'
+      description: Activity/binding/version HOLD or minimal EXPIRED tombstone receipt. These outcomes do not require association/normalization
+        fields present in the accepted face/gate receipt.
+    QualifiedMonitoringObserveReply:
+      type: object
+      required:
+      - ok
+      - observation_id
+      - status
+      - time_admitted
+      - receipt_scope
+      - normalization
+      - reason_codes
+      - association
+      - monitoring
+      - trajectories
+      properties:
+        ok:
+          type: boolean
+        observation_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACCEPTED
+          - HOLD
+        time_admitted:
+          type: boolean
+        receipt_scope:
+          type: string
+          enum:
+          - ORIGINAL_TRANSACTION
+        normalization:
+          $ref: '#/components/schemas/ClockNormalization'
+        reason_codes:
+          type: array
+          items:
+            type: string
+        association:
+          oneOf:
+          - $ref: '#/components/schemas/AssociationResult'
+          - type: object
+            nullable: true
+            enum:
+            - null
+        monitoring:
+          oneOf:
+          - $ref: '#/components/schemas/MonitoringProjection'
+          - type: object
+            nullable: true
+            enum:
+            - null
+        trajectories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonitoringTrajectoryReference'
+    QualifiedMonitoringGateReply:
+      type: object
+      required:
+      - ok
+      - event_id
+      - status
+      - revision
+      - normalization
+      - target_id
+      - identity_source
+      properties:
+        ok:
+          type: boolean
+        event_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - HOLD
+          - UNBOUND
+          - BINDING_PENDING
+          - BOUND
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+        normalization:
+          $ref: '#/components/schemas/ClockNormalization'
+        target_id:
+          type: string
+          nullable: true
+        identity_source:
+          type: string
+          enum:
+          - CONFIRMED_FACE_OBSERVATION_ONLY
+        monitoring:
+          $ref: '#/components/schemas/MonitoringProjection'
+  responses:
+    StateConflict:
+      description: Version precondition or authoritative source mismatch, or current trajectory needs rebuild after association
+        changes. Do not blindly refresh expected_version and resend old input.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorReply'
+    InvalidRequest:
+      description: Invalid JSON object, evidence, graph, option or query.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorReply'
+    WorkerUnavailable:
+      description: C++ algorithm worker unavailable or returned invalid JSON.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorReply'
+    CapacityUnavailable:
+      description: Queue, gallery or SQLite capacity reached, or verified UTC proof is unavailable/expired. Preserve immutable
+        source/event/content on retry; refresh authority proof as appropriate.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorReply'
+    RequestTimeout:
+      description: Caller timed out. A mutation may still commit; retry its exact immutable observation ID/content.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorReply'
+    Unauthorized:
+      description: Missing, invalid, expired or untrusted signed backend identity.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorReply'
+    Forbidden:
+      description: Authenticated identity lacks the requested activity action or subscription context.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorReply'
+    SubscriptionGone:
+      description: Subscription ended or was lost on daemon restart; reopen without changing monitoring lifecycle.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorReply'
+  securitySchemes:
+    BackendSignedBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: base64url(JSON).base64url(Ed25519 signature)
+      description: Signature covers exact decoded JSON bytes. Trusted issuer/public keys are startup configuration. Plain
+        activity_id or unsigned client_context conveys no authority.
+security:
+- BackendSignedBearer: []
+x-trusted-clock:
+  challenge: GET /health
+  proofSchema: '#/components/schemas/ClockAuthorityProof'
+  proofConfiguration: clock-proof-file
+  keysConfiguration: clock-public-key-file
+  issuerConfiguration: clock-issuer
+  maximumProofMS: 120000
+  maximumTotalUncertaintyMS: 1000
+x-retention:
+  durationMS: 604800000
+  cutoff: trusted UTC now - 604800000; nominal capture == cutoff is retained
+  defaultDeletionEnabled: false
+  unknownP2: at most 168 hours from first verified quarantine receipt; retries/restarts never reset
+  unknownLegacyOrP1: immediate expiry when no trustworthy original quarantine deadline exists; no new migration window
+  excluded: registered gallery, activities, necessary lifecycle/bindings, backend ticket history and camera recordings

@@ -1,0 +1,218 @@
+{
+  "date": "2026-10-13",
+  "timezone": "Asia/Singapore",
+  "scope": "Local ordinary-camera connection display, overlap selection and direction arrows",
+  "production_accessed": false,
+  "field_accuracy_claim": false,
+  "model_installed_or_changed": false,
+  "real_camera_end_to_end_verified": false,
+  "eagleeye_implemented": false,
+  "checks": {
+    "viewer_tests": 16,
+    "viewer_test_failures": 0,
+    "viewer_syntax": true,
+    "browser_passed": true,
+    "distinct_chords": 2,
+    "retained_drawable_records": 3,
+    "nominal_hollow_arrows": 3,
+    "filled_arrows_in_uncertain_sample": 0,
+    "selected_return_arrow": "C -> B",
+    "existing_local_document_links": 137
+  },
+  "unchanged_against_previous": [
+    {
+      "file": "cpp/src/point_trajectory.cpp",
+      "previous_sha256": "77431bb6ad7a0f0fccb77602c931a172fa6f47eae621e92df0c578a10d7be209",
+      "current_sha256": "77431bb6ad7a0f0fccb77602c931a172fa6f47eae621e92df0c578a10d7be209",
+      "unchanged": true
+    },
+    {
+      "file": "cpp/src/activity.cpp",
+      "previous_sha256": "3c6093967d452691081b0aea5db01adb4b517497c58e918895677fa1858ca25f",
+      "current_sha256": "3c6093967d452691081b0aea5db01adb4b517497c58e918895677fa1858ca25f",
+      "unchanged": true
+    },
+    {
+      "file": "cpp/CMakeLists.txt",
+      "previous_sha256": "c3466f7d746e3737c1b8340c6f576458ac7c4800885e91a05b31c1f68780b709",
+      "current_sha256": "c3466f7d746e3737c1b8340c6f576458ac7c4800885e91a05b31c1f68780b709",
+      "unchanged": true
+    },
+    {
+      "file": "cpp/tests/point_connections_test.cpp",
+      "previous_sha256": "a013b774d2d7f06fd288e38f8b5ee82fb4793ca1ca3518b32a92ee17bcc4e25d",
+      "current_sha256": "a013b774d2d7f06fd288e38f8b5ee82fb4793ca1ca3518b32a92ee17bcc4e25d",
+      "unchanged": true
+    },
+    {
+      "file": "openapi.yaml",
+      "previous_sha256": "6d1cabc00df22104128d155f1f08ab8a90b7024b10bcdcbef8c59cf3004582f6",
+      "current_sha256": "6d1cabc00df22104128d155f1f08ab8a90b7024b10bcdcbef8c59cf3004582f6",
+      "unchanged": true
+    },
+    {
+      "file": "tools/verify_point_connections.py",
+      "previous_sha256": "d8bd0bd88ef539a2605fcda460219d404a2c295899a28777c7431d67d807206a",
+      "current_sha256": "d8bd0bd88ef539a2605fcda460219d404a2c295899a28777c7431d67d807206a",
+      "unchanged": true
+    },
+    {
+      "file": "tools/point-viewer/trace.test.mjs",
+      "previous_sha256": "dd197d4bd74b6f0b5819204eec6a1e20836a26fd265d666901329b46ab3b74ae",
+      "current_sha256": "dd197d4bd74b6f0b5819204eec6a1e20836a26fd265d666901329b46ab3b74ae",
+      "unchanged": true
+    },
+    {
+      "file": "tools/point-viewer/serve_viewer.py",
+      "previous_sha256": "6c9a04f6493040f43fb93ee13ab06b7f3a903bf249c8ac2800f3d693821df2f1",
+      "current_sha256": "6c9a04f6493040f43fb93ee13ab06b7f3a903bf249c8ac2800f3d693821df2f1",
+      "unchanged": true
+    },
+    {
+      "file": "tools/point-viewer/sample.json",
+      "previous_sha256": "de7a0df79bc4376e859bb20ec67ad47018976b3711983ce957a14bb17ccaacdb",
+      "current_sha256": "de7a0df79bc4376e859bb20ec67ad47018976b3711983ce957a14bb17ccaacdb",
+      "unchanged": true
+    },
+    {
+      "file": "cpp/build-point-connections/Release/face_trajectory_worker.exe",
+      "previous_sha256": "2e2b33aad3b8f99fcc0c224e6d63977d114fc9d81c400dea6141a4074705718f",
+      "current_sha256": "2e2b33aad3b8f99fcc0c224e6d63977d114fc9d81c400dea6141a4074705718f",
+      "unchanged": true
+    },
+    {
+      "file": "cpp/build-point-connections/Release/face-trajectoryd.exe",
+      "previous_sha256": "c7f7e2b59dceb915579d671bd0665164d133eb12da07539a9c6e8bba8bc53daf",
+      "current_sha256": "c7f7e2b59dceb915579d671bd0665164d133eb12da07539a9c6e8bba8bc53daf",
+      "unchanged": true
+    },
+    {
+      "file": "cpp/build-point-connections/Release/point_connections_test.exe",
+      "previous_sha256": "b7b0f7f8631a3ae458a4195cd57fc944e8376e01caa18f26ebb56914f5d79cfe",
+      "current_sha256": "b7b0f7f8631a3ae458a4195cd57fc944e8376e01caa18f26ebb56914f5d79cfe",
+      "unchanged": true
+    }
+  ],
+  "files": [
+    {
+      "file": "docs/point-connections.md",
+      "sha256": "ec49f0f8a6cf506174fa20e3b8617facf27a04a32d66b23d789d39845a887563"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/after-direction-render.json",
+      "sha256": "69b682af9e25a3609e1365c88810f38b3f2093e3821178ff84ee36b5463333ca"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/after-direction.jpg",
+      "sha256": "ff6e689ba29fbdb6409c7995abdd3d687d510616ac570483a00ae1ce62bfd145"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/after-render.json",
+      "sha256": "4cf8ce57c2c2b40fe09d298dd1654289523a02c4760b506547ca4d40b994a93a"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/after-tests.log",
+      "sha256": "4ec68bd0322887b8f2fc9540d5857572b5237b9353cb8b7ee5b1622b982900b5"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/after.jpg",
+      "sha256": "52f9c6f95aea272541a5ffbf7a0707b2eda564cec66faee8432055cf72c4a2e0"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before/docs__point-connections.md",
+      "sha256": "1df7175754f086105c81456ae68dbac4dce17ab94bb559190f293c29d46f31b7"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before/HANDOFF.md",
+      "sha256": "3a2f7707a9b9730e4a9e13c0292f9d3d68d4d1538299b69365e30614600e327c"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before/tools__point-viewer__index.html",
+      "sha256": "8b320ad0d0179d04c60c933f194007ab807e38e67d8677a58f9e86b94cd04783"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before/tools__point-viewer__style.css",
+      "sha256": "90251acb7a7ea9031a0fd044a04e130c3e06bd95b1d8123c8273e97fbf4c0db6"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before/tools__point-viewer__trace.mjs",
+      "sha256": "76c9bc0f59e92d46fab7e14d8fc944f92d495ef9d7174e1f1912da804a5641e3"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before/tools__point-viewer__trace.test.mjs",
+      "sha256": "dd197d4bd74b6f0b5819204eec6a1e20836a26fd265d666901329b46ab3b74ae"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before/tools__point-viewer__viewer.mjs",
+      "sha256": "cac640403d62f9f8e09db83355594a0e38bb82bdb78696b1f4f72529641025a1"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before-render.json",
+      "sha256": "1dc7b1335085ba8f72002988e7cce8cb62bfbdd05c02471dc26e675d4202d6c8"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before-tests.log",
+      "sha256": "6580adadc07ac06c21863fcc6122893ab2997f2f38d38caefc88a48ef2993453"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/before.jpg",
+      "sha256": "e588d80846f219ccf4301502d5db44fe17f7374efd2ee81557948fc638371c61"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/final-tests.log",
+      "sha256": "1866453f21d75bc61dbfef053f10b4f8a948553b1c69446f37631297e0055071"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/red-baseline/overlap.test.mjs",
+      "sha256": "71f8e20ec025b926619d89837eee8d03ed62fea7430aad0bb5b7a62a81a43d58"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/red-baseline/sample.json",
+      "sha256": "de7a0df79bc4376e859bb20ec67ad47018976b3711983ce957a14bb17ccaacdb"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/red-baseline/trace.mjs",
+      "sha256": "8015a78fcdc0637d8d96cfe9c44451dfeceaa19e41ec8639e3d3f54410efc4b0"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/REVIEW.md",
+      "sha256": "c2ae5d312244021ca52f27c47b3f8ebf0faf7dc4621cbc5bf52c82d5c59eead8"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/selected-record-3-direction.jpg",
+      "sha256": "cccff688eb4cfd08cc0cda9b6eacec7d0beec76ac1961c6ab7c30dcaee9fd88a"
+    },
+    {
+      "file": "evidence/2026-10-13-point-connection-display-fix/selected-record-3.jpg",
+      "sha256": "bb8bcdaad4f1e410d95218ae02cb22be457751805c624a38808178792cc4b2ab"
+    },
+    {
+      "file": "HANDOFF.md",
+      "sha256": "6e2896cbd079e86253fc208102150be232a1e7085e76a2ddc853773dc33ea98a"
+    },
+    {
+      "file": "tools/point-viewer/direction.test.mjs",
+      "sha256": "d6ef9ac7ff3a2342f0fa5d5923c21e529dca70f9fea6d0d6199745fee54a11a1"
+    },
+    {
+      "file": "tools/point-viewer/index.html",
+      "sha256": "c582fc5965be5b4b591b4eea4658bcd7dad72cc0b380b06fc13de454428b5cbf"
+    },
+    {
+      "file": "tools/point-viewer/overlap.test.mjs",
+      "sha256": "71f8e20ec025b926619d89837eee8d03ed62fea7430aad0bb5b7a62a81a43d58"
+    },
+    {
+      "file": "tools/point-viewer/style.css",
+      "sha256": "17c9acddb890704c66fd0360a81fd246af8bb40aac12cf91b71242cf7a313157"
+    },
+    {
+      "file": "tools/point-viewer/trace.mjs",
+      "sha256": "c56581c32629af5ea620864db05f6f8b871b4517e0a2a576e336a2c4824f31ea"
+    },
+    {
+      "file": "tools/point-viewer/viewer.mjs",
+      "sha256": "1ee098e17532afbf5dcd3fed59d54b02a90d327d1a8a74e4614a6764a5a4d6cf"
+    }
+  ]
+}

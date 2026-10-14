@@ -1,0 +1,1 @@
+observation_id,source_id,camera_id,frame_id,captured_at_unix_ms,clock_uncertainty_ms,time_source,clock_domain,local_track_id,track_session_id,detection_score,face_size_px,embedding_file,feature_space_file,image_file,truth_target_id,truth_evidence_id,notes

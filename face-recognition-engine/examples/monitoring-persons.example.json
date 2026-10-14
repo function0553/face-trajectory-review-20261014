@@ -1,0 +1,19 @@
+{
+  "persons": [
+    {
+      "activity_id": "REPLACE_WITH_AUTHORITATIVE_ACTIVITY_ID",
+      "activity_num": "REPLACE_WITH_AUTHORITATIVE_ACTIVITY_NUM",
+      "config_version": 1,
+      "binding_version": 1,
+      "monitoring_version": 1,
+      "source_id": "REPLACE_WITH_AUTHORITATIVE_ROSTER_SOURCE",
+      "event_id": "REPLACE_WITH_STABLE_PER_PERSON_SYNC_EVENT_ID",
+      "person_id": "REPLACE_WITH_STABLE_PERSON_ID",
+      "category": "PRIORITY",
+      "revision": 1,
+      "expected_revision": 0,
+      "evidence_id": "REPLACE_WITH_ROSTER_REVISION_SOURCE",
+      "photos": ["REPLACE_WITH_SINGLE_PERSON_PHOTO.jpg"]
+    }
+  ]
+}

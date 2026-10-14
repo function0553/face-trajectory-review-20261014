@@ -1,0 +1,928 @@
+{
+  "status": "LOCAL_REQUIREMENTS_VERIFIED",
+  "scope": "No production deployment, frontend/backend live integration or capacity acceptance.",
+  "requirements": [
+    {
+      "requirement_ids": [
+        "2.activities.1",
+        "2.activities.2",
+        "4.activity.1",
+        "3.stage2.3"
+      ],
+      "requirement": "A/B查询、旧响应与旧通知按活动和用户上下文识别丢弃",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "client_switch_discards_old_reply"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "client_switch_discards_old_push"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "subscription_actual_notification"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/go/internal/api/subscriptions.go"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "2.activities.3",
+        "2.activities.5",
+        "3.stage2.5",
+        "4.activity.2"
+      ],
+      "requirement": "选择、创建与启停独立，退出订阅不停止后台",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "creation_not_start_A"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "logout_does_not_stop_monitor"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "query_cannot_start"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/activity.cpp"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "2.activities.4",
+        "2.data.3",
+        "2.data.4",
+        "3.stage1.2",
+        "3.stage1.8",
+        "4.activity.3",
+        "4.activity.5",
+        "4.activity.12",
+        "4.activity.14"
+      ],
+      "requirement": "并行用户、同人类别/会话/轨迹及EXIT/停止A与B隔离，人员ID不改写",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "simultaneous_users_context_isolation"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "independent_categories"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "physical_activity_namespaces"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "A_exit_leaves_B"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "stop_A_not_B"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "activity_trajectory_only_B"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/state.cpp",
+        "face-trajectory/cpp/src/worker.cpp"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "2.activities.6",
+        "2.activities.8",
+        "3.stage1.5",
+        "3.stage2.1",
+        "4.activity.10"
+      ],
+      "requirement": "新活动CAS同步、设备范围修订及明确启停，无须改核心，不按计划结束自动停",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "new_binding_ingests_without_code_change"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "old_binding_new_event_quarantined"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "planned_end_not_stop"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "stale_config_isolated"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "stopped_late_intake_hold"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/docs/activity-service.md",
+        "face-trajectory/collection/activity-service.example.json"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "2.activities.7",
+        "2.data.5",
+        "2.data.6",
+        "3.stage1.7",
+        "4.activity.11"
+      ],
+      "requirement": "不猜最新活动、不按共享场地扇出；缺归属保持隔离",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "shared_device_no_fanout"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "unknown_activity_reject"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "no_legacy_observation_write"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "event_authoritative_mapping_conflict_hold"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/activity.cpp"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "2.activities.9",
+        "3.stage1.1",
+        "3.stage2.6",
+        "4.activity.4"
+      ],
+      "requirement": "签名身份/动作覆盖读写订阅，裸参数不能越权",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "missing_identity_rejected"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "cross_activity_denied_/v1/activities/get"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "cross_activity_denied_/v1/monitoring/get"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "cross_activity_denied_/v1/subscriptions/open"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "cross_activity_denied_/v1/activities/monitoring"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/go/internal/trust/auth.go",
+        "face-trajectory/go/internal/api/server.go"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "2.data.1",
+        "2.data.2"
+      ],
+      "requirement": "活动id、唯一num与venue权威映射，矛盾编号拒绝或入流隔离",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "mapping_immutable"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "query_authoritative_mapping_conflict_rejected"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "activity_query_mapping_conflict_rejected"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "monitoring_query_mapping_conflict_rejected"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/activity.cpp"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "2.data.7",
+        "2.data.8",
+        "2.data.8.a",
+        "2.data.8.b",
+        "2.data.8.c",
+        "2.data.8.d",
+        "2.data.8.e"
+      ],
+      "requirement": "登记图库与动态状态分开；保留统一身份标准、优先/普通配额、匿名轨迹、漏入口和明确人脸出闸",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "unregistered_anonymous_trajectory"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "A_exit_closes_A"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "anonymous_context_retains_business_id"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/gallery.cpp",
+        "face-trajectory/cpp/src/association.cpp",
+        "face-trajectory/cpp/src/monitoring.cpp",
+        "face-recognition-engine/src/face_engine/scheduling.py",
+        "face-recognition-engine/src/face_engine/monitoring_service.py"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "2.data.9.a",
+        "2.data.9.b",
+        "4.activity.16",
+        "4.activity.17"
+      ],
+      "requirement": "核验相机名义UTC、60秒误差准入及重叠顺序歧义",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "time_over60_hold"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "unverified_time_hold"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "unknown_time_hold"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "admitted_overlap_preserved"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "untrusted_server_reference_denied"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "retention_preserves_crossing_interval_order_ambiguity"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/clock_adapter.cpp",
+        "face-trajectory/go/internal/trust/clock.go"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "2.data.10"
+      ],
+      "requirement": "约600路/3090优先/2秒目标3秒可接受作为设计约束记录，明确尚未容量验收",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [],
+      "current_sources": [
+        "face-trajectory/HANDOFF.md",
+        "face-recognition-engine/docs/monitoring-runtime.md",
+        "face-recognition-engine/examples/monitoring.example.json"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "3.stage1.3",
+        "3.stage1.4",
+        "3.stage2.4",
+        "4.activity.6",
+        "4.activity.7",
+        "4.activity.8"
+      ],
+      "requirement": "activity/source/event幂等，同内容不重复副作用、异内容409及冷启动重放隔离",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "same_person_cross_activity"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "same_event_other_source"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "same_key_retry"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "same_key_changed_conflict"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "restart_idempotency"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "live_retry_has_no_persisted_business_side_effect"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/activity.cpp"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "3.stage1.6",
+        "4.activity.9"
+      ],
+      "requirement": "按活动轮转与持久推送配额，失败活动退避，保持其他活动处理机会",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/outbox-final-03/summary.json",
+          "check": "A_scope_backpressure_preserves_global_reserve"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/outbox-final-03/summary.json",
+          "check": "B_intake_remains_accepted_after_A_durable_queue_backpressure"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/outbox-final-03/summary.json",
+          "check": "A_committed_same_content_retry_survives_backpressure"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/outbox-final-03/summary.json",
+          "check": "B_committed_event_retry_is_idempotent_at_A_backpressure"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/outbox-final-03/summary.json",
+          "check": "B_valid_runtime_restores_after_A_outbox_flood"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "real_Go_Cpp_failed_A_does_not_block_B_push"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "B_notification_has_activity_versions_and_deadline"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "B_monitoring_stays_active_during_A_delivery_failure"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "only_A_unacknowledged_scope_heads_remain_before_restart"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "Go_Cpp_restart_preserves_independent_A_B_lifecycles_during_failed_delivery"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "restart_replays_same_A_head_and_scoped_idempotency_key"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "restarted_failed_A_does_not_block_new_B_push"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "real_Cpp_A_scope_commit_order_survives_retry"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "A_retry_preserves_scoped_idempotency_key"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "A_retry_keeps_independent_backoff"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "all_activities_durable_pushes_acknowledged_without_loss"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+          "check": "real_SQLite_outbox_has_no_unacknowledged_rows"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/go/internal/worker/fair.go",
+        "face-trajectory/go/internal/push/sender.go",
+        "face-trajectory/cpp/src/worker.cpp"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "4.activity.13",
+        "4.activity.15"
+      ],
+      "requirement": "迟到EXIT不关闭新会话，重启恢复各活动状态",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "late_exit_not_close_new_session"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+          "check": "restart_isolated_monitoring"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "restart_lifecycle_A"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "restart_lifecycle_B"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "late_exit_after_prune_does_not_close_new_session"
+        }
+      ],
+      "current_sources": []
+    },
+    {
+      "requirement_ids": [
+        "3.stage3.1",
+        "3.stage3.2",
+        "3.stage3.3",
+        "4.retention.1"
+      ],
+      "requirement": "可信UTC和名义capture唯一截止口径，等于168小时保留",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "known_capture_deadline_uses_capture_only"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "capture_equal_cutoff_retained"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "capture_before_cutoff_removed"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/retention.cpp",
+        "face-trajectory/go/internal/trust/clock.go"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "3.stage3.4",
+        "3.stage3.5",
+        "4.retention.7",
+        "4.retention.8"
+      ],
+      "requirement": "清理所有历史版本、共享节点、索引、缓存、投递与重放源；有效引用不损坏",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "all_historical_versions_scrubbed_1"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "legacy_refs_v1_live_shared_object_retained"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "expired_marker_absent_all_state_columns"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "subscription_replay_has_no_expired_markers"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "live_gate_own_capture_history_retained_with_scrubbed_expired_dependency"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/trajectory.cpp",
+        "face-trajectory/cpp/src/retention.cpp",
+        "face-trajectory/cpp/src/p1_retention.cpp"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "3.stage3.6",
+        "4.retention.2",
+        "4.retention.3",
+        "4.retention.9"
+      ],
+      "requirement": "过期补传/重复/恢复不复活，窗口内重试无重复副作用、异内容冲突",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "expired_duplicate_cannot_resurrect"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "expired_late_new_key_rejected"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "expired_restart_retry_cannot_resurrect"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "live_retry_remains_idempotent"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "live_retry_changed_content_conflicts"
+        }
+      ],
+      "current_sources": []
+    },
+    {
+      "requirement_ids": [
+        "3.stage3.7",
+        "3.stage3.12",
+        "4.retention.4",
+        "4.retention.5"
+      ],
+      "requirement": "未知/超限首次隔离最多168小时，不借重试、迁移或未来时间续期；未归属历史同样有界",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "unknown_first_quarantine_unchanged"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "quarantine_one_ms_after_deadline_expired"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "unknown_restart_retry_cannot_renew"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "changed_unknown_requarantine_cannot_renew_key"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "legacy_orphan_held_intake_does_not_gain_new_lease"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "future_timestamp_cannot_extend_quarantine_past_168_hours"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/p1_retention.cpp"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "3.stage3.8",
+        "4.retention.6"
+      ],
+      "requirement": "持续清理、指标可观测，真实kill/读事务阻塞后恢复，物理未完成不会伪称success",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "periodic_real_cleanup_executes"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "http_retention_observable"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "actual_process_kill_recovers_partial_transaction"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "terminated_process_cleanup_resumes"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "reader_blocked_physical_cleanup_reports_failure_and_incomplete"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "released_reader_next_retention_finishes_physical_cleanup"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/go/internal/retention/manager.go"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "3.stage3.9",
+        "4.retention.10"
+      ],
+      "requirement": "清理A不删除B的窗口内轨迹",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "A_cleanup_leaves_B_valid_trajectory_identical"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "pruned_face_binding_does_not_damage_B_valid_trajectory"
+        }
+      ],
+      "current_sources": []
+    },
+    {
+      "requirement_ids": [
+        "3.stage3.10",
+        "4.retention.11"
+      ],
+      "requirement": "登记图库/活动/绑定与外部验票录像排除",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "registered_gallery_excluded"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "legacy_registered_gallery_excluded"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/cpp/src/retention.cpp",
+        "face-trajectory/cpp/src/p1_retention.cpp",
+        "face-trajectory/HANDOFF.md"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "3.stage3.11"
+      ],
+      "requirement": "最小运行状态不保存超窗时间、相机或事件原文",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "runtime_seed_has_no_expired_time_camera_or_event"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "crossing_dependencies_are_minimal_hash_kind_tokens"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "corrected_gate_expiry_keeps_closed_minimum_state_without_gate_history"
+        }
+      ],
+      "current_sources": []
+    },
+    {
+      "requirement_ids": [
+        "3.stage3.13",
+        "4.retention.12"
+      ],
+      "requirement": "本地隔离验证，默认dry-run，生产删除另行授权；精确统计不改任何源列或辅助文件",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "dry_run_preserves_every_persisted_column"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "dry_total_delete_prediction_exact"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+          "check": "dry_shared_object_prediction_exact"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "http_dry_run_no_state_changes"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/docs/activity-service.md",
+        "face-recognition-engine/evidence/2026-10-10-activity-retention/p1-maintenance-result.json"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "3.design",
+        "3.stage2.2",
+        "3.stage2.7",
+        "3.stage4",
+        "5.handoff.1",
+        "5.handoff.2",
+        "5.handoff.3",
+        "5.handoff.4",
+        "5.handoff.5",
+        "5.handoff.6",
+        "5.handoff.7",
+        "5.handoff.8",
+        "5.handoff.9",
+        "5.handoff.10"
+      ],
+      "requirement": "统一设计、实际接收接口、契约/示例/迁移回退/坑点、两份唯一交接及前后端最小配合",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [],
+      "current_sources": [
+        "face-trajectory/docs/activity-retention.md",
+        "face-trajectory/docs/activity-service.md",
+        "face-trajectory/openapi.yaml",
+        "face-trajectory/collection/activity-service.example.json",
+        "face-trajectory/HANDOFF.md",
+        "face-recognition-engine/HANDOFF.md"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "4.build.cpp",
+        "4.build.go",
+        "4.integration"
+      ],
+      "requirement": "C++构建及Go build/vet/test通过，真实Go/C++/新建SQLite集成作为验收",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "real_worker_results_scoped"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+          "check": "http_real_cleanup_reports"
+        }
+      ],
+      "current_sources": [
+        "face-trajectory/evidence/2026-10-10-activity-retention/cpp-final-build.log",
+        "face-trajectory/evidence/2026-10-10-activity-retention/go-final-tests.log"
+      ]
+    },
+    {
+      "requirement_ids": [
+        "4.storage.1",
+        "4.storage.2",
+        "4.storage.3",
+        "4.storage.4",
+        "4.storage.5"
+      ],
+      "requirement": "查询/重放、有效数据量、可复用空间、主库/WAL、六轮增长分开报告",
+      "status": "VERIFIED_LOCAL",
+      "behavior_proofs": [
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "expired_duplicate_cannot_resurrect"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "explicit_cleanup_reports_physical_storage"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "expired_marker_absent_file_main"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "expired_marker_absent_file_-wal"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "multi_cycle_trajectory_storage_growth_bounded"
+        },
+        {
+          "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+          "check": "minimal_hash_tombstone_growth_separately_measured"
+        }
+      ],
+      "current_sources": []
+    }
+  ],
+  "suite_results": {
+    "core": {
+      "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/core-final-03/summary.json",
+      "checks_passed": 40,
+      "worker_sha256": "965a1bd29fb6547ae532b44d81aef1d3e083402d53590ae3e837562f02e6d428"
+    },
+    "service": {
+      "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/service-final-03/summary.json",
+      "checks_passed": 31,
+      "worker_sha256": "965a1bd29fb6547ae532b44d81aef1d3e083402d53590ae3e837562f02e6d428"
+    },
+    "retention": {
+      "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/retention-final-03/summary.json",
+      "checks_passed": 81,
+      "worker_sha256": "965a1bd29fb6547ae532b44d81aef1d3e083402d53590ae3e837562f02e6d428"
+    },
+    "edges": {
+      "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/edges-final-03/summary.json",
+      "checks_passed": 45,
+      "worker_sha256": "965a1bd29fb6547ae532b44d81aef1d3e083402d53590ae3e837562f02e6d428"
+    },
+    "outbox": {
+      "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/outbox-final-03/summary.json",
+      "checks_passed": 5,
+      "worker_sha256": "965a1bd29fb6547ae532b44d81aef1d3e083402d53590ae3e837562f02e6d428"
+    },
+    "push": {
+      "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+      "checks_passed": 12,
+      "worker_sha256": "965a1bd29fb6547ae532b44d81aef1d3e083402d53590ae3e837562f02e6d428"
+    },
+    "p1_scope": {
+      "evidence": "face-recognition-engine/evidence/2026-10-10-activity-retention/p1-scope-result.json",
+      "checks_passed": 12
+    },
+    "p1_retention": {
+      "evidence": "face-recognition-engine/evidence/2026-10-10-activity-retention/p1-retention-result.json",
+      "checks_passed": 10
+    },
+    "p1_maintenance": {
+      "evidence": "face-recognition-engine/evidence/2026-10-10-activity-retention/p1-maintenance-result.json",
+      "checks_passed": 8
+    },
+    "p1_dependency": {
+      "evidence": "face-recognition-engine/evidence/2026-10-10-activity-retention/p1-dependency-result.json",
+      "checks_passed": 7
+    }
+  },
+  "fairness_additional_evidence": [
+    {
+      "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/outbox-final-03/summary.json",
+      "checks_passed": 5,
+      "worker_sha256": "965a1bd29fb6547ae532b44d81aef1d3e083402d53590ae3e837562f02e6d428"
+    },
+    {
+      "evidence": "face-trajectory/evidence/2026-10-10-activity-retention/push-final-04/summary.json",
+      "checks_passed": 12,
+      "worker_sha256": "965a1bd29fb6547ae532b44d81aef1d3e083402d53590ae3e837562f02e6d428"
+    }
+  ],
+  "p1_compatibility_evidence": [
+    {
+      "evidence": "face-recognition-engine/evidence/2026-10-10-activity-retention/p1-scope-result.json",
+      "checks_passed": 12
+    },
+    {
+      "evidence": "face-recognition-engine/evidence/2026-10-10-activity-retention/p1-retention-result.json",
+      "checks_passed": 10
+    },
+    {
+      "evidence": "face-recognition-engine/evidence/2026-10-10-activity-retention/p1-maintenance-result.json",
+      "checks_passed": 8
+    },
+    {
+      "evidence": "face-recognition-engine/evidence/2026-10-10-activity-retention/p1-dependency-result.json",
+      "checks_passed": 7
+    }
+  ],
+  "explicitly_not_performed": [
+    "Real frontend/login/production authorization integration",
+    "Production deployment or cleanup",
+    "600-camera/3090/2-3s capacity acceptance"
+  ],
+  "remaining_limits": [
+    "P1 non-Windows offline external-store freeze fails closed",
+    "Minimal idempotency hashes and excluded registration/configuration history still grow",
+    "One P1 maintenance recovery assertion failed without preserved report; eight later runs passed; original cause remains unknown"
+  ],
+  "sealed_client_date": "2026-10-12"
+}

@@ -1,0 +1,1 @@
+camera_id,measured_at_utc,device_time_raw,device_timezone,server_utc_before,server_utc_after,ntp_enabled,ntp_server,utc_offset_estimate_ms,uncertainty_ms,evidence_file,notes

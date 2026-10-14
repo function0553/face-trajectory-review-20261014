@@ -1,0 +1,133 @@
+{
+  "scope": "Local real Go/C++/isolated SQLite, synthetic test identity and UTC signer only",
+  "passed": 31,
+  "checks": [
+    {
+      "name": "missing_identity_rejected",
+      "passed": true
+    },
+    {
+      "name": "create_stopped_A",
+      "passed": true
+    },
+    {
+      "name": "create_stopped_B",
+      "passed": true
+    },
+    {
+      "name": "cross_activity_denied_/v1/activities/get",
+      "passed": true
+    },
+    {
+      "name": "cross_activity_denied_/v1/monitoring/get",
+      "passed": true
+    },
+    {
+      "name": "cross_activity_denied_/v1/subscriptions/open",
+      "passed": true
+    },
+    {
+      "name": "cross_activity_denied_/v1/activities/monitoring",
+      "passed": true
+    },
+    {
+      "name": "query_cannot_start",
+      "passed": true
+    },
+    {
+      "name": "activity_query_mapping_conflict_rejected",
+      "passed": true
+    },
+    {
+      "name": "monitoring_query_mapping_conflict_rejected",
+      "passed": true
+    },
+    {
+      "name": "simultaneous_users_context_isolation",
+      "passed": true
+    },
+    {
+      "name": "real_worker_results_scoped",
+      "passed": true
+    },
+    {
+      "name": "same_retry_no_effect",
+      "passed": true
+    },
+    {
+      "name": "changed_retry_conflict",
+      "passed": true
+    },
+    {
+      "name": "subscription_actual_notification",
+      "passed": true
+    },
+    {
+      "name": "client_switch_discards_old_reply",
+      "passed": true
+    },
+    {
+      "name": "client_switch_discards_old_push",
+      "passed": true
+    },
+    {
+      "name": "other_session_cannot_poll",
+      "passed": true
+    },
+    {
+      "name": "logout_does_not_stop_monitor",
+      "passed": true
+    },
+    {
+      "name": "stop_A_leaves_B",
+      "passed": true
+    },
+    {
+      "name": "restart_lifecycle_A",
+      "passed": true
+    },
+    {
+      "name": "restart_lifecycle_B",
+      "passed": true
+    },
+    {
+      "name": "restart_idempotency",
+      "passed": true
+    },
+    {
+      "name": "old_but_window_capture_accepted",
+      "passed": true
+    },
+    {
+      "name": "http_dry_run_no_state_changes",
+      "passed": true
+    },
+    {
+      "name": "http_real_cleanup_reports",
+      "passed": true
+    },
+    {
+      "name": "http_cleanup_payload_removed",
+      "passed": true
+    },
+    {
+      "name": "http_expired_retry_no_restore",
+      "passed": true
+    },
+    {
+      "name": "http_retains_other_valid_points",
+      "passed": true
+    },
+    {
+      "name": "http_retention_observable",
+      "passed": true
+    },
+    {
+      "name": "periodic_real_cleanup_executes",
+      "passed": true
+    }
+  ],
+  "failure": null,
+  "service_sha256": "c7f7e2b59dceb915579d671bd0665164d133eb12da07539a9c6e8bba8bc53daf",
+  "worker_sha256": "2e2b33aad3b8f99fcc0c224e6d63977d114fc9d81c400dea6141a4074705718f"
+}

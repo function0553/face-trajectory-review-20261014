@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "cameras": [
+    {
+      "camera_id": "REPLACE_WITH_CAMERA_ID",
+      "source_id": "monitoring-acquisition-v1",
+      "activity_context": {
+        "activity_id": "REPLACE_WITH_AUTHORITATIVE_ACTIVITY_ID",
+        "activity_num": "REPLACE_WITH_AUTHORITATIVE_ACTIVITY_NUM",
+        "config_version": 1,
+        "binding_version": 1,
+        "monitoring_version": 1,
+        "route_rule_id": "REPLACE_WITH_VERSIONED_INPUT_ROUTE"
+      },
+      "role": "interior",
+      "sub_url_env": "MONITOR_CAMERA_SUB_URL",
+      "main_url_env": "MONITOR_CAMERA_MAIN_URL",
+      "backend": "ffmpeg",
+      "ffmpeg_path_env": "MONITOR_FFMPEG_PATH",
+      "gst_python_env": "MONITOR_GSTREAMER_PYTHON",
+      "sample_fps": 10,
+      "clock_profile_version": null,
+      "hikvision": {
+        "enabled": false,
+        "alert_url_env": "MONITOR_CAMERA_ALERT_URL",
+        "username_env": "MONITOR_CAMERA_USER",
+        "password_env": "MONITOR_CAMERA_PASSWORD"
+      }
+    }
+  ]
+}
