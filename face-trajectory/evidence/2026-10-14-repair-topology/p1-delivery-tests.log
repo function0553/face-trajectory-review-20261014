@@ -1,0 +1,10 @@
+test_bridge_activity_context (test_delivery_isolation.DeliveryIsolation.test_bridge_activity_context) ... ok
+test_bridge_permanent_errors_continue_fifo (test_delivery_isolation.DeliveryIsolation.test_bridge_permanent_errors_continue_fifo) ... ok
+test_bridge_retryable_errors_preserve_fifo (test_delivery_isolation.DeliveryIsolation.test_bridge_retryable_errors_preserve_fifo) ... ok
+test_delivery_410_is_quarantined (test_delivery_isolation.DeliveryIsolation.test_delivery_410_is_quarantined) ... ok
+test_empty_priority_does_not_starve_auxiliary (test_delivery_isolation.DeliveryIsolation.test_empty_priority_does_not_starve_auxiliary) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 1.288s
+
+OK

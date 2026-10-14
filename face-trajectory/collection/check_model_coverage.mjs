@@ -176,7 +176,7 @@ async function main() {
       const r = query.findPath(a.nav_polygon_ref, b.nav_polygon_ref, start, end, { maxPathPolys: 4096 });
       const flags = Detour.DT_BUFFER_TOO_SMALL | Detour.DT_OUT_OF_NODES | Detour.DT_PARTIAL_RESULT;
       let reached = !!(r.success && r.polys.size && r.polys.get(r.polys.size - 1) === b.nav_polygon_ref);
-      let complete = reached && !(r.status & flags), length = null, straightStatus = null;
+      let complete = reached && !(r.status & flags), length = null, straightStatus = null, waypoints = null;
       try {
         if (complete) {
           const straight = query.findStraightPath(start, end, r.polys, { maxStraightPathPoints: 4096 });
@@ -186,7 +186,11 @@ async function main() {
               x: straight.straightPath.get(i * 3), y: straight.straightPath.get(i * 3 + 1), z: straight.straightPath.get(i * 3 + 2) }));
             reached = !!(points.length && distance(points.at(-1), end) <= .2);
             complete = !!(straight.success && reached && !(straight.status & flags));
-            if (complete) length = points.slice(1).reduce((sum, p, i) => sum + distance(p, points[i]), 0);
+            if (complete) {
+              length = points.slice(1).reduce((sum, p, i) => sum + distance(p, points[i]), 0);
+              // Export scene-local coordinates, never raw Detour [x,z,-y].
+              waypoints = points.map(p => {const [x,y,z] = localPoint(p); return {x,y,z};});
+            }
           } finally {
             straight.straightPath.destroy(); straight.straightPathFlags.destroy(); straight.straightPathRefs.destroy();
           }
@@ -195,7 +199,7 @@ async function main() {
       pairs.push({ from_annotation_id: a.annotation_id, to_annotation_id: b.annotation_id,
         from_camera_id: a.camera_id, to_camera_id: b.camera_id, complete_model_path: complete,
         reached_destination: reached, path_status: r.status, straight_path_status: straightStatus,
-        model_path_length_m: length, real_pedestrian_route_verified: false });
+        model_path_length_m: length, ...(waypoints ? {waypoints} : {}), real_pedestrian_route_verified: false });
     }
     report = { schema: 'general-model-suitability-audit@2', production_executed: false,
       trajectory_acceptance: false, camera_fov_verified: false, navigability_field_verified: false,

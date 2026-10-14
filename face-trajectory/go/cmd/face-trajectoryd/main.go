@@ -113,11 +113,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server := &http.Server{
-		Addr: *address, Handler: api.NewAuthorized(sender, verifier, clock, retentionManager),
-		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
-		WriteTimeout: 30 * time.Second,
-	}
+	server := algorithmHTTPServer(*address, api.NewAuthorized(sender, verifier, clock, retentionManager))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	pushDone := make(chan struct{})
@@ -143,4 +139,14 @@ func main() {
 	stop()
 	<-pushDone
 	<-retentionDone
+}
+
+func algorithmHTTPServer(address string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr: address, Handler: handler,
+		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
+		// Allow a 20s admission queue, 5m first restoration and bounded reaping.
+		// Ordinary execution still has the worker's independent 20s timer.
+		WriteTimeout: 6 * time.Minute,
+	}
 }

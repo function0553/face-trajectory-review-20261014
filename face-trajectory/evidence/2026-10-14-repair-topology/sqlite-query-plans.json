@@ -1,0 +1,14 @@
+{
+  "activity_result_keyset": [
+    "SEARCH state USING PRIMARY KEY (ns=? AND key>?)"
+  ],
+  "activity_push_head": [
+    "SEARCH state USING INDEX state_ref (ns=? AND ref=? AND key>?)"
+  ],
+  "activity_push_count": [
+    "SEARCH state USING COVERING INDEX state_ref (ns=? AND ref=?)"
+  ],
+  "event_ack_lookup": [
+    "SEARCH state USING INDEX state_track (ns=? AND track=?)"
+  ]
+}

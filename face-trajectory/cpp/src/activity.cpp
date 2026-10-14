@@ -92,10 +92,16 @@ json ActivityStore::Control(const json& r) {
         const auto latest=std::stoull(scope.Get("activity_result_meta","sequence").value_or("0"));
         const auto limit=std::min<std::uint64_t>(r.value("limit",100ULL),100);
         auto events=json::array(); const auto now=TrustedNow(r);
-        scope.Scan("activity_result",[&](const std::string&,const std::string& raw){
-            const auto e=json::parse(raw);
-            if(e.at("sequence").get<std::uint64_t>()>after && e.at("retention_deadline_unix_ms").get<std::int64_t>()>=now && events.size()<limit)events.push_back(e);
-        });
+        const auto number=std::to_string(after);
+        auto cursor=std::string(20-number.size(),'0')+number;
+        while(events.size()<limit) {
+            bool advanced=false;
+            scope.ScanAfter("activity_result",cursor,limit-events.size(),[&](const std::string& key,const std::string& raw){
+                cursor=key;advanced=true;const auto e=json::parse(raw);
+                if(e.at("retention_deadline_unix_ms").get<std::int64_t>()>=now)events.push_back(e);
+            });
+            if(!advanced)break;
+        }
         return WithContext({{"ok",true},{"events",events},{"latest_sequence",latest}},c);
     }
     if(op=="activity_sync") {

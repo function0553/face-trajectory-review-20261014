@@ -1,0 +1,10 @@
+Internal ctest changing into directory: D:/人脸算法/face-trajectory/cpp/build-repair20
+Test project D:/人脸算法/face-trajectory/cpp/build-repair20
+    Start 1: point_connections
+1/2 Test #1: point_connections ................   Passed    0.04 sec
+    Start 2: state_activity
+2/2 Test #2: state_activity ...................   Passed    0.10 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.15 sec

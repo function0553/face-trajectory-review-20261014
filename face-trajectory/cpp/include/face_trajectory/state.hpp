@@ -35,6 +35,11 @@ public:
     void Scan(const std::string& ns, const std::function<void(const std::string&,const std::string&)>& fn,
               const std::optional<std::string>& ref = {}, bool metadata = false,
               const std::optional<std::string>& track = {}) const;
+    void ScanAfter(const std::string& ns, const std::string& after_key, std::uint64_t limit,
+                   const std::function<void(const std::string&,const std::string&)>& fn,
+                   const std::optional<std::string>& ref = {}) const;
+    std::uint64_t Count(const std::string& ns, const std::optional<std::string>& ref = {}, bool indexed = true) const;
+    std::vector<std::string> References(const std::string& ns) const;
     struct Row {
         std::string ns, key, value, ref, track, meta;
     };

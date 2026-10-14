@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(face_trajectory_core LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+if(NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 17)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(sqlite_state STATIC vendor/sqlite/sqlite3.c)
@@ -24,4 +26,7 @@ if(BUILD_TESTING)
     add_executable(point_connections_test tests/point_connections_test.cpp)
     target_link_libraries(point_connections_test PRIVATE face_trajectory_core)
     add_test(NAME point_connections COMMAND point_connections_test)
+    add_executable(state_activity_test tests/state_activity_test.cpp)
+    target_link_libraries(state_activity_test PRIVATE face_trajectory_core)
+    add_test(NAME state_activity COMMAND state_activity_test)
 endif()

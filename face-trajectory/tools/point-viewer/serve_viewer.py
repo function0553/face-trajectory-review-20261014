@@ -4,7 +4,7 @@ import http.server
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
-ALLOWED = {'index.html', 'style.css', 'viewer.mjs', 'trace.mjs', 'sample.json'}
+ALLOWED = {'index.html', 'style.css', 'viewer.mjs', 'trace.mjs', 'sample.json', 'topology-sample.json'}
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):

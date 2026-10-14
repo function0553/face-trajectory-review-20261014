@@ -100,9 +100,9 @@ bool UsableFace(const FaceObservation& o, const AssociationPolicy& p) {
 AssociationStore::AssociationStore(Gallery& gallery,State* state):gallery_(gallery),state_(state) {
     if(!state_)return;
     version_=std::stoull(state_->Get("version","association").value_or("0"));
-    state_->Scan("policy",[&](const auto& id,const auto& value){policies_[id]=nlohmann::json::parse(value).get<AssociationPolicy>();});
-    state_->Scan("association_graph",[&](const auto& id,const auto& value){graphs_[id]=nlohmann::json::parse(value).get<CameraGraph>();});
-    state_->Scan("owned_template",[&](const auto& id,const auto& value){
+    state_->Scan("policy",[&](const std::string& id,const std::string& value){policies_[id]=nlohmann::json::parse(value).get<AssociationPolicy>();});
+    state_->Scan("association_graph",[&](const std::string& id,const std::string& value){graphs_[id]=nlohmann::json::parse(value).get<CameraGraph>();});
+    state_->Scan("owned_template",[&](const std::string& id,const std::string& value){
         for(const auto& v:nlohmann::json::parse(value))templates_[id].push_back({v.at("observation_id"),v.at("template_id"),v.at("quality")});
     });
 }
@@ -220,7 +220,7 @@ std::map<std::string,std::uint64_t> AssociationStore::TrackTargetCounts(const st
             return value.at("counts").get<std::map<std::string,std::uint64_t>>();
     }
     std::map<std::string,std::uint64_t> counts;
-    state_->Scan("observation",[&](const auto&,const auto& text){
+    state_->Scan("observation",[&](const std::string&,const std::string& text){
         const auto value=nlohmann::json::parse(text);
         if (!value.at("target_id").is_null()) ++counts[value.at("target_id").get<std::string>()];
     },{},true,track);
@@ -230,7 +230,7 @@ std::map<std::string,std::uint64_t> AssociationStore::TrackTargetCounts(const st
 }
 std::vector<AssociationStore::CaptureMetadata> AssociationStore::TargetMetadata(const std::string& target) const {
     std::vector<CaptureMetadata> result;
-    if(state_)state_->Scan("observation",[&](const auto&,const auto& value){
+    if(state_)state_->Scan("observation",[&](const std::string&,const std::string& value){
         const auto j=nlohmann::json::parse(value);CaptureMetadata o{};
         o.observation_id=j.at("observation_id");o.source_id=j.at("source_id");o.camera_id=j.at("camera_id");o.frame_id=j.at("frame_id");
         o.captured_at_unix_ms=j.at("captured_at_unix_ms");o.clock_uncertainty_ms=j.at("clock_uncertainty_ms");
@@ -248,7 +248,7 @@ CameraCompatibility AssociationStore::Compatible(const FaceObservation& o, const
         if (summary.camera_counts.empty()) return CameraCompatibility::Compatible;
         if (summary.camera_counts.size()==1 && summary.camera_counts.begin()->first==o.camera_id) {
             bool conflict=false;
-            state_->Scan("association_frame",[&](const auto&,const auto& text){
+            state_->Scan("association_frame",[&](const std::string&,const std::string& text){
                 const auto track=nlohmann::json::parse(text);
                 if (o.local_track_id.empty() || track.at(1).get<std::string>().empty() ||
                     track.at(0)!=o.track_session_id || track.at(1)!=o.local_track_id) conflict=true;
@@ -491,7 +491,7 @@ AssociationResult AssociationStore::Correct(const std::string& observation_id, c
 
 std::vector<SightingEvidence> AssociationStore::Sightings(const std::string& target) const {
     std::vector<SightingEvidence> result;
-    if(state_){state_->Scan("observation",[&](const auto&,const auto& value){auto j=nlohmann::json::parse(value);if(!j.at("sighting").is_null())result.push_back(j.at("sighting").get<SightingEvidence>());},target,true);
+    if(state_){state_->Scan("observation",[&](const std::string&,const std::string& value){auto j=nlohmann::json::parse(value);if(!j.at("sighting").is_null())result.push_back(j.at("sighting").get<SightingEvidence>());},target,true);
         if(result.empty() && !state_->Get("association_target",target))throw std::out_of_range("association target not found");return result;}
     const auto history = target_observations_.find(target);
     if (history == target_observations_.end()) throw std::out_of_range("association target not found");

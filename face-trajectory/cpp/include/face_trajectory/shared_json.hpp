@@ -80,7 +80,7 @@ class SharedJson {
     }
     std::optional<J> Find(std::string ref,const std::string& key) {
         while(!ref.empty()) { const auto node=Node(ref); const auto k=node.at("k").get<std::string>();
-            if(key==k) return node.at("v"); ref=node.at(key<k?"l":"r").get<std::string>(); }
+            if(key==k) return std::optional<nlohmann::json>{node.at("v")}; ref=node.at(key<k?"l":"r").get<std::string>(); }
         return {};
     }
     std::string Erase(const std::string& ref,const std::string& key) {

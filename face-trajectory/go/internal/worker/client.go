@@ -28,6 +28,8 @@ type Client struct {
 	cmd                *exec.Cmd
 	stdin              io.WriteCloser
 	stdout             *bufio.Reader
+	processCleanup     func() error // platform lifetime guard; held until Wait completes
+	reapDone           chan error
 	transactionTimeout time.Duration // set before first request
 	closed             bool          // guarded by gate
 	failure            error         // guarded by gate
@@ -77,19 +79,29 @@ func start(path, stateFile string, maxPending int, extraArgs []string) (*Client,
 	}
 	args = append(args, extraArgs...)
 	cmd := exec.Command(path, args...)
+	cleanup, err := configureProcess(cmd)
+	if err != nil {
+		return nil, err
+	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		_ = cleanup()
 		return nil, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		_ = stdin.Close()
+		_ = cleanup()
 		return nil, err
 	}
 	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
+	if err := startProcess(cmd); err != nil {
+		_ = stdin.Close()
+		_ = cleanup()
 		return nil, err
 	}
 	client := &Client{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout), gate: make(chan struct{}, 1), closing: make(chan struct{}), transactionTimeout: requestTimeout}
+	client.processCleanup = cleanup
 	client.pending = make(chan struct{}, maxPending)
 	client.path = path
 	client.args = args
@@ -142,35 +154,44 @@ func (c *Client) Request(ctx context.Context, request json.RawMessage) (json.Raw
 	}
 	done := make(chan transactionResult, 1)
 	go c.transact(append([]byte(nil), request...), done)
-	select {
-	case reply := <-done:
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		return reply.response, reply.err
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	// Admission cancellation stops at this boundary. Once submitted, wait for
+	// the worker's bounded transaction and preserve its committed receipt.
+	reply := <-done
+	return reply.response, reply.err
 }
 
 // Only the next request restarts a durable worker. The interrupted mutation is
 // never silently replayed; producers retry using the same observation ID.
 func (c *Client) restartLocked() error {
-	_ = c.cmd.Wait()
+	if c.cmd != nil {
+		if err := c.finishReapLocked(); err != nil {
+			return err
+		}
+	}
 	cmd := exec.Command(c.path, c.args...)
+	cleanup, err := configureProcess(cmd)
+	if err != nil {
+		return err
+	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		_ = cleanup()
 		return err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		_ = stdin.Close()
+		_ = cleanup()
 		return err
 	}
 	cmd.Stderr = os.Stderr
-	if err = cmd.Start(); err != nil {
+	if err = startProcess(cmd); err != nil {
+		_ = stdin.Close()
+		_ = cleanup()
 		return err
 	}
 	c.cmd = cmd
+	c.processCleanup = cleanup
 	c.stdin = stdin
 	c.stdout = bufio.NewReader(stdout)
 	c.closed = false
@@ -235,8 +256,33 @@ func (c *Client) transact(request []byte, done chan<- transactionResult) {
 func (c *Client) stopLocked(err error) {
 	c.closed = true
 	c.failure = err
-	_ = c.cmd.Process.Kill()
+	if c.cmd == nil {
+		return
+	}
 	_ = c.stdin.Close()
+	_ = c.cmd.Process.Kill()
+	// Wait runs exactly once. If reaping exceeds the short bound, retain cmd
+	// and fail closed: a replacement must never race the old state lock.
+	cmd := c.cmd
+	c.reapDone = make(chan error, 1)
+	wait := c.reapDone
+	go func() { wait <- cmd.Wait() }()
+	_ = c.finishReapLocked()
+}
+
+func (c *Client) finishReapLocked() error {
+	select {
+	case <-c.reapDone:
+	case <-time.After(3 * time.Second):
+		return errors.New("old C++ worker has not exited; restart is blocked")
+	}
+	c.cmd = nil
+	c.reapDone = nil
+	if c.processCleanup != nil {
+		_ = c.processCleanup()
+		c.processCleanup = nil
+	}
+	return nil
 }
 
 func (c *Client) Close() error {
@@ -247,8 +293,14 @@ func (c *Client) Close() error {
 		if c.failure == nil {
 			c.failure = errors.New("C++ worker is closed")
 		}
-		_ = c.stdin.Close()
-		c.closeErr = c.cmd.Wait()
+		if c.cmd != nil {
+			if c.reapDone == nil {
+				c.stopLocked(c.failure)
+			}
+			if c.cmd != nil {
+				c.closeErr = c.finishReapLocked()
+			}
+		}
 		c.gate <- struct{}{}
 	})
 	return c.closeErr

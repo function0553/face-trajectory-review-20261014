@@ -1,8 +1,10 @@
 # 给Gemini的审核任务
 
-我是算法开发交付方，希望你审核这套安保人脸/时空算法当前源码。核心对象是P2 C++17+Go+SQLite，P1相关Python源码用于跨模块审核。请阅读实际文件，不要从名称、目录或一般经验直接判定已存在缺陷。
+我是算法开发交付方，希望你审核这套安保人脸/时空算法当前源码。核心对象是P2 C++17/20+Go+SQLite，P1相关Python源码用于跨模块审核。请阅读实际文件，不要从名称、目录或一般经验直接判定已存在缺陷。
 
 先确认你已读到源码正文。如果GitHub未被工具读取、内容截断或文件未加载，请列出缺失文件，不要编造行号或结论；可用仓库audit_bundle.txt作为纯文本附件补充。上传者也可直接把该TXT上传当前会话。
+
+当前已按D-01～D-07任务书修复并新增拓扑参考折线；先读repair-topology-2026-10-14.md和validation-summary.json，再核对修复后源码。拓扑折点不是实测连续轨迹；相机原端点与时钟不确定性必须保留。
 
 请按以下顺序审核：
 1. P2完整HANDOFF、OpenAPI、activity-service、monitoring、clock-adapter、consistency、point-connections合同。

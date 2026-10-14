@@ -1,7 +1,9 @@
 #include "face_trajectory/state.hpp"
+#include "face_trajectory/path_utf8.hpp"
 #include <sqlite/sqlite3.h>
 #include <nlohmann/json.hpp>
 #include <filesystem>
+#include <algorithm>
 #include <stdexcept>
 #ifdef _WIN32
 #define NOMINMAX
@@ -39,7 +41,7 @@ struct Statement {
 State::State(const std::string& path,std::uint64_t max_bytes) {
     if (path.empty()) throw std::invalid_argument("state file path is required");
     auto resolved=std::filesystem::absolute(std::filesystem::u8path(path));
-    path_=resolved.u8string();
+    path_=PathToUtf8(resolved);
     std::filesystem::create_directories(resolved.parent_path());
     auto lockpath=resolved;lockpath+=".lock";
 #ifdef _WIN32
@@ -52,7 +54,7 @@ State::State(const std::string& path,std::uint64_t max_bytes) {
     lock_=reinterpret_cast<void*>(static_cast<intptr_t>(fd+1));
 #endif
     try {
-        if (sqlite3_open_v2(resolved.u8string().c_str(),&db_,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,nullptr)!=SQLITE_OK)
+        if (sqlite3_open_v2(path_.c_str(),&db_,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,nullptr)!=SQLITE_OK)
             throw std::runtime_error("cannot open SQLite state");
         sqlite3_busy_timeout(db_,5000);
         Sql("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA cache_size=-8192; PRAGMA secure_delete=ON;");
@@ -66,6 +68,11 @@ State::State(const std::string& path,std::uint64_t max_bytes) {
         Sql(("PRAGMA max_page_count="+std::to_string(max_bytes/page_size)).c_str());
         Sql("CREATE TABLE IF NOT EXISTS state(ns TEXT NOT NULL,key TEXT NOT NULL,value TEXT NOT NULL,ref TEXT NOT NULL,track TEXT NOT NULL,meta TEXT NOT NULL,PRIMARY KEY(ns,key)) WITHOUT ROWID;"
             "CREATE INDEX IF NOT EXISTS state_ref ON state(ns,ref); CREATE INDEX IF NOT EXISTS state_track ON state(ns,track); PRAGMA user_version=1;");
+        // One-time compatible backfill for durable queues written before the
+        // activity/event indices were populated. It never changes event bodies.
+        Sql("UPDATE state SET ref=json_extract(value,'$.activity_id'),track=json_extract(value,'$.event_id') "
+            "WHERE ns='push_outbox' AND json_valid(value) AND json_type(value,'$.activity_id')='text' "
+            "AND json_type(value,'$.event_id')='text' AND (ref='' OR track='');");
     } catch (...) {
         if(db_){sqlite3_close(db_);db_=nullptr;}
 #ifdef _WIN32
@@ -145,6 +152,30 @@ void State::Scan(const std::string& ns,const std::function<void(const std::strin
     if(ref)sql+=" AND ref=?";if(track)sql+=" AND track=?";
     Statement s(db_,sql.c_str());s.Bind(1,PhysicalNamespace(ns));int i=2;if(ref)s.Bind(i++,*ref);if(track)s.Bind(i++,*track);
     while(s.Step()==SQLITE_ROW)fn(s.Text(0),s.Text(1));
+}
+void State::ScanAfter(const std::string& ns,const std::string& after_key,std::uint64_t limit,
+                     const std::function<void(const std::string&,const std::string&)>& fn,
+                     const std::optional<std::string>& ref) const {
+    if(limit==0)return;
+    const auto bounded=std::min<std::uint64_t>(limit,static_cast<std::uint64_t>(INT64_MAX));
+    const char* sql=ref ? "SELECT key,value FROM state INDEXED BY state_ref WHERE ns=? AND ref=? AND key>? ORDER BY key ASC LIMIT ?"
+                       : "SELECT key,value FROM state WHERE ns=? AND key>? ORDER BY key ASC LIMIT ?";
+    Statement s(db_,sql);s.Bind(1,PhysicalNamespace(ns));int i=2;
+    if(ref)s.Bind(i++,*ref);s.Bind(i++,after_key);
+    if(sqlite3_bind_int64(s.value,i,static_cast<sqlite3_int64>(bounded))!=SQLITE_OK)throw std::runtime_error(sqlite3_errmsg(db_));
+    while(s.Step()==SQLITE_ROW)fn(s.Text(0),s.Text(1));
+}
+std::uint64_t State::Count(const std::string& ns,const std::optional<std::string>& ref,bool indexed) const {
+    std::string sql="SELECT count(*) FROM state";
+    if(ref&&indexed)sql+=" INDEXED BY state_ref";
+    sql+=" WHERE ns=?";if(ref)sql+=" AND ref=?";
+    Statement s(db_,sql.c_str());s.Bind(1,PhysicalNamespace(ns));if(ref)s.Bind(2,*ref);s.Step();
+    return static_cast<std::uint64_t>(sqlite3_column_int64(s.value,0));
+}
+std::vector<std::string> State::References(const std::string& ns) const {
+    Statement s(db_,"SELECT DISTINCT ref FROM state INDEXED BY state_ref WHERE ns=? ORDER BY ref");
+    s.Bind(1,PhysicalNamespace(ns));std::vector<std::string> result;
+    while(s.Step()==SQLITE_ROW)result.push_back(s.Text(0));return result;
 }
 std::vector<State::Row> State::AllRows() const {
     RequireOwner();

@@ -1,3 +1,4 @@
+#include "face_trajectory/path_utf8.hpp"
 #include "face_trajectory/p1_retention.hpp"
 #include "face_trajectory/activity.hpp"
 #include "face_trajectory/clock_adapter.hpp"
@@ -296,7 +297,7 @@ bool ScrubReferences(json& value,const std::string& activity,const std::string& 
 }
 json One(const std::string& configured,std::int64_t now,bool dry_run,const ClockAdapter& clocks,const ExpiredReference& external) {
     const auto path=std::filesystem::weakly_canonical(std::filesystem::absolute(std::filesystem::u8path(configured)));
-    json result={{"path",path.u8string()},{"dry_run",dry_run},{"status","ERROR"}};
+    json result={{"path",PathToUtf8(path)},{"dry_run",dry_run},{"status","ERROR"}};
     if(!std::filesystem::is_regular_file(path)){result["reason"]="CONFIGURED_P1_FILE_MISSING";return result;}
     // Read-only inventory never creates a lease file or a tombstone table.
     std::unique_ptr<Lease> owner,lease;
@@ -315,7 +316,7 @@ json One(const std::string& configured,std::int64_t now,bool dry_run,const Clock
         result["pause_handshake"]="QUIESCENT";
         pause->Set("CLEANING");
     }
-    Database database(path.u8string(),dry_run);auto db=database.db;
+    Database database(PathToUtf8(path),dry_run);auto db=database.db;
     if(!dry_run)Sql(db,"PRAGMA secure_delete=ON");
     Sql(db,dry_run?"BEGIN":"BEGIN IMMEDIATE");
     try {
@@ -412,7 +413,7 @@ json PruneP1(const std::vector<std::string>& paths,std::int64_t now,bool dry_run
     if(now<ActivityStore::RetentionMs)throw std::invalid_argument("trusted UTC is required for P1 retention");
     json databases=json::array();std::set<std::string> seen;bool complete=true;
     std::vector<std::string> resolved_paths;
-    for(const auto& path:paths)resolved_paths.push_back(std::filesystem::weakly_canonical(std::filesystem::absolute(std::filesystem::u8path(path))).u8string());
+    for(const auto& path:paths)resolved_paths.push_back(PathToUtf8(std::filesystem::weakly_canonical(std::filesystem::absolute(std::filesystem::u8path(path)))));
     for(const auto& resolved:resolved_paths) {
         if(!seen.insert(resolved).second)continue;
         const auto lookup=[&](const std::string& activity,const std::string& source,const std::string& event){

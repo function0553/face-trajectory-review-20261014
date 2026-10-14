@@ -1,0 +1,30 @@
+✔ uncertain forward and return records retain both nominal directions (2.423ms)
+✔ selecting record three keeps C-to-B only, without asserting confirmed time order (0.2394ms)
+✔ confirmed and uncertain directions have independent certainty (0.1921ms)
+✔ individually selecting a confirmed direction does not inherit another record uncertainty (0.2023ms)
+✔ actual sample keeps three records but draws two unique camera chords (4.238ms)
+✔ minimal forward and return pair remains two independently selectable records (0.2485ms)
+✔ distinct camera pairs are not merged merely because coordinates coincide (0.1747ms)
+✔ same camera pair with different actual endpoints retains separate geometry (0.1743ms)
+✔ topology selection uses supplied bends while chord endpoints stay immutable (5.381ms)
+✔ legacy traces without topology remain supported and never fabricate a path (0.2813ms)
+✔ one uncertain record always renders dashed two-way markers (0.5921ms)
+✔ same camera endpoints with different corridor bends are separate geometry (0.5797ms)
+✔ unreachable, HOLD and unresolved positions never produce a line (1.2302ms)
+✔ invalid or claimed observed route geometry fails closed (1.5434ms)
+✔ different sources with equal original IDs remain distinct (1.563ms)
+✔ unresolved positions cannot carry a manufactured line (0.3414ms)
+✔ endpoint coordinates must match evidence (1.02ms)
+✔ duplicate event keys and unknown endpoints rejected (0.2762ms)
+✔ error replies and legacy contracts rejected (0.2179ms)
+✔ clock uncertainty and historical freshness preserved (0.1777ms)
+✔ nonfinite coordinates and unsafe clock values rejected (0.2745ms)
+✔ projection keeps ordinary and extreme finite coordinates finite (0.3814ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 249.0783

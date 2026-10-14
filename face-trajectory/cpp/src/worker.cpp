@@ -456,14 +456,15 @@ void AddResultFreshness(json& response, const json& request, TrajectoryStore& tr
         return;
     }
     const bool rebuild = op == "association_rebuild" || op == "trajectory_rebuild" || op == "point_trajectory_rebuild";
-    if (!rebuild && op != "trajectory_get" && op != "point_trace" && op != "trajectory_predict" &&
+    if (!rebuild && !(op=="monitoring_get" && request.value("include_point_trace",false)) && op != "trajectory_get" && op != "point_trace" && op != "trajectory_predict" &&
         op != "trajectory_geometry" && op != "timeline_query" && op != "point_prediction_compare") return;
     const auto target = request.at("target_id").get<std::string>();
+    if(op=="monitoring_get" && trajectories.LatestVersion(target)==0)return;
     const auto version = rebuild ? response.at("revision").at("version").get<std::uint64_t>()
-        : static_cast<std::uint64_t>(request.contains("version") ? ReadInt64(request.at("version")) : 0);
+        : static_cast<std::uint64_t>(op!="monitoring_get" && request.contains("version") ? ReadInt64(request.at("version")) : 0);
     const auto freshness = SnapshotFreshness(trajectories.Get(target, version), trajectories, associations, !rebuild && version != 0);
     response["freshness"] = freshness;
-    for (const auto* key : {"trajectory", "point_trace", "prediction", "geometry", "timeline", "comparison"})
+    for (const auto* key : {"trajectory", "point_trace", "prediction", "geometry", "timeline", "comparison", "monitoring"})
         if (response.contains(key)) response[key]["freshness"] = freshness;
 }
 
@@ -505,7 +506,25 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
              const json& request) {
     const auto op = request.at("op").get<std::string>();
     if(op=="monitoring_person_put") return monitoring.PutPerson(request,gallery);
-    if(op=="monitoring_get") return {{"ok",true},{"monitoring",monitoring.Get(request.at("target_id"),associations)}};
+    if(op=="monitoring_get") {
+        auto result=monitoring.Get(request.at("target_id"),associations);
+        if(request.value("include_point_trace",false)) {
+            const auto target=request.at("target_id").get<std::string>();
+            if(trajectories.LatestVersion(target)==0) {
+                result["point_connections"]=json::array();result["point_geometry"]={{"status","NO_CONFIRMED_OBSERVATIONS"}};
+            } else {
+                const auto snapshot=trajectories.Get(target,0);
+                const auto packet=point_graphs.Get(snapshot.graph.version);
+                const auto trace=face_trajectory::CameraPointTrace(snapshot,packet,site_context);
+                result["point_connections"]=trace.at("connections");
+                result["point_geometry"]={{"version",snapshot.version},{"scene_version",packet.at("scene_version")},
+                    {"graph_version",snapshot.graph.version},{"coordinate_frame",trace.at("coordinate_frame")},
+                    {"topology_verified",trace.at("topology_verified")},{"topology_is_complete",trace.at("topology_is_complete")},
+                    {"physical_path_observed",false}};
+            }
+        }
+        return {{"ok",true},{"monitoring",result}};
+    }
     if(op=="monitoring_gate_event") {
         monitoring.RequireDurable();
         return monitoring.PutGate(request,MonitoringTime(clocks,request),associations);
@@ -543,7 +562,7 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
         if(!reasons.empty()) { monitoring.SaveObservation(request,response); return response; }
         for(const auto* field:{"captured_at_unix_ms","clock_uncertainty_ms","time_source","clock_domain"})
             observation[field]=normalized.at(field);
-        const auto result=associations.Observe(ReadFaceObservation(observation),policy,graph,request.value("reconsider",false));
+        const auto result=associations.Observe(ReadFaceObservation(observation),policy,graph,false);
         const auto append=associations.LastAppend();
         response["association"]=AssociationToJson(result);
         if(result.sighting) response["status"]="ACCEPTED";
@@ -887,10 +906,12 @@ json PushControl(face_trajectory::State* state, bool enabled, const json& reques
     if (op == "push_next") {
         std::map<std::string,json> heads;
         const auto excluded=request.value("exclude_activity_ids",std::vector<std::string>{});
-        state->Scan("push_outbox",[&](const auto&,const auto& text){
-            const auto event=json::parse(text);const auto activity=event.value("activity_id",std::string{});
-            if(std::find(excluded.begin(),excluded.end(),activity)==excluded.end())heads.emplace(activity,event);
-        });
+        for(const auto& activity:state->References("push_outbox")) {
+            if(std::find(excluded.begin(),excluded.end(),activity)!=excluded.end())continue;
+            state->ScanAfter("push_outbox","",1,[&](const std::string&,const std::string& text){
+                heads.emplace(activity,json::parse(text));
+            },activity);
+        }
         auto next=heads.upper_bound(state->Get("push_meta","last_activity").value_or(""));
         if(next==heads.end())next=heads.begin();
         if(next==heads.end())return {{"ok",true},{"event",nullptr}};
@@ -898,11 +919,13 @@ json PushControl(face_trajectory::State* state, bool enabled, const json& reques
         return {{"ok",true},{"event",next->second}};
     }
     if (op == "push_ack") {
-        std::optional<std::string> selected;std::set<std::string> seen;
-        state->Scan("push_outbox",[&](const auto& key,const auto& text){
-            const auto event=json::parse(text);const auto activity=event.value("activity_id",std::string{});
-            if(seen.insert(activity).second&&event.at("event_id")==request.at("event_id"))selected=key;
-        });
+        std::optional<std::string> selected;
+        state->Scan("push_outbox",[&](const std::string& key,const std::string& text){
+            const auto event=json::parse(text);const auto activity=event.at("activity_id").get<std::string>();
+            state->ScanAfter("push_outbox","",1,[&](const std::string& first,const std::string&){
+                if(first==key)selected=key;
+            },activity);
+        },{},false,request.at("event_id").get<std::string>());
         if(!selected)throw std::invalid_argument("push acknowledgement must match oldest pending event in its activity");
         state->Erase("push_outbox",*selected);
         state->Put("push_meta", "pending", std::to_string(PushCounter(*state, "pending") - 1));
@@ -912,8 +935,8 @@ json PushControl(face_trajectory::State* state, bool enabled, const json& reques
 }
 
 void EnqueuePush(face_trajectory::State& state, const std::string& op, const json& response,const json& request) {
-    const auto activity=response.at("activity_id").get<std::string>();std::size_t activity_pending=0;
-    state.Scan("push_outbox",[&](const auto&,const auto& text){activity_pending+=json::parse(text).value("activity_id",std::string{})==activity;});
+    const auto activity=response.at("activity_id").get<std::string>();
+    const auto activity_pending=state.Count("push_outbox",activity,true);
     if(activity_pending>=256||PushCounter(state,"pending")>=10000)
         throw std::runtime_error("CAPACITY: backend push quota exhausted; retry after delivery");
     auto stream = state.Get("push_meta", "stream_id");
@@ -936,7 +959,7 @@ void EnqueuePush(face_trajectory::State& state, const std::string& op, const jso
         if(response.contains(k))event[k]=response.at(k);
     event["retention_deadline_unix_ms"]=response.value("retention_deadline_unix_ms",now+face_trajectory::ActivityStore::RetentionMs);
     // Store only results: no input face embedding, raw image or credentials.
-    state.Put("push_outbox", key, event.dump());
+    state.Put("push_outbox", key, event.dump(),activity,event.at("event_id"));
     state.Put("push_meta", "sequence", number);
     state.Put("push_meta", "pending", std::to_string(PushCounter(state, "pending") + 1));
 }
@@ -1034,6 +1057,9 @@ int Run(const std::vector<std::string>& args) {
             } else if(op.rfind("activity_",0)==0) {
                 if(!activities)throw std::invalid_argument("activities require durable state-file");
                 response=activities->Control(request);
+                if(op!="activity_get" && op!="activity_results" &&
+                   (!response.value("enabled",false) || !response.value("duplicate",false)))
+                    activity_runtimes.erase(request.at("activity_id").get<std::string>());
             } else if(GlobalOperation(op)) {
                 if(op=="push_next" || op=="push_ack")activities->TrustedNow(request);
                 response=op.rfind("push_",0)==0 ? PushControl(state.get(),push_results,request)

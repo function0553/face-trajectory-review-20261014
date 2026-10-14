@@ -42,17 +42,19 @@ SightingEvidence Event(const std::string& id, const std::string& camera, std::in
         TimeSource::UtcCapture, "SYNTHETIC:source", "UTC", ""};
 }
 json Trace(const std::vector<SightingEvidence>& sightings, SiteContextStore& sites,
-    std::int64_t session_gap = 3600000) {
+    std::int64_t session_gap = 3600000, const json& edges = nullptr) {
     TrajectoryOptions options;
     options.max_clock_uncertainty_ms = 60000;
     options.session_gap_ms = session_gap;
     TrajectoryStore trajectories;
-    const auto revision = trajectories.Rebuild("PERSON", sightings, {"SYNTHETIC:graph", {}},
+    json packet={{"graph_version", "SYNTHETIC:graph"}, {"scene_version", "SYNTHETIC:scene"},
+         {"source_evidence_id","SYNTHETIC:geometry"},{"coordinate_frame", "SYNTHETIC:local"}, {"topology_verified", false},
+         {"topology_is_complete", false},{"edges",edges.is_null()?json::array():edges}};
+    PointGraphStore graphs;graphs.Put(packet,sites);
+    const auto revision = trajectories.Rebuild("PERSON", sightings, graphs.Graph("SYNTHETIC:graph"),
         options, "SYNTHETIC:independent-events", 0);
     return CameraPointTrace(trajectories.Get("PERSON", revision.version),
-        {{"graph_version", "SYNTHETIC:graph"}, {"scene_version", "SYNTHETIC:scene"},
-         {"coordinate_frame", "SYNTHETIC:local"}, {"topology_verified", false},
-         {"topology_is_complete", false}}, sites);
+        packet, sites);
 }
 }
 
@@ -116,6 +118,29 @@ int main() {
         json legacy = {{"meaning", "OBSERVATION_SEQUENCE_ONLY"}, {"from_observation_id", scoped}};
         ActivityStore::ExternalIds(legacy);
         Check(legacy["from_observation_id"] == scoped, "legacy observation order identifiers remain compatible");
+        const auto point=[](double x,double y,double z){return json{{"x",x},{"y",y},{"z",z}};};
+        const auto edge=[](const char* id,const char* from,const char* to,double cost,const json& points){
+            return json{{"edge_id",id},{"from_camera",from},{"to_camera",to},{"min_travel_ms",0},
+                {"max_travel_ms",10000},{"cost",cost},{"waypoints",points}};
+        };
+        auto route_edges=json::array({edge("ab","A","B",6,json::array({point(0,0,0),point(5,0,0),point(5,0,10),point(10,0,10)})),
+            edge("bc","B","C",4,json::array({point(10,0,10),point(15,0,10),point(20,0,15)})),
+            edge("ac","A","C",100,json::array({point(0,0,0),point(20,0,15)}))});
+        const auto route=Trace({Event("a","A",100),Event("c","C",200)},sites,3600000,route_edges)["connections"][0];
+        Check(route["route_edge_ids"]==json({"ab","bc"})&&route["route_waypoints"].size()==6,"shortest route concatenates supplied bends and intermediate camera");
+        Check(route["coordinates"]==json({{0,0,5},{20,0,15}})&&route["from_position"]==json({0,0,5}),"route surface does not overwrite camera marker chord");
+        Check(route["chord_distance_m"].get<double>()==std::hypot(20.0,0.0,10.0)&&route["geometry_kind"]=="CAMERA_CHORD"&&
+            route["route_geometry_kind"]=="TOPOLOGY_INFERRED_PATH","geometry provenance and original chord distance preserved");
+        const auto uncertain_route=Trace({Event("a","A",100,100),Event("c","C",200,100)},sites,3600000,route_edges)["connections"][0];
+        Check(uncertain_route["order_confirmed"]==false&&uncertain_route["direction_status"]=="ORDER_UNCERTAIN"&&uncertain_route.contains("route_waypoints"),"topology geometry cannot confirm overlapping time");
+        route_edges[0].erase("waypoints");
+        const auto missing_route=Trace({Event("a","A",100),Event("c","C",200)},sites,3600000,route_edges)["connections"][0];
+        Check(!missing_route.contains("route_waypoints")&&missing_route["route_status"]=="GEOMETRY_UNAVAILABLE","missing geometry never invents bends or selects more expensive route");
+        route_edges[0]["waypoints"]=json::array({point(0,0,0),point(9,0,10)});
+        Check(Trace({Event("a","A",100),Event("c","C",200)},sites,3600000,route_edges)["connections"][0]["route_status"]=="DISCONNECTED_GEOMETRY","disconnected surface projections never bridged");
+        route_edges[0]["waypoints"][0]["x"]="bad";bool bad_geometry=false;
+        try{Trace({Event("a","A",100),Event("c","C",200)},sites,3600000,route_edges);}catch(const std::exception&){bad_geometry=true;}
+        Check(bad_geometry,"invalid geometry rejected at graph admission");
         std::cout << "Passed " << checks << " point connection checks\n";
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';

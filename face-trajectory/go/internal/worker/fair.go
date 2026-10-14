@@ -14,14 +14,15 @@ type Requester interface {
 	Request(context.Context, json.RawMessage) (json.RawMessage, error)
 }
 type fairCall struct {
-	ctx    context.Context
-	data   json.RawMessage
-	result chan transactionResult
+	ctx     context.Context
+	data    json.RawMessage
+	result  chan transactionResult
+	started bool // protected by Fair.mu; cancellation is admission-only
 }
 type Fair struct {
 	inner              Requester
 	mu                 sync.Mutex
-	queues             map[string][]fairCall
+	queues             map[string][]*fairCall
 	order              []string
 	total              int
 	limit, perActivity int
@@ -35,7 +36,7 @@ func NewFair(inner Requester, limit, perActivity int) *Fair {
 	if limit < 1 || perActivity < 1 {
 		panic("positive fair queue limits required")
 	}
-	f := &Fair{inner: inner, queues: make(map[string][]fairCall), limit: limit, perActivity: perActivity, wake: make(chan struct{}, 1), done: make(chan struct{})}
+	f := &Fair{inner: inner, queues: make(map[string][]*fairCall), limit: limit, perActivity: perActivity, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	go f.run()
 	return f
 }
@@ -48,7 +49,7 @@ func (f *Fair) Request(ctx context.Context, request json.RawMessage) (json.RawMe
 	}
 	// Global config/control is one scheduler participant, not a priority bypass.
 	id := scope.ActivityID
-	c := fairCall{ctx: ctx, data: append(json.RawMessage(nil), request...), result: make(chan transactionResult, 1)}
+	c := &fairCall{ctx: ctx, data: append(json.RawMessage(nil), request...), result: make(chan transactionResult, 1)}
 	f.mu.Lock()
 	if f.closed {
 		f.mu.Unlock()
@@ -72,16 +73,30 @@ func (f *Fair) Request(ctx context.Context, request json.RawMessage) (json.RawMe
 	case r := <-c.result:
 		return r.response, r.err
 	case <-ctx.Done():
+		f.mu.Lock()
+		started := c.started
+		f.mu.Unlock()
+		if started {
+			r := <-c.result
+			return r.response, r.err
+		}
 		return nil, ctx.Err()
 	case <-f.done:
+		f.mu.Lock()
+		started := c.started
+		f.mu.Unlock()
+		if started {
+			r := <-c.result
+			return r.response, r.err
+		}
 		return nil, errors.New("fair worker is closing")
 	}
 }
-func (f *Fair) next() (fairCall, bool) {
+func (f *Fair) next() (*fairCall, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.closed || len(f.order) == 0 {
-		return fairCall{}, false
+		return nil, false
 	}
 	id := f.order[0]
 	f.order = f.order[1:]
@@ -95,12 +110,16 @@ func (f *Fair) next() (fairCall, bool) {
 	} else {
 		delete(f.queues, id)
 	}
+	// Check and mark atomically with Request's cancellation branch. A queued
+	// cancelled call never crosses this boundary; a running call waits for I/O.
+	c.started = c.ctx.Err() == nil
 	return c, true
 }
 func (f *Fair) run() {
 	for {
 		if c, ok := f.next(); ok {
-			if err := c.ctx.Err(); err != nil {
+			if !c.started {
+				err := c.ctx.Err()
 				c.result <- transactionResult{err: err}
 				continue
 			}

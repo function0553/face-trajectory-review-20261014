@@ -1,15 +1,21 @@
 {
   "date": "2026-10-14",
   "timezone": "Asia/Singapore",
-  "scope": "complete current P2 source and P1 source references",
+  "scope": "Locally repaired P1/P2 source, pinned vendor, synthetic examples and compact test evidence",
   "original_git_history_available": false,
   "production_accessed": false,
-  "algorithm_source_changed": false,
+  "algorithm_source_changed": true,
+  "local_validation": "PASS",
   "files": [
     {
-      "path": "face-recognition-engine/README.md",
-      "bytes": 13113,
-      "sha256": "5f78115df67189329dc37b0cd75f1a884632f57ac91d26158b9addd0902adf98"
+      "path": ".gitattributes",
+      "bytes": 90,
+      "sha256": "5ac019c04d6fb9ae416f5538780b88f99da44956cfdc1481dd59510b9ecf29e9"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 204,
+      "sha256": "faa8fbdcf31dd75c0838e7c72b884d5c36fa54e80b067fd8e1862ce8146c18f2"
     },
     {
       "path": "face-recognition-engine/configs/default.yaml",
@@ -22,24 +28,24 @@
       "sha256": "95d0c11ac86a75e712aa817472a254cfb78d9fc63c655aa8584ffd19e5e17cd2"
     },
     {
-      "path": "face-recognition-engine/docs/ERROR_TROUBLESHOOTING.md",
-      "bytes": 23268,
-      "sha256": "305be4d490e90e012f3aa91cda883464836e1eca3c03a664ba926fa1a59f7d1c"
-    },
-    {
-      "path": "face-recognition-engine/docs/README.md",
-      "bytes": 1504,
-      "sha256": "7088a8920ab651dbc283811cb0e2749bc20cdb5fc4ee6620bb400a4d7634daa1"
-    },
-    {
       "path": "face-recognition-engine/docs/acquisition.md",
       "bytes": 15252,
       "sha256": "4ddceb464ae97ef7ff2cf1cecf68ade97d6154ad129dbb4f8035f685b858242a"
     },
     {
+      "path": "face-recognition-engine/docs/ERROR_TROUBLESHOOTING.md",
+      "bytes": 23268,
+      "sha256": "305be4d490e90e012f3aa91cda883464836e1eca3c03a664ba926fa1a59f7d1c"
+    },
+    {
       "path": "face-recognition-engine/docs/monitoring-runtime.md",
       "bytes": 22296,
       "sha256": "e63a3b4f3d2ed06ed38ee8a0808e7be547acb5d7c752eada41f4619e421601ed"
+    },
+    {
+      "path": "face-recognition-engine/docs/README.md",
+      "bytes": 1504,
+      "sha256": "7088a8920ab651dbc283811cb0e2749bc20cdb5fc4ee6620bb400a4d7634daa1"
     },
     {
       "path": "face-recognition-engine/examples/compare_two_faces.py",
@@ -82,9 +88,19 @@
       "sha256": "0986b688d48592ce996abe94149eabdaf804fa47a93343286ef73f781cf1d6dc"
     },
     {
+      "path": "face-recognition-engine/HANDOFF.md",
+      "bytes": 726,
+      "sha256": "8600e94e0af17e3c932d6590a196292fd05d3bd38aed6df608aaff4ea5f87844"
+    },
+    {
       "path": "face-recognition-engine/pyproject.toml",
       "bytes": 469,
       "sha256": "10fa9fb7435d894303515a03a05aaa72926e85ba78c070fab9258ff6838c0912"
+    },
+    {
+      "path": "face-recognition-engine/README.md",
+      "bytes": 13113,
+      "sha256": "5f78115df67189329dc37b0cd75f1a884632f57ac91d26158b9addd0902adf98"
     },
     {
       "path": "face-recognition-engine/requirements.txt",
@@ -188,8 +204,8 @@
     },
     {
       "path": "face-recognition-engine/src/face_engine/monitoring_delivery.py",
-      "bytes": 21148,
-      "sha256": "0d034cb7e493af9511719f412c925e6f29bc210f7a57012b3f6f170c047d0a32"
+      "bytes": 21207,
+      "sha256": "b3c8cc1f80e8128c764568e0e6856e535c644565334e991cfa65218c28a25149"
     },
     {
       "path": "face-recognition-engine/src/face_engine/monitoring_service.py",
@@ -243,28 +259,18 @@
     },
     {
       "path": "face-recognition-engine/src/face_engine/trajectory_bridge.py",
-      "bytes": 28693,
-      "sha256": "acc33314747f65fd00d92aefbb9916cc4e12ebb902b60d78b7ee424a843e7974"
+      "bytes": 29368,
+      "sha256": "deff83472e89c833fe356f7ee24723e51a2dc84309057d940ffd759635f9923c"
+    },
+    {
+      "path": "face-recognition-engine/tests/test_delivery_isolation.py",
+      "bytes": 5320,
+      "sha256": "befa139497cb492359c15b374545aca709e4820e99d592232ac172e117f83b84"
     },
     {
       "path": "face-trajectory/.gitignore",
       "bytes": 11,
       "sha256": "57e9b91507d6bbbf909d8bdbe606766398f6f011644159e1d54999ec02961f42"
-    },
-    {
-      "path": "face-trajectory/HANDOFF.md",
-      "bytes": 106178,
-      "sha256": "3659788234295a5ff5e5a01d4ce842db46b47ae39d862de39c4eac67489c1aac"
-    },
-    {
-      "path": "face-trajectory/README.md",
-      "bytes": 4816,
-      "sha256": "84cb84d04eee118ca0ab35f3c4f28aa61262a1787f0f2db95515d57ad64c8936"
-    },
-    {
-      "path": "face-trajectory/collection/README.md",
-      "bytes": 15004,
-      "sha256": "9656fad16de278630408f5eb87dc2d933eb41ec99ac5b1408406a509f87e2525"
     },
     {
       "path": "face-trajectory/collection/activity-service.example.json",
@@ -278,18 +284,23 @@
     },
     {
       "path": "face-trajectory/collection/build_point_graph.py",
-      "bytes": 17207,
-      "sha256": "d6f131dd7f84394d05c9b2a0f40e098c89089bae73a265a550e29c4e9c53dc03"
+      "bytes": 17885,
+      "sha256": "79c3eb3a7309c445a6fd9cc1d7994dc7dbca3419967650958aef2a9d628a3fc5"
     },
     {
       "path": "face-trajectory/collection/check_model_coverage.mjs",
-      "bytes": 13941,
-      "sha256": "29b993fb86ad1cc882c04eb3087583d46cf3e533c59714f288150e0b02a2cb3d"
+      "bytes": 14193,
+      "sha256": "9d20339105203a020c5d44e18f4faaf42083d2d4a856e6d846433e6dacb2d03d"
     },
     {
       "path": "face-trajectory/collection/import_published_scene.py",
       "bytes": 10032,
       "sha256": "70e08d3834903c6e88375af5528035fe0495edbddbf11973bb33e6d1ceb61795"
+    },
+    {
+      "path": "face-trajectory/collection/README.md",
+      "bytes": 15004,
+      "sha256": "9656fad16de278630408f5eb87dc2d933eb41ec99ac5b1408406a509f87e2525"
     },
     {
       "path": "face-trajectory/collection/templates/cameras.csv",
@@ -328,8 +339,8 @@
     },
     {
       "path": "face-trajectory/cpp/CMakeLists.txt",
-      "bytes": 1428,
-      "sha256": "c3466f7d746e3737c1b8340c6f576458ac7c4800885e91a05b31c1f68780b709"
+      "bytes": 1683,
+      "sha256": "09c0b9b94bdca9af0ff2fbc1a0a8965566601d914411b6700ba541c50a9f0b56"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/activity.hpp",
@@ -367,6 +378,11 @@
       "sha256": "8ce6a2cfe46785c063830c78ca6a575559699faa7d1b04d878ff25902beb24b6"
     },
     {
+      "path": "face-trajectory/cpp/include/face_trajectory/path_utf8.hpp",
+      "bytes": 235,
+      "sha256": "909ac139615f858f49989d7c8224c4f8d27f42ed7ad6ef8194fe544caf1cd92d"
+    },
+    {
       "path": "face-trajectory/cpp/include/face_trajectory/point_trajectory.hpp",
       "bytes": 687,
       "sha256": "c9f5d23310d7700adef6f65f183bcc789e2fe5ca6dfe806724da75a7bc04050a"
@@ -383,8 +399,8 @@
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/shared_json.hpp",
-      "bytes": 9331,
-      "sha256": "1eadbb26fde03c1b03d4ac222d115b2dc4b78ac0f957cedf8057c099c4a0d5e6"
+      "bytes": 9362,
+      "sha256": "a4651cabe06509e3fafc1be1e66213d677bf4418c1151f4067cadae3a3e9ed82"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/site_context.hpp",
@@ -393,8 +409,8 @@
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/state.hpp",
-      "bytes": 3438,
-      "sha256": "5b231f0ad9878fcef7b141ed5eda757fcf59dedbd9e321171c12adb17a2d9c06"
+      "bytes": 3879,
+      "sha256": "1583f81cfb2d8e53dc2097288d739d7c49e750de25ecc3df21f0a6c3bfcadb65"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/storage_json.hpp",
@@ -408,8 +424,8 @@
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/trajectory.hpp",
-      "bytes": 8499,
-      "sha256": "17118c91d628c5e2912e8971593f70d24576fdf4ebaa73d8cb5826f251083b4e"
+      "bytes": 8793,
+      "sha256": "4340d1eb17cb1c33fd5686d085e58064273d13bfafc1b419f3fe77930e92eb52"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/visits.hpp",
@@ -418,13 +434,13 @@
     },
     {
       "path": "face-trajectory/cpp/src/activity.cpp",
-      "bytes": 19645,
-      "sha256": "3c6093967d452691081b0aea5db01adb4b517497c58e918895677fa1858ca25f"
+      "bytes": 19875,
+      "sha256": "717d48c041357eb1e226b0a2d8d54e853911e178baddd185e69c4928af274395"
     },
     {
       "path": "face-trajectory/cpp/src/association.cpp",
-      "bytes": 29746,
-      "sha256": "9c13ec416056989b7b9e9a7ec58d832c18c6dd098a9eb8f9f5ec2fb4ad923f39"
+      "bytes": 29844,
+      "sha256": "12dedfc15713bf04d9583334662c7c851e6f927ab880f77a74018b88271854c6"
     },
     {
       "path": "face-trajectory/cpp/src/clock_adapter.cpp",
@@ -433,8 +449,8 @@
     },
     {
       "path": "face-trajectory/cpp/src/gallery.cpp",
-      "bytes": 10036,
-      "sha256": "8f28b116e16800f8d56a66f298dfa025da19ca58fa7487e59f4e5ffaa41d98df"
+      "bytes": 10050,
+      "sha256": "32335d7fa026fc41f639eacc3f451bdd46e89f19e1c3674ac231694ec06d167a"
     },
     {
       "path": "face-trajectory/cpp/src/geometry.cpp",
@@ -443,18 +459,18 @@
     },
     {
       "path": "face-trajectory/cpp/src/monitoring.cpp",
-      "bytes": 25293,
-      "sha256": "2448beaaa95efea75093bbfbf1a4b53be7f7b18a5191cb466fa160a89e1e9f46"
+      "bytes": 24170,
+      "sha256": "0e9fa3b6a5a06fc9589ab50e7240fc145cf0c77226b2045d473ec44bb97fea02"
     },
     {
       "path": "face-trajectory/cpp/src/p1_retention.cpp",
-      "bytes": 25055,
-      "sha256": "1e8a982d3f8716d1f779cea94bd96bef8433b12449c3ba47dbaf0f49facec49f"
+      "bytes": 25099,
+      "sha256": "d10d3727545a24442d44bb1d60c33dfedc4ff6def77400c14286d3fceef4d267"
     },
     {
       "path": "face-trajectory/cpp/src/point_trajectory.cpp",
-      "bytes": 18792,
-      "sha256": "77431bb6ad7a0f0fccb77602c931a172fa6f47eae621e92df0c578a10d7be209"
+      "bytes": 25047,
+      "sha256": "4e0b9d8419547d091774a39833dfa361c2f5293749c2c28de16cafc7b6fac794"
     },
     {
       "path": "face-trajectory/cpp/src/reachability.cpp",
@@ -463,8 +479,8 @@
     },
     {
       "path": "face-trajectory/cpp/src/retention.cpp",
-      "bytes": 17044,
-      "sha256": "2bf0544134e9a5cc93d4026a739de251febd7fd4ce883828b69f8f4c1226b005"
+      "bytes": 17161,
+      "sha256": "d49fe87e626925688dc53b2dfe233d3ec18c37d91353ddab236ee12b377d7628"
     },
     {
       "path": "face-trajectory/cpp/src/site_context.cpp",
@@ -473,8 +489,8 @@
     },
     {
       "path": "face-trajectory/cpp/src/state.cpp",
-      "bytes": 11728,
-      "sha256": "634a441fb124ae80b237ba877f7ad64286476acb9674a293cf61cced87f2e8b9"
+      "bytes": 13893,
+      "sha256": "1313cec15e69331e95c5767a806d9d98a9b8e3c8c4ad6671b2701b8bd15c56b6"
     },
     {
       "path": "face-trajectory/cpp/src/time_constraints.cpp",
@@ -493,13 +509,18 @@
     },
     {
       "path": "face-trajectory/cpp/src/worker.cpp",
-      "bytes": 70696,
-      "sha256": "15857b96e53bf0df9cc1d0fb99c97e305a444a711f0397b7cfba870eac641ad1"
+      "bytes": 72307,
+      "sha256": "7f7bc0a2f9af0dd0298cf8199d7936db5823e941b8d0067df82439db5d48eaa5"
     },
     {
       "path": "face-trajectory/cpp/tests/point_connections_test.cpp",
-      "bytes": 7588,
-      "sha256": "a013b774d2d7f06fd288e38f8b5ee82fb4793ca1ca3518b32a92ee17bcc4e25d"
+      "bytes": 10438,
+      "sha256": "4467257b6a699e820eebcf6347fd09feab2f4eafcfe05294455354c1c9329a78"
+    },
+    {
+      "path": "face-trajectory/cpp/tests/state_activity_test.cpp",
+      "bytes": 4770,
+      "sha256": "7a9999fdf4001b67cafaff91f28d13051eadd3ec642bec83d7c3a21aac42340c"
     },
     {
       "path": "face-trajectory/cpp/vendor/LICENSE.MIT",
@@ -525,11 +546,6 @@
       "path": "face-trajectory/cpp/vendor/sqlite/sqlite3.h",
       "bytes": 690838,
       "sha256": "919e7f2e8ed1d8f56ac17b412b8971c76aa5d1a879752cc6058f75e7d5910e1d"
-    },
-    {
-      "path": "face-trajectory/docs/README.md",
-      "bytes": 5277,
-      "sha256": "2e61b2a5cf4d8f95ca7c3b33712aff00e9de4cc21b419c43250da48cc28c868b"
     },
     {
       "path": "face-trajectory/docs/activity-config.schema.json",
@@ -598,8 +614,8 @@
     },
     {
       "path": "face-trajectory/docs/point-connections.md",
-      "bytes": 11470,
-      "sha256": "ec49f0f8a6cf506174fa20e3b8617facf27a04a32d66b23d789d39845a887563"
+      "bytes": 11797,
+      "sha256": "9acd38da331fa4e694f3f2adcdde6468aeade7bfd069eb7c360d7b5869126609"
     },
     {
       "path": "face-trajectory/docs/point-graph-data.md",
@@ -622,6 +638,16 @@
       "sha256": "1e59bf2d33248b16372f314209f2837bd4dc25b5718bb68461099b7ef88fcd1c"
     },
     {
+      "path": "face-trajectory/docs/README.md",
+      "bytes": 5408,
+      "sha256": "ab0c6dd163cee377557fdcef42a7f244289845dc678019f3cc025484e3a83471"
+    },
+    {
+      "path": "face-trajectory/docs/repair-topology-2026-10-14.md",
+      "bytes": 12923,
+      "sha256": "bab44886e8d8de4b98c53e79606b437f1df2da476a0e74f86d3cf0151147537f"
+    },
+    {
       "path": "face-trajectory/docs/runtime-and-geometry.md",
       "bytes": 9411,
       "sha256": "35e46e134532bbf66dd2896e1149579b0fa7995609118e968e079987085e6f3a"
@@ -630,6 +656,16 @@
       "path": "face-trajectory/docs/validate_activity_contract.py",
       "bytes": 10018,
       "sha256": "b52b8d4a3434f8d340ffcc70737b84c2dff71151116705904173f39a0a23a4cc"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-10-activity-retention/p1-retention-test/CMakeLists.txt",
+      "bytes": 710,
+      "sha256": "c4cae8405d64ea47c4bd0d7971d4d8af05a58d63b821172f22c71fb37c19b39f"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-10-activity-retention/p1-retention-test/test.cpp",
+      "bytes": 1081,
+      "sha256": "ec2d7971c276779e45d54366aa1c159c9099b2c9046f0748e435840209bb5459"
     },
     {
       "path": "face-trajectory/evidence/2026-10-10-activity-retention/requirement-coverage.json",
@@ -672,11 +708,6 @@
       "sha256": "0a12c4d753cfec117ba62f1560a0360228724580d3065829d8172b9d3f452073"
     },
     {
-      "path": "face-trajectory/evidence/2026-10-13-point-connection-display-fix/REVIEW.md",
-      "bytes": 5029,
-      "sha256": "c2ae5d312244021ca52f27c47b3f8ebf0faf7dc4621cbc5bf52c82d5c59eead8"
-    },
-    {
       "path": "face-trajectory/evidence/2026-10-13-point-connection-display-fix/final-manifest.json",
       "bytes": 9502,
       "sha256": "5a66609bcd2795537ca1e763201d22e68611507e95ff37fd89c3d39ea1492b50"
@@ -685,6 +716,11 @@
       "path": "face-trajectory/evidence/2026-10-13-point-connection-display-fix/final-tests.log",
       "bytes": 1394,
       "sha256": "1866453f21d75bc61dbfef053f10b4f8a948553b1c69446f37631297e0055071"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-13-point-connection-display-fix/REVIEW.md",
+      "bytes": 5029,
+      "sha256": "c2ae5d312244021ca52f27c47b3f8ebf0faf7dc4621cbc5bf52c82d5c59eead8"
     },
     {
       "path": "face-trajectory/evidence/2026-10-13-point-connections/browser-verification.json",
@@ -717,19 +753,69 @@
       "sha256": "da949d43fae812e6f8e1f11a84aeb490fc8a04fb6e1377fca0a782145cceda27"
     },
     {
+      "path": "face-trajectory/evidence/2026-10-14-repair-topology/go-linux-worker.log",
+      "bytes": 980,
+      "sha256": "9e2ec3f80288cdc9d771979785286d7ab49dd23d5abb7052a76a69a965e2b055"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-14-repair-topology/go-windows-tests.log",
+      "bytes": 274,
+      "sha256": "4ec887f5f80219f4cc29ed9457dad9477f0af27fb0921ee74584a39135454360"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-14-repair-topology/http-cold-before.log",
+      "bytes": 214,
+      "sha256": "3891f24293eeee61b7a9ac83360fac22c050eca645e0e75bdcbb8b5564831dc2"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-14-repair-topology/msvc20-ctest.log",
+      "bytes": 443,
+      "sha256": "c95cea115c2193f01078d3b141ed5082d407ac336cea10e77c1b544514616402"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-14-repair-topology/p1-delivery-tests.log",
+      "bytes": 751,
+      "sha256": "8165148a1ff7061b18557c679cef14bf0bfd54b8bf884bd793272a6fd5e00e26"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-14-repair-topology/sqlite-query-plans.json",
+      "bytes": 395,
+      "sha256": "f6f4706f34c84d62b99ad35a7afdc7e4a21e2e4af17f6eb3c5c467e18e10d957"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-14-repair-topology/validation-summary.json",
+      "bytes": 3521,
+      "sha256": "117766a512c43df202a5a5ea5351993f3f448f508d91540015b3de4b0e519d4f"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-14-repair-topology/viewer-tests.log",
+      "bytes": 1888,
+      "sha256": "1c510fdcba0f310115e71b0530f83cf4ed045a73e6b6949a74b8304cc8d267b1"
+    },
+    {
       "path": "face-trajectory/evidence/2026-10-14-review-package/verification-summary.json",
       "bytes": 1416,
       "sha256": "4f665ba26738cb12c1417b0f94752a3715a55aa34f3addb5ea3fc8370f3698c6"
     },
     {
       "path": "face-trajectory/go/cmd/face-trajectoryd/main.go",
-      "bytes": 5696,
-      "sha256": "5d6bb161e8b25532c8fffeeae409d8ea2694cdb411131e2f6b4af05a6c46138b"
+      "bytes": 5968,
+      "sha256": "372037ea8e00445a3f52b07cea3955596e442eb2d5029fb45767c9053ab684bf"
+    },
+    {
+      "path": "face-trajectory/go/cmd/face-trajectoryd/main_test.go",
+      "bytes": 1361,
+      "sha256": "0e1a8dbbf6719463648fc8b7b88294bc94c83e4ec3b01f3063dc5c7b904be606"
     },
     {
       "path": "face-trajectory/go/go.mod",
-      "bytes": 32,
-      "sha256": "885d84a883107a53650d0e9c6a7684c10882a30c23b1684e495121902f7c737d"
+      "bytes": 66,
+      "sha256": "0fb8bae977ce03325abe644d2125f0f1b26e7ffd287ca3181debd949086c668f"
+    },
+    {
+      "path": "face-trajectory/go/go.sum",
+      "bytes": 153,
+      "sha256": "50525b09f4448026339b45ad88801ff0fae28a671b620e7e3cca358e7703941f"
     },
     {
       "path": "face-trajectory/go/internal/api/retention.go",
@@ -793,13 +879,18 @@
     },
     {
       "path": "face-trajectory/go/internal/worker/client.go",
-      "bytes": 7279,
-      "sha256": "c111ea1083eed5475cc191975a9700c9eaede5c6e9b1afd6e51c80f6acc2de4f"
+      "bytes": 8610,
+      "sha256": "3924f55aab802edf901af7cec15381136a60e72ef355198ff875cada83266e53"
+    },
+    {
+      "path": "face-trajectory/go/internal/worker/client_test.go",
+      "bytes": 5085,
+      "sha256": "956dc098119878d82870453eec0900c74ccac26f6cba59c806f07645dcde5b8c"
     },
     {
       "path": "face-trajectory/go/internal/worker/fair.go",
-      "bytes": 2974,
-      "sha256": "24da0d6ca2cad9e4473940fa760688fa62e8faa54423996ebb9d104740b96af5"
+      "bytes": 3470,
+      "sha256": "e24bbca5fc764ea5f71472b451e24bcd759cd8fb8de5ae4f8acb4ef3add11e7d"
     },
     {
       "path": "face-trajectory/go/internal/worker/fair_test.go",
@@ -807,9 +898,189 @@
       "sha256": "df48c34377aae171f9b48c5e0eb628ea4f3618167647403cc43aec781840a9ad"
     },
     {
+      "path": "face-trajectory/go/internal/worker/proc_linux.go",
+      "bytes": 891,
+      "sha256": "d64eb113506c6186dd14a16bdcb0f565beafbc21ea913bdd5148a11f6e203f76"
+    },
+    {
+      "path": "face-trajectory/go/internal/worker/proc_linux_test.go",
+      "bytes": 395,
+      "sha256": "243d31272e09e62a58d31f4e3efac6ac40a80987cc60dd5719c400a36ac1d054"
+    },
+    {
+      "path": "face-trajectory/go/internal/worker/proc_other.go",
+      "bytes": 314,
+      "sha256": "ec92d561556129711ad2a6d4051c1ae71051124c68dcf1a04e26b9bff715d26b"
+    },
+    {
+      "path": "face-trajectory/go/internal/worker/proc_other_test.go",
+      "bytes": 98,
+      "sha256": "d54d5607ba3e306327d46168d2bc32fbfe99f609c0f49d7d1da730b31deb6920"
+    },
+    {
+      "path": "face-trajectory/go/internal/worker/proc_windows.go",
+      "bytes": 2316,
+      "sha256": "ee8cfcaa2f83c1db0a43480e7a179de25d0d7f850c0c50a06553760af3bfed4e"
+    },
+    {
+      "path": "face-trajectory/go/internal/worker/proc_windows_test.go",
+      "bytes": 332,
+      "sha256": "8d679e8e1df0abddd0bb5fc19760c5b373c86db40f2687e814f471003504cf1b"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/LICENSE",
+      "bytes": 1453,
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/PATENTS",
+      "bytes": 1303,
+      "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/aliases.go",
+      "bytes": 281,
+      "sha256": "83f3e3fa7ca4af1f37ee2d68f3a8c9b51e488953dff60ddf779527ebcda84eb9"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/dll_windows.go",
+      "bytes": 12377,
+      "sha256": "6c64d71f3c83c726415c09f1bd5df7e646a9e86cc7c36682a67f94f35c617f2a"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/env_windows.go",
+      "bytes": 1367,
+      "sha256": "fcfa69bb220a15cc151240ecc57bb144cf25c6628e899bc72d8217171376ab5b"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/eventlog.go",
+      "bytes": 825,
+      "sha256": "0162de9581d94b7f73c2125e310a8c08d1f5f6ec9d99d68b450ea330cdab33e0"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/exec_windows.go",
+      "bytes": 7513,
+      "sha256": "9c4824d3c8a1d54189f9d81e54a5786971b338c6d8b116ad188c1746212534a8"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/memory_windows.go",
+      "bytes": 1405,
+      "sha256": "070342979027b739e224a8d35c5dabd9ac6ea662b9a58954446f27103c2443c4"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/mkerrors.bash",
+      "bytes": 2168,
+      "sha256": "1e8ad2fee707012f9df5b217fb17fc08bbe65677d249d167d065c7d83c215e43"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/mkknownfolderids.bash",
+      "bytes": 1382,
+      "sha256": "3b7f6ac42ae1e73aa8d06d4f89f18b91916f153b030e9c01e15d41959b6b5fc6"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/mksyscall.go",
+      "bytes": 367,
+      "sha256": "ece9a0ac70f7ee5765046bed09762c27e22b7a3777ab82d65ba696806cdcd264"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/race.go",
+      "bytes": 591,
+      "sha256": "bda47d77e2bd07cbdb9471188672b735973fbf85e9f6494a0c7fb397d53f20fa"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/race0.go",
+      "bytes": 454,
+      "sha256": "fd656479b0761b07939c12b95733002fe0437f33e6a9b317cdaf8b3fe3e116e4"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/security_windows.go",
+      "bytes": 54357,
+      "sha256": "d1fa1f37a7dd7b0d6404a77494f42074a1fb7f8d6ee1e9841c5c159aa33bc37b"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/service.go",
+      "bytes": 10503,
+      "sha256": "88b18aaac8358e790f5f723acac90799e84b813bc02c9c7ddad2e0f15a0503d7"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/setupapi_windows.go",
+      "bytes": 68854,
+      "sha256": "72097fc028210a5700ede92673d155af6de97210292770bfb31363691dad07c4"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/str.go",
+      "bytes": 504,
+      "sha256": "6c8cc24a3e0c11c6b4950dbb49a5f7eb72e65fcb861a8cd71cdad376125a43cb"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/syscall.go",
+      "bytes": 3238,
+      "sha256": "60b6c688bece9fb3550cb369311b55dc33d1e2350a93f9c8a5f8fa0cd8ddb2cc"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/syscall_windows.go",
+      "bytes": 86531,
+      "sha256": "4494535aebf89120fc74e2fc9405750f9e388ff569774abe82af42e23c88c456"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/types_windows.go",
+      "bytes": 113823,
+      "sha256": "751d9b13a06a68817668fa8a2dd2aa95f8f68057e9152c1d4c4dd798e523aa9d"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/types_windows_386.go",
+      "bytes": 875,
+      "sha256": "02d259fd40882f68a35913b0c1d3320054804d92a4a7a4e6b86b1816c1b90258"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/types_windows_amd64.go",
+      "bytes": 817,
+      "sha256": "c375406875cabc6447a9a8ca917eccab2227ea33a17ac3ed02a3a8fca0af8ce1"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/types_windows_arm.go",
+      "bytes": 875,
+      "sha256": "e4dade4b688c7dea2a0d89a819d6917f3ab7be2514e462d7eb2fc2052cdc625c"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/types_windows_arm64.go",
+      "bytes": 817,
+      "sha256": "c375406875cabc6447a9a8ca917eccab2227ea33a17ac3ed02a3a8fca0af8ce1"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/zerrors_windows.go",
+      "bytes": 945502,
+      "sha256": "fdf634bbd093494501a9aec0660aa53b434fdc2c2bb989e8d0925323e511358d"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/zknownfolderids_windows.go",
+      "bytes": 19145,
+      "sha256": "3815bbaa8adf5400041954decc56e8889eb56eb20bfc30053e7799703af0fc95"
+    },
+    {
+      "path": "face-trajectory/go/vendor/golang.org/x/sys/windows/zsyscall_windows.go",
+      "bytes": 206316,
+      "sha256": "3182516f373d9992934ed52fee0efd37f9b721e0f73640f03ad541d09c790c50"
+    },
+    {
+      "path": "face-trajectory/go/vendor/modules.txt",
+      "bytes": 73,
+      "sha256": "f53e9b267392bde60911a88ae07a2dbe1fa6df60c2bb8d14fe9fea11ae5410e1"
+    },
+    {
+      "path": "face-trajectory/HANDOFF.md",
+      "bytes": 106476,
+      "sha256": "fd8544fee826d8317c9948757d895750323a96e083125ad4ef20a3c0aa6e44a8"
+    },
+    {
       "path": "face-trajectory/openapi.yaml",
-      "bytes": 181789,
-      "sha256": "6d1cabc00df22104128d155f1f08ab8a90b7024b10bcdcbef8c59cf3004582f6"
+      "bytes": 184869,
+      "sha256": "2985b01452e7d37f23f08bb6aad049c94c3c6426e99425fcae9c43a9b9bb6032"
+    },
+    {
+      "path": "face-trajectory/README.md",
+      "bytes": 4816,
+      "sha256": "84cb84d04eee118ca0ab35f3c4f28aa61262a1787f0f2db95515d57ad64c8936"
     },
     {
       "path": "face-trajectory/tools/evaluate_identity_events.py",
@@ -823,8 +1094,8 @@
     },
     {
       "path": "face-trajectory/tools/point-viewer/index.html",
-      "bytes": 1969,
-      "sha256": "c582fc5965be5b4b591b4eea4658bcd7dad72cc0b380b06fc13de454428b5cbf"
+      "bytes": 2272,
+      "sha256": "b74ccde2157dd8b9c135eb4efb03619f2fab54472763eaa19db26c708c1c68cc"
     },
     {
       "path": "face-trajectory/tools/point-viewer/overlap.test.mjs",
@@ -838,8 +1109,8 @@
     },
     {
       "path": "face-trajectory/tools/point-viewer/serve_viewer.py",
-      "bytes": 1570,
-      "sha256": "6c9a04f6493040f43fb93ee13ab06b7f3a903bf249c8ac2800f3d693821df2f1"
+      "bytes": 1594,
+      "sha256": "5660afd5e421695dd2ee93750124dc6cd05a7d4604910bb854f38a051f2846ba"
     },
     {
       "path": "face-trajectory/tools/point-viewer/style.css",
@@ -847,9 +1118,19 @@
       "sha256": "17c9acddb890704c66fd0360a81fd246af8bb40aac12cf91b71242cf7a313157"
     },
     {
+      "path": "face-trajectory/tools/point-viewer/topology-sample.json",
+      "bytes": 14644,
+      "sha256": "ed12a09cacc39c1f2db154ddff7d08155fff2db883c35e5151601c307e0d9545"
+    },
+    {
+      "path": "face-trajectory/tools/point-viewer/topology.test.mjs",
+      "bytes": 3062,
+      "sha256": "ad580bc6611c0e8977318bd7e5901d21d6e7daf1b7ea4954efbc75ee2d816807"
+    },
+    {
       "path": "face-trajectory/tools/point-viewer/trace.mjs",
-      "bytes": 5420,
-      "sha256": "c56581c32629af5ea620864db05f6f8b871b4517e0a2a576e336a2c4824f31ea"
+      "bytes": 7575,
+      "sha256": "449397365612a00182a6d234d6760c15fcaa570b733111909e7127d4346dd22c"
     },
     {
       "path": "face-trajectory/tools/point-viewer/trace.test.mjs",
@@ -858,140 +1139,43 @@
     },
     {
       "path": "face-trajectory/tools/point-viewer/viewer.mjs",
-      "bytes": 10387,
-      "sha256": "1ee098e17532afbf5dcd3fed59d54b02a90d327d1a8a74e4614a6764a5a4d6cf"
+      "bytes": 10800,
+      "sha256": "d8501f62904a3107437eef4bdc6fdae248e4a48ae7be21c9f5736d445f864cb0"
     },
     {
       "path": "face-trajectory/tools/verify_point_connections.py",
-      "bytes": 14002,
-      "sha256": "d8bd0bd88ef539a2605fcda460219d404a2c295899a28777c7431d67d807206a"
-    },
-    {
-      "path": "README.md",
-      "bytes": 4385,
-      "sha256": "afd22d915af8b2f785fb3b6ad0fa5e713c3e40bab55ab1e07153705670122edd",
-      "generated_review_material": true
+      "bytes": 17070,
+      "sha256": "14208b9372fdbbf4020fd3113c51b0c49b37235b671e1940f799c6c1f3be8d4d"
     },
     {
       "path": "GEMINI_REVIEW_PROMPT.md",
-      "bytes": 3146,
-      "sha256": "deab02278cd8659a98445782215d4a4f5142174bb96497de089007ea5a2e777a",
-      "generated_review_material": true
+      "bytes": 3402,
+      "sha256": "f748ae474d2de832e6f21fe2e39d67c0dfd0a5dbfa0928c089b22d905072f45c"
     },
     {
       "path": "HANDOFF.md",
-      "bytes": 818,
-      "sha256": "1cf880c5ca3b5f69dfd9974caf8bb14297c9820efae9e8eccb18013b4e67e800",
-      "generated_review_material": true
+      "bytes": 981,
+      "sha256": "362d3eb9c134c425828faa58035566c7c6d549ba95137964f3686ee0364aa584"
     },
     {
-      "path": ".gitignore",
-      "bytes": 204,
-      "sha256": "faa8fbdcf31dd75c0838e7c72b884d5c36fa54e80b067fd8e1862ce8146c18f2",
-      "generated_review_material": true
-    },
-    {
-      "path": "face-recognition-engine/HANDOFF.md",
-      "bytes": 409,
-      "sha256": "710233ce5db62bc4bc10165fcc6e96005add197f8fd1c59923d86802caaca31a",
-      "generated_review_material": true
-    },
-    {
-      "path": "audit_bundle.txt",
-      "bytes": 2030913,
-      "sha256": "44e7f556e4f766335b64f8b51d934f758b43937af717d099b5810a2e201932aa",
-      "generated_review_material": true
-    },
-    {
-      "path": ".gitattributes",
-      "bytes": 90,
-      "sha256": "5ac019c04d6fb9ae416f5538780b88f99da44956cfdc1481dd59510b9ecf29e9",
-      "generated_review_material": true
+      "path": "README.md",
+      "bytes": 5016,
+      "sha256": "b0d313985875ed153bb97bc97e09751863540d7ad43c17d2fa9c557a4b427418"
     }
   ],
-  "excluded": [
-    {
-      "path": "face-trajectory/evidence/",
-      "reason": "raw historical evidence is outside current-source export; selected synthetic drivers and summaries are explicit"
-    },
-    {
-      "path": "face-trajectory/state/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/collection/__pycache__/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/cpp/build/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/cpp/build-activity/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/cpp/build-clock-policy/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/cpp/build-consistency/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/cpp/build-model-update/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/cpp/build-monitoring/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/cpp/build-point/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/cpp/build-point-connections/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/cpp/build-push/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-trajectory/tools/__pycache__/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-recognition-engine/src/face_engine/__pycache__/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-recognition-engine/src/face_engine/alignment/__pycache__/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-recognition-engine/src/face_engine/cache/__pycache__/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-recognition-engine/src/face_engine/detector/__pycache__/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-recognition-engine/src/face_engine/index/__pycache__/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-recognition-engine/src/face_engine/pipeline/__pycache__/",
-      "reason": "runtime/environment/generated/external directory"
-    },
-    {
-      "path": "face-recognition-engine/src/face_engine/recognizer/__pycache__/",
-      "reason": "runtime/environment/generated/external directory"
-    }
-  ],
-  "p2_current_source_payloads": 124,
+  "file_count": 231,
   "all_payloads_byte_identical": true,
-  "git_byte_preservation": ".gitattributes * -text; core.autocrlf=false"
+  "byte_identity_scope": "Every mirrored workspace source copied and compared above; audit README/manifest/bundle are generated",
+  "excluded": [
+    "models and weights",
+    "state/databases/lockfiles",
+    "captured images",
+    "original scene/navmesh/geometry",
+    "authorization and trusted UTC proofs",
+    "raw event logs",
+    "build outputs and environments",
+    "before-source backups"
+  ],
+  "git_byte_preservation": "* -text in .gitattributes",
+  "p2_current_source_payloads": 176
 }

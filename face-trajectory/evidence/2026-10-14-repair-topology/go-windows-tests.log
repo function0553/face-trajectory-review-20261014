@@ -1,0 +1,6 @@
+ok  	face-trajectory/cmd/face-trajectoryd	31.293s
+ok  	face-trajectory/internal/api	0.433s
+ok  	face-trajectory/internal/push	2.350s
+ok  	face-trajectory/internal/retention	1.291s
+ok  	face-trajectory/internal/trust	0.372s
+ok  	face-trajectory/internal/worker	22.852s

@@ -108,7 +108,7 @@ Gallery::Gallery(State* state,std::size_t max_templates): state_(state),max_temp
     if (!state_) return;
     auto persisted=state_;
     state_=nullptr;
-    persisted->Scan("template",[&](const auto&,const auto& text){Add(nlohmann::json::parse(text).get<FaceTemplate>());});
+    persisted->Scan("template",[&](const std::string&,const std::string& text){Add(nlohmann::json::parse(text).get<FaceTemplate>());});
     version_=std::stoull(persisted->Get("version","gallery").value_or("0"));
     state_=persisted;
 }

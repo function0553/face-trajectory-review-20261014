@@ -1,12 +1,87 @@
 #include "face_trajectory/point_trajectory.hpp"
 #include "face_trajectory/state.hpp"
 #include <algorithm>
+#include <cmath>
+#include <queue>
 #include <limits>
 #include <set>
 #include <stdexcept>
 namespace face_trajectory {
 namespace {
 using nlohmann::json;
+using Point = std::array<double,3>;
+std::vector<Point> Waypoints(const json& edge) {
+    const char* field=edge.contains("waypoints")?"waypoints":"route_points";
+    if(!edge.contains(field))return {};
+    const auto& value=edge.at(field);
+    if(!value.is_array()||value.size()<2||value.size()>4096)throw std::invalid_argument("bounded route waypoints array required");
+    std::vector<Point> points;
+    for(const auto& p:value) {
+        Point point{};
+        for(int i=0;i<3;++i) {
+            const auto& v=p.is_object()?p.at(i==0?"x":i==1?"y":"z"):p.at(i);
+            if(!v.is_number()||!std::isfinite(v.get<double>()))throw std::invalid_argument("finite route XYZ required");
+            point[i]=v.get<double>();
+        }
+        if((!p.is_object()&&!p.is_array())||(p.is_array()&&p.size()!=3))throw std::invalid_argument("route point must be XYZ");
+        points.push_back(point);
+    }
+    if(edge.contains("waypoints")&&edge.contains("route_points")&&edge.at("waypoints")!=edge.at("route_points"))
+        throw std::invalid_argument("conflicting route geometry aliases");
+    return points;
+}
+struct RouteEdge {std::string from,to,id;double cost;std::vector<Point> points;};
+using Routes=std::map<std::string,std::vector<RouteEdge>>;
+Routes RouteIndex(const json& packet) {
+    Routes routes;
+    if(!packet.contains("edges"))return routes;
+    if(packet.at("edges").size()>100000)throw std::invalid_argument("point graph route edge limit exceeded");
+    for(const auto& e:packet.at("edges")) {
+        RouteEdge edge{e.at("from_camera"),e.at("to_camera"),e.at("edge_id"),e.at("cost"),Waypoints(e)};
+        if(!std::isfinite(edge.cost)||edge.cost<0)throw std::invalid_argument("invalid route cost");
+        routes[edge.from].push_back(std::move(edge));
+    }
+    for(auto& [camera,edges]:routes)std::sort(edges.begin(),edges.end(),[](const auto& a,const auto& b){return a.id<b.id;});
+    return routes;
+}
+struct RouteResult {std::string status="UNKNOWN_NOT_IMPOSSIBLE";CameraLink link;};
+RouteResult Route(const Routes& routes,const std::string& from,const std::string& to,bool complete) {
+    using Entry=std::pair<double,std::string>;
+    std::priority_queue<Entry,std::vector<Entry>,std::greater<Entry>> queue;
+    std::map<std::string,double> costs{{from,0}};
+    std::map<std::string,const RouteEdge*> previous;
+    queue.emplace(0,from);std::size_t expansions=0;
+    while(!queue.empty()) {
+        const auto [cost,camera]=queue.top();queue.pop();
+        if(cost!=costs.at(camera))continue;
+        if(++expansions>10000)return {"SEARCH_LIMIT",{}};
+        if(camera==to)break;
+        const auto found=routes.find(camera);if(found==routes.end())continue;
+        for(const auto& edge:found->second) {
+            const auto next=cost+edge.cost;if(!std::isfinite(next))continue;
+            const auto old=costs.find(edge.to);
+            if(old!=costs.end()&&old->second<=next)continue;
+            costs[edge.to]=next;previous[edge.to]=&edge;queue.emplace(next,edge.to);
+        }
+    }
+    if(!previous.count(to))return {complete?"UNREACHABLE":"UNKNOWN_NOT_IMPOSSIBLE",{}};
+    std::vector<const RouteEdge*> path;
+    for(auto camera=to;camera!=from;) {
+        if(path.size()>=10000)return {"SEARCH_LIMIT",{}};
+        const auto* edge=previous.at(camera);path.push_back(edge);camera=edge->from;
+    }
+    std::reverse(path.begin(),path.end());CameraLink link;
+    for(const auto* edge:path) {
+        if(edge->points.empty())return {"GEOMETRY_UNAVAILABLE",{}};
+        // A gap between separately projected surfaces is not a known corridor.
+        if(!link.route_waypoints.empty()&&link.route_waypoints.back()!=edge->points.front())return {"DISCONNECTED_GEOMETRY",{}};
+        const auto skip=link.route_waypoints.empty()?0:1;
+        if(link.route_waypoints.size()+edge->points.size()-skip>4096)return {"SEARCH_LIMIT",{}};
+        link.route_waypoints.insert(link.route_waypoints.end(),edge->points.begin()+skip,edge->points.end());
+        link.route_edge_ids.push_back(edge->id);
+    }
+    return {"AVAILABLE",std::move(link)};
+}
 std::int64_t Integer(const json& v) {
     if (!v.is_number_integer() || (v.is_number_unsigned() && v.get<std::uint64_t>() >
         static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())))
@@ -153,6 +228,11 @@ void ValidateSceneBinding(const json& packet, const json& site) {
         }
     }
     for (const auto& e : packet.at("edges")) {
+        (void)Waypoints(e);
+        if(e.contains("route_coordinate_frame")&&e.at("route_coordinate_frame")!=packet.at("coordinate_frame"))
+            throw std::invalid_argument("route coordinate frame differs from point graph");
+        if(e.contains("route_geometry_kind")&&e.at("route_geometry_kind")!="TOPOLOGY_INFERRED_PATH")
+            throw std::invalid_argument("route geometry must remain topology inferred");
         for (const auto& endpoint : {std::pair{"from_annotation_id", "from_camera"},
                                      std::pair{"to_annotation_id", "to_camera"}}) {
             if (model_packet && !e.contains(endpoint.first))
@@ -200,7 +280,7 @@ nlohmann::json PointGraphStore::Get(const std::string& version) const {
 }
 CameraGraph PointGraphStore::Graph(const std::string& version) const { return Decode(Get(version)); }
 nlohmann::json CameraPointTrace(const TrajectorySnapshot& s, const nlohmann::json& p, const SiteContextStore& sites) {
-    if (s.graph.version != p.at("graph_version")) throw std::invalid_argument("point trace graph version mismatch");
+    if (s.graph.version != p.at("graph_version").get<std::string>()) throw std::invalid_argument("point trace graph version mismatch");
     const std::set<std::string> rejected(s.rejected_observation_ids.begin(), s.rejected_observation_ids.end());
     std::vector<const SightingEvidence*> evidence;
     for (const auto& e : s.evidence) if (Accepted(e, s, rejected)) evidence.push_back(&e);
@@ -209,6 +289,8 @@ nlohmann::json CameraPointTrace(const TrajectorySnapshot& s, const nlohmann::jso
     });
     json observations = json::array(), order = json::array(), connections = json::array();
     const auto ambiguous_order = AmbiguousOrder(evidence);
+    const auto routes=RouteIndex(p);
+    std::map<std::pair<std::string,std::string>,RouteResult> route_cache;
     std::map<std::string, std::string> visit_sessions, observation_sessions, anchor_visits;
     for (const auto& a : s.anchors) anchor_visits[a.anchor_id] = a.visit_id;
     for (const auto& session : s.sessions) for (const auto& id : session.anchor_ids) {
@@ -268,6 +350,28 @@ nlohmann::json CameraPointTrace(const TrajectorySnapshot& s, const nlohmann::jso
                         (unique_positions ? "DRAWABLE" : "UNRESOLVED_POSITION")},
                     {"coordinates", coordinates}, {"physical_path_observed", false},
                     {"meaning", "DIRECT_CAMERA_POINT_CONNECTION"}});
+                auto& connection=connections.back();
+                connection["geometry_kind"]="CAMERA_CHORD";
+                const bool ordered=connection.at("order_status")=="ORDERED";
+                connection["direction_status"]=ordered?"CONFIRMED":"ORDER_UNCERTAIN";
+                connection["order_confirmed"]=ordered;
+                if(!coordinates.empty()) {
+                    connection["from_position"]=coordinates[0];connection["to_position"]=coordinates[1];
+                    const auto a=coordinates[0].get<Point>(),b=coordinates[1].get<Point>();
+                    connection["chord_distance_m"]=std::hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+                    const auto pair=std::make_pair(previous->camera_id,e->camera_id);
+                    auto found=route_cache.find(pair);
+                    if(found==route_cache.end())found=route_cache.emplace(pair,Route(routes,pair.first,pair.second,
+                        p.at("topology_verified")==true&&p.at("topology_is_complete")==true)).first;
+                    const auto& route=found->second;
+                    connection["route_status"]=route.status;
+                    if(route.status=="AVAILABLE") {
+                        auto points=json::array();for(const auto& q:route.link.route_waypoints)points.push_back({{"x",q[0]},{"y",q[1]},{"z",q[2]}});
+                        connection["route_waypoints"]=points;
+                        connection["route_edge_ids"]=route.link.route_edge_ids;
+                        connection["route_geometry_kind"]="TOPOLOGY_INFERRED_PATH";
+                    }
+                }
             }
         }
         previous = e;

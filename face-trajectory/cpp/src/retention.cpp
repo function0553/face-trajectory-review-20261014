@@ -71,7 +71,7 @@ json Retain(State& root,std::int64_t now,bool dry_run){
             if(ns=="activity_intake"){
                 intake[row.key]=v;const auto deadline=Deadline(v);
                 if(v.value("expired",false)||deadline<now){expired.insert(row.key);remove(ns,row.key);if(!dry_run){auto hashes=v.value("fingerprints",json::array());if(hashes.empty()&&v.contains("fingerprint"))hashes.push_back(v.at("fingerprint"));state->Put("retention_tombstone",ActivityStore::Digest(row.key),json{{"fingerprints",hashes}}.dump());}}
-                else next=std::min(next,deadline);
+                else next=std::min<std::int64_t>(next,deadline);
             }
         }
         for(const auto& row:rows){const auto ns=Scope(row.ns).second;const auto v=Parse(row.value);
@@ -90,7 +90,7 @@ json Retain(State& root,std::int64_t now,bool dry_run){
             const auto deadline=known?norm.at("captured_at_unix_ms").get<std::int64_t>()+ActivityStore::RetentionMs:0;
             // Missing trusted first quarantine provenance never obtains a fresh
             // migration window. Qualified legacy receipt uses capture expiry.
-            if(deadline<now){expired.insert(event);remove(ns,row.key);}else next=std::min(next,deadline);
+            if(deadline<now){expired.insert(event);remove(ns,row.key);}else next=std::min<std::int64_t>(next,deadline);
         }
         const bool changed=!expired.empty();
         Gallery gallery(state);AssociationStore associations(gallery,state);MonitoringStore monitoring(state);TrajectoryStore trajectories(state);
@@ -112,7 +112,7 @@ json Retain(State& root,std::int64_t now,bool dry_run){
                 const bool lost_face=!v.at("binding").is_null()&&expired.count(v.at("binding").at("observation_id").get<std::string>());
                 if(expired.count(event)||deadline<now)remove(ns,row.key);
                 else {
-                    next=std::min(next,deadline);
+                    next=std::min<std::int64_t>(next,deadline);
                     if(lost_face&&!dry_run){
                         // Freeze current confirmed attribution, including any
                         // correction made while the face evidence was live.
@@ -134,7 +134,7 @@ json Retain(State& root,std::int64_t now,bool dry_run){
             }
             if(changed&&(ns=="association_track_targets"||ns=="association_target_summary"||ns=="monitoring_projection"))remove(ns,row.key);
             if(ns=="activity_result"){
-                if(v.value("retention_deadline_unix_ms",0LL)<now)remove(ns,row.key);
+                if(v.value("retention_deadline_unix_ms",std::int64_t{0})<now)remove(ns,row.key);
                 else {next=std::min(next,v.at("retention_deadline_unix_ms").get<std::int64_t>());if(changed&&!dry_run)state->Put(ns,row.key,Compact(v).dump());}
             }
             if(changed&&ns=="activity_intake"&&!expired.count(row.key)&&v.contains("response")&&!dry_run){
@@ -177,8 +177,8 @@ json Retain(State& root,std::int64_t now,bool dry_run){
     }
     std::size_t pending=0,push_removed=0;
     for(const auto& row:initial)if(row.ns=="push_outbox"){
-        const auto v=Parse(row.value);const auto deadline=v.value("retention_deadline_unix_ms",0LL);
-        if(deadline<now||!v.contains("activity_id")){++push_removed;if(!dry_run)root.Erase("push_outbox",row.key);}else{++pending;next=std::min(next,deadline);if(!dry_run&&changed_activities.count(v.value("activity_id",std::string{}))){auto compact=v;compact["result"]=Compact(v.at("result"));root.Put("push_outbox",row.key,compact.dump());}}
+        const auto v=Parse(row.value);const auto deadline=v.value("retention_deadline_unix_ms",std::int64_t{0});
+        if(deadline<now||!v.contains("activity_id")){++push_removed;if(!dry_run)root.Erase("push_outbox",row.key);}else{++pending;next=std::min<std::int64_t>(next,deadline);if(!dry_run&&changed_activities.count(v.value("activity_id",std::string{}))){auto compact=v;compact["result"]=Compact(v.at("result"));root.Put("push_outbox",row.key,compact.dump(),v.at("activity_id"),v.at("event_id"));}}
     }
     if(!dry_run){root.Put("push_meta","pending",std::to_string(pending));root.Put("retention_meta","next_deadline",std::to_string(next));root.Put("retention_meta","last_run_unix_ms",std::to_string(now));}
     std::set<std::pair<std::string,std::string>> surviving;for(const auto& row:root.AllRows())surviving.emplace(row.ns,row.key);

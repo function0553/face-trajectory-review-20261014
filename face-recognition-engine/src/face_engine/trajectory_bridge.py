@@ -328,6 +328,8 @@ class Outbox:
             if 'metadata' not in {row[1] for row in self.db.execute('PRAGMA table_info(frames)')}:
                 self.db.execute('ALTER TABLE frames ADD COLUMN metadata TEXT')
             columns={row[1] for row in self.db.execute("PRAGMA table_info(outbox)")}
+            if "error" not in columns:
+                self.db.execute("ALTER TABLE outbox ADD COLUMN error TEXT")
             if "enqueue_seq" not in columns:
                 self.db.execute("ALTER TABLE outbox ADD COLUMN enqueue_seq INTEGER")
                 self.db.execute("UPDATE outbox SET enqueue_seq=rowid")
@@ -400,7 +402,8 @@ class Outbox:
                 activity_context(original)
             except ActivityContextError:
                 with self.db:
-                    self.db.execute("UPDATE outbox SET status='QUARANTINED' WHERE id=?", (row[0],))
+                    retention_write_guard(self.db)
+                    self.db.execute("UPDATE outbox SET status='QUARANTINED',error='ACTIVITY_CONTEXT_REQUIRED' WHERE id=?", (row[0],))
                 continue
             headers = {"Content-Type": "application/json"}
             if authorization:
@@ -414,6 +417,12 @@ class Outbox:
                     reply = json.load(response)
             except urllib.error.HTTPError as error:
                 detail=error.read(2048).decode("utf-8",errors="replace")
+                if error.code in (400, 404, 409, 410, 413, 422):
+                    with self.db:
+                        retention_write_guard(self.db)
+                        self.db.execute("UPDATE outbox SET status='QUARANTINED',error=? WHERE id=?",
+                                        (f"P2 HTTP {error.code}: {detail}", row[0]))
+                    continue
                 raise RuntimeError(f"P2 HTTP {error.code}: {detail}; observation remains pending") from error
             if reply.get("ok") is not True or reply.get('observation_id', (reply.get('association') or {}).get('observation_id')) != original['observation']['observation_id']:
                 raise RuntimeError("invalid association acknowledgement")
@@ -421,13 +430,14 @@ class Outbox:
                 verify_activity_receipt(original, reply)
             except ActivityContextError:
                 with self.db:
-                    self.db.execute("UPDATE outbox SET status='QUARANTINED',receipt=? WHERE id=?", (encoded(reply), row[0]))
+                    retention_write_guard(self.db)
+                    self.db.execute("UPDATE outbox SET status='QUARANTINED',receipt=?,error='ACTIVITY_RECEIPT_MISMATCH' WHERE id=?", (encoded(reply), row[0]))
                 continue
             with self.db:
                 retention_write_guard(self.db)
                 if retention_tombstone(self.db, 'outbox', row[0]):
                     continue
-                self.db.execute("UPDATE outbox SET payload=NULL,receipt=?,status='ACKNOWLEDGED' WHERE id=?", (encoded(reply), row[0]))
+                self.db.execute("UPDATE outbox SET payload=NULL,receipt=?,status='ACKNOWLEDGED',error=NULL WHERE id=?", (encoded(reply), row[0]))
             sent += 1
         return sent
 

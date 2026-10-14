@@ -6,6 +6,7 @@
 
 | 用途 | 文档 |
 | --- | --- |
+| 当前D-01～D-07修复、3D拓扑折线、验证与接手 | [2026-10-14修复与拓扑交接](repair-topology-2026-10-14.md) |
 | 活动CAS/权限/订阅/新活动/清理/迁移与回退 | [0.13服务合同](activity-service.md)、[实施前统一设计及核对](activity-retention.md) |
 | 三类人员、人脸比对、闸机监控与自动轨迹 | [监控入流合同](monitoring.md) |
 | 经过记录、版本和新观测修正 | [点位轨迹接入](point-trajectories.md) |

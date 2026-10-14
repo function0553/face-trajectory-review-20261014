@@ -21,12 +21,8 @@ std::uint64_t Revision(const json& value, const char* name) {
     return item.get<std::uint64_t>();
 }
 json Payload(json request) {
-    for(const auto* k:{"op","reconsider","evidence_id","_trusted_clock","_client_context","_source_event_key","_normalization","_content_digest"})request.erase(k);
+    for(const auto* k:{"op","_trusted_clock","_client_context","_source_event_key","_normalization","_content_digest"})request.erase(k);
     return request;
-}
-bool ReplayAllowed(const json& request) {
-    return request.value("reconsider", false) && request.contains("evidence_id") &&
-           request.at("evidence_id").is_string() && !request.at("evidence_id").get<std::string>().empty();
 }
 std::string Key(const std::string& id, std::uint64_t revision) { return json::array({id,revision}).dump(); }
 json ObservationRecord(State* state,const std::string& text,bool payload=true) {
@@ -126,15 +122,9 @@ std::optional<json> MonitoringStore::ObservationReceipt(const json& request) con
     if (!stored) return {};
     const auto previous = ObservationRecord(state_,*stored);
     const auto payload = Payload(request);
-    if (previous.at("payload") == payload &&
-        !(ReplayAllowed(request) && previous.at("response").value("status","")=="HOLD"))
-        return previous.at("response");
-    if (previous.at("payload").at("observation") != payload.at("observation"))
-        throw std::invalid_argument("SOURCE_CONFLICT: immutable face observation changed");
-    if (!ReplayAllowed(request) || previous.at("response").value("status","") == "ACCEPTED")
-        throw std::invalid_argument("SOURCE_CONFLICT: changed intake context requires unaccepted observation, reconsider and evidence_id");
-    // Exact retries of an older receipt remain auditable in monitoring_observation_revision.
-    return {};
+    if (previous.at("payload") == payload)
+        return std::optional<json>{previous.at("response")};
+    throw std::invalid_argument("SOURCE_CONFLICT: immutable intake changed; use associations correct/rebuild");
 }
 
 void MonitoringStore::SaveObservation(const json& request, const json& response) {
@@ -142,8 +132,7 @@ void MonitoringStore::SaveObservation(const json& request, const json& response)
     const auto id = Required(request.at("observation"),"observation_id");
     const auto old = state_->Get("monitoring_observation",id);
     const auto revision = old ? json::parse(*old).at("revision").get<std::uint64_t>()+1 : 1;
-    const json record = {{"revision",revision},{"payload",Payload(request)},{"response",response},
-        {"replay_evidence_id",request.value("evidence_id",std::string{})}};
+    const json record = {{"revision",revision},{"payload",Payload(request)},{"response",response}};
     StoreObservationRecord(state_,id,record);
 }
 
@@ -168,12 +157,8 @@ json MonitoringStore::PutGate(const json& request, const json& normalization, co
     std::uint64_t revision=1;
     if(oldtext) {
         old=json::parse(*oldtext); revision=old.at("revision").get<std::uint64_t>();
-        if(old.at("payload")!=payload) {
-            auto oldcore=old.at("payload"), newcore=payload;
-            oldcore.erase("time_record"); newcore.erase("time_record");
-            if(oldcore!=newcore || !ReplayAllowed(request) || old.at("normalization").value("status","")=="NORMALIZED")
-                throw std::invalid_argument("SOURCE_CONFLICT: gate event changed; only held clock evidence may be explicitly reconsidered");
-        }
+        if(old.at("payload")!=payload)
+            throw std::invalid_argument("SOURCE_CONFLICT: immutable gate intake changed");
         if(binding.is_null()) binding=old.at("binding");
         if(!old.at("binding").is_null() && old.at("binding")!=binding)
             throw std::invalid_argument("SOURCE_CONFLICT: gate binding is immutable; correct referenced face attribution instead");

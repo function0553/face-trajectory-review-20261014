@@ -38,6 +38,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--worker',type=Path,required=True); parser.add_argument('--service',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True); parser.add_argument('--example',type=Path)
+    parser.add_argument('--topology',action='store_true',help='Also exercise supplied topology bends and optional monitoring geometry')
     args=parser.parse_args()
     if args.output.exists() or (args.example and args.example.exists()):
         raise RuntimeError('Fresh output and example paths required')
@@ -92,6 +93,14 @@ def main():
     def stop():
         proc.terminate();proc.wait(15)
     graph=dict(version='SYNTHETIC:graph',edges=[])
+    if args.topology:
+        for name,source,target,points in [
+            ('ab','A','B',[(0,0,0),(5,0,0),(5,0,7),(15,0,7)]),
+            ('bc','B','C',[(15,0,7),(20,0,7),(20,0,14),(30,0,14)]),
+            ('cb','C','B',[(30,0,14),(20,0,14),(20,0,7),(15,0,7)])]:
+            graph['edges'].append(dict(edge_id='SYNTHETIC:'+name,from_camera=source,to_camera=target,
+                min_travel_ms=0,max_travel_ms=1000000,cost=20,
+                waypoints=[dict(x=x,y=y,z=z) for x,y,z in points]))
     def observe(event,camera,t,source='S1',activity='A',clock_name='good'):
         return dict(scope(activity),route_rule_id='ROUTE-'+activity,time_record=dict(profile_version=clock_name,raw_time=iso(T0+t)),
             observation=dict(observation_id=event,source_id=source,camera_id=camera,frame_id=camera+':'+event,
@@ -104,7 +113,7 @@ def main():
         proc=start();A=token('A');B=token('B')
         call('/v1/site-scenes',dict(site=site()),A)
         call('/v1/point-graphs',dict(point_graph=dict(graph_version=graph['version'],scene_version='SYNTHETIC:points',
-            source_evidence_id='SYNTHETIC:points-only',coordinate_frame='SYNTHETIC:local',topology_verified=False,topology_is_complete=False,edges=[])),A)
+            source_evidence_id='SYNTHETIC:points-only',coordinate_frame='SYNTHETIC:local',topology_verified=False,topology_is_complete=False,edges=graph['edges'])),A)
         for camera in ['A','B','C','CONFLICT','MISSING']:
             for name,error,verified in [('good',0,True),('overlap',40000,True),('held',0,False)]:
                 value=profile(name,error=error,verified=verified)['profile'];value['camera_id']=camera
@@ -127,13 +136,24 @@ def main():
         trace=query()['point_trace'];line=trace['connections'][0]
         check('two_point_direct_line',line['drawing_status']=='DRAWABLE' and len(line['coordinates'])==2 and line['order_status']=='ORDERED')
         check('cross_source_ids_are_original',line['from_source_id']=='S1' and line['from_observation_id']=='repeat' and line['to_source_id']=='S2' and line['to_observation_id']=='shared')
+        if args.topology:
+            check('optional_topology_bends_preserved',len(line['route_waypoints'])==4 and line['geometry_kind']=='CAMERA_CHORD' and line['route_geometry_kind']=='TOPOLOGY_INFERRED_PATH')
+            check('topology_does_not_replace_endpoints',line['from_position']==line['coordinates'][0] and line['to_position']==line['coordinates'][1] and len(line['coordinates'])==2)
+            monitor=call('/v1/monitoring/get',dict(scope(),target_id='PERSON',include_point_trace=True),A)
+            check('optional_monitoring_connections_match_query',monitor['monitoring']['point_connections']==trace['connections'])
         call('/v1/monitoring/observe',observe('c','C',60000,clock_name='overlap'),A)
         trace=query()['point_trace']
         check('uncertain_clock_line_retained',trace['connections'][1]['order_status']=='UNCERTAIN_CLOCK_ORDER')
+        if args.topology:
+            check('topology_cannot_confirm_overlap',trace['connections'][1]['order_confirmed'] is False and trace['connections'][1]['direction_status']=='ORDER_UNCERTAIN')
         call('/v1/monitoring/observe',observe('return','B',90000),A)
         call('/v1/monitoring/observe',observe('conflict','CONFLICT',120000),A)
         call('/v1/monitoring/observe',observe('missing','MISSING',150000),A)
-        check('held_event_stays_out',call('/v1/monitoring/observe',observe('held','A',160000,clock_name='held'),A)['status']=='HOLD')
+        held=observe('held','A',160000,clock_name='held')
+        check('held_event_stays_out',call('/v1/monitoring/observe',held,A)['status']=='HOLD')
+        check('held_exact_retry_keeps_original_receipt',call('/v1/monitoring/observe',held,A)['duplicate'] is True)
+        reconsider=copy.deepcopy(held);reconsider.update(reconsider=True,evidence_id='SYNTHETIC:new-evidence')
+        check('held_reconsider_same_key_conflicts',call('/v1/monitoring/observe',reconsider,A,409)['error_code']=='SOURCE_CONFLICT')
         late=observe('late','A',20000);call('/v1/monitoring/observe',late,A)
         before=query();trace=before['point_trace']
         check('late_event_updates_boundary',trace['connections'][0]['from_observation_id']=='late')
@@ -157,6 +177,8 @@ def main():
         check('restart_preserves_point_connections',query()['point_trace']==trace)
         call('/v1/associations/correct',dict(scope(),source_id='S2',observation_id='shared',target_id='OTHER',evidence_id='SYNTHETIC:independent-correction'),A)
         check('correction_invalidates_current_trace',query(expected=409)['error_code']=='REBUILD_REQUIRED')
+        if args.topology:
+            check('monitoring_geometry_cannot_bypass_freshness',call('/v1/monitoring/get',dict(scope(),target_id='PERSON',include_point_trace=True,version=trace['version']),A,409)['error_code']=='REBUILD_REQUIRED')
         historical=query(version=trace['version'])
         check('historical_trace_marks_changed_attribution',historical['point_trace']['freshness']['status']=='STALE_ASSOCIATION')
         call('/v1/associations/rebuild',dict(scope(),target_id='PERSON',expected_version=trace['version'],graph=graph,
@@ -164,6 +186,17 @@ def main():
         changed=query()['point_trace']
         check('rebuild_removes_corrected_source_event',not any(o['source_id']=='S2' and o['observation_id']=='shared' for o in changed['observations']))
         check('other_activity_unchanged_after_correction',len(query('B')['point_trace']['observations'])==1)
+        if args.topology:
+            # Lifecycle version changes drop RAM runtimes; durable gallery and
+            # original observations must survive rebuilding the scoped runtime.
+            stopped=call('/v1/activities/monitoring',dict(activity_id='A',config_version=1,binding_version=1,
+                monitoring_version=2,expected_monitoring_version=1,enabled=False),A)
+            check('activity_disable_committed',stopped['enabled'] is False)
+            resumed=call('/v1/activities/monitoring',dict(activity_id='A',config_version=1,binding_version=1,
+                monitoring_version=3,expected_monitoring_version=2,enabled=True),A)
+            check('activity_resume_committed',resumed['enabled'] is True)
+            resumed_trace=call('/v1/point-trajectories/get',dict(scope(),monitoring_version=3,target_id='PERSON'),A)['point_trace']
+            check('runtime_eviction_keeps_durable_trajectory',resumed_trace['connections']==changed['connections'])
     except BaseException as error:failure=repr(error)
     finally:
         if proc and proc.poll() is None:stop()

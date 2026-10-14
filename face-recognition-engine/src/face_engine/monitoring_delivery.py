@@ -283,9 +283,9 @@ class DeliveryStore:
             if isinstance(error, urllib.error.HTTPError):
                 # Permanent bad events are isolated, retaining their original payload.
                 # A full/dead peer or unavailable credentials can recover later.
-                if error.code in (400, 404, 409, 413, 422):
+                if error.code in (400, 404, 409, 410, 413, 422):
                     status = "QUARANTINED"
-                detail = f"P2 HTTP {error.code}"
+                detail = f"P2 HTTP {error.code}: {error.read(2048).decode('utf-8', errors='replace')}"
             else:
                 detail = type(error).__name__
             with self.lock, self.db:

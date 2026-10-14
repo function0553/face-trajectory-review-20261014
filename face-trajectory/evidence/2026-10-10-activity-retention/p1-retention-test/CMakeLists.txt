@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.20)
+project(p1_retention_adapter_verification LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+get_filename_component(CORE "${CMAKE_CURRENT_LIST_DIR}/../../../cpp" ABSOLUTE)
+add_library(test_sqlite STATIC "${CORE}/vendor/sqlite/sqlite3.c")
+target_compile_definitions(test_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_DEFAULT_MEMSTATUS=0)
+add_executable(p1_retention_test test.cpp "${CORE}/src/p1_retention.cpp"
+    "${CORE}/src/activity.cpp" "${CORE}/src/state.cpp" "${CORE}/src/clock_adapter.cpp")
+target_include_directories(p1_retention_test PRIVATE "${CORE}/include" "${CORE}/vendor")
+target_link_libraries(p1_retention_test PRIVATE test_sqlite)

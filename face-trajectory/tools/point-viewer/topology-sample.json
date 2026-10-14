@@ -1,0 +1,511 @@
+{
+  "activity_id": "A",
+  "activity_num": "NUM-A",
+  "binding_version": 1,
+  "client_context": {
+    "subject": "viewer-A",
+    "session": "test-A",
+    "context_id": "viewer-A",
+    "context_generation": 1,
+    "authz_revision": 1
+  },
+  "config_version": 1,
+  "freshness": {
+    "association_matches_current": true,
+    "current_association_revision": 8,
+    "latest_version": 8,
+    "requested_scope": "CURRENT",
+    "snapshot_association_revision": 8,
+    "status": "CURRENT",
+    "valid_for_current_use": true
+  },
+  "monitoring_version": 1,
+  "ok": true,
+  "point_trace": {
+    "connections": [
+      {
+        "chord_distance_m": 16.55294535724685,
+        "coordinates": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            15.0,
+            0.0,
+            7.0
+          ]
+        ],
+        "direction_status": "ORDER_UNCERTAIN",
+        "drawing_status": "DRAWABLE",
+        "from_camera_id": "A",
+        "from_observation_id": "late",
+        "from_position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "from_source_id": "S1",
+        "geometry_kind": "CAMERA_CHORD",
+        "meaning": "DIRECT_CAMERA_POINT_CONNECTION",
+        "order_confirmed": false,
+        "order_status": "UNCERTAIN_CLOCK_ORDER",
+        "physical_path_observed": false,
+        "route_edge_ids": [
+          "SYNTHETIC:ab"
+        ],
+        "route_geometry_kind": "TOPOLOGY_INFERRED_PATH",
+        "route_status": "AVAILABLE",
+        "route_waypoints": [
+          {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          {
+            "x": 5.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          {
+            "x": 5.0,
+            "y": 0.0,
+            "z": 7.0
+          },
+          {
+            "x": 15.0,
+            "y": 0.0,
+            "z": 7.0
+          }
+        ],
+        "to_camera_id": "B",
+        "to_observation_id": "shared",
+        "to_position": [
+          15.0,
+          0.0,
+          7.0
+        ],
+        "to_source_id": "S2"
+      },
+      {
+        "chord_distance_m": 16.55294535724685,
+        "coordinates": [
+          [
+            15.0,
+            0.0,
+            7.0
+          ],
+          [
+            30.0,
+            0.0,
+            14.0
+          ]
+        ],
+        "direction_status": "ORDER_UNCERTAIN",
+        "drawing_status": "DRAWABLE",
+        "from_camera_id": "B",
+        "from_observation_id": "shared",
+        "from_position": [
+          15.0,
+          0.0,
+          7.0
+        ],
+        "from_source_id": "S2",
+        "geometry_kind": "CAMERA_CHORD",
+        "meaning": "DIRECT_CAMERA_POINT_CONNECTION",
+        "order_confirmed": false,
+        "order_status": "UNCERTAIN_CLOCK_ORDER",
+        "physical_path_observed": false,
+        "route_edge_ids": [
+          "SYNTHETIC:bc"
+        ],
+        "route_geometry_kind": "TOPOLOGY_INFERRED_PATH",
+        "route_status": "AVAILABLE",
+        "route_waypoints": [
+          {
+            "x": 15.0,
+            "y": 0.0,
+            "z": 7.0
+          },
+          {
+            "x": 20.0,
+            "y": 0.0,
+            "z": 7.0
+          },
+          {
+            "x": 20.0,
+            "y": 0.0,
+            "z": 14.0
+          },
+          {
+            "x": 30.0,
+            "y": 0.0,
+            "z": 14.0
+          }
+        ],
+        "to_camera_id": "C",
+        "to_observation_id": "c",
+        "to_position": [
+          30.0,
+          0.0,
+          14.0
+        ],
+        "to_source_id": "S1"
+      },
+      {
+        "chord_distance_m": 16.55294535724685,
+        "coordinates": [
+          [
+            30.0,
+            0.0,
+            14.0
+          ],
+          [
+            15.0,
+            0.0,
+            7.0
+          ]
+        ],
+        "direction_status": "ORDER_UNCERTAIN",
+        "drawing_status": "DRAWABLE",
+        "from_camera_id": "C",
+        "from_observation_id": "c",
+        "from_position": [
+          30.0,
+          0.0,
+          14.0
+        ],
+        "from_source_id": "S1",
+        "geometry_kind": "CAMERA_CHORD",
+        "meaning": "DIRECT_CAMERA_POINT_CONNECTION",
+        "order_confirmed": false,
+        "order_status": "UNCERTAIN_CLOCK_ORDER",
+        "physical_path_observed": false,
+        "route_edge_ids": [
+          "SYNTHETIC:cb"
+        ],
+        "route_geometry_kind": "TOPOLOGY_INFERRED_PATH",
+        "route_status": "AVAILABLE",
+        "route_waypoints": [
+          {
+            "x": 30.0,
+            "y": 0.0,
+            "z": 14.0
+          },
+          {
+            "x": 20.0,
+            "y": 0.0,
+            "z": 14.0
+          },
+          {
+            "x": 20.0,
+            "y": 0.0,
+            "z": 7.0
+          },
+          {
+            "x": 15.0,
+            "y": 0.0,
+            "z": 7.0
+          }
+        ],
+        "to_camera_id": "B",
+        "to_observation_id": "return",
+        "to_position": [
+          15.0,
+          0.0,
+          7.0
+        ],
+        "to_source_id": "S1"
+      },
+      {
+        "coordinates": [],
+        "direction_status": "ORDER_UNCERTAIN",
+        "drawing_status": "UNRESOLVED_POSITION",
+        "from_camera_id": "B",
+        "from_observation_id": "return",
+        "from_source_id": "S1",
+        "geometry_kind": "CAMERA_CHORD",
+        "meaning": "DIRECT_CAMERA_POINT_CONNECTION",
+        "order_confirmed": false,
+        "order_status": "UNCERTAIN_CLOCK_ORDER",
+        "physical_path_observed": false,
+        "to_camera_id": "CONFLICT",
+        "to_observation_id": "conflict",
+        "to_source_id": "S1"
+      },
+      {
+        "coordinates": [],
+        "direction_status": "CONFIRMED",
+        "drawing_status": "UNRESOLVED_POSITION",
+        "from_camera_id": "CONFLICT",
+        "from_observation_id": "conflict",
+        "from_source_id": "S1",
+        "geometry_kind": "CAMERA_CHORD",
+        "meaning": "DIRECT_CAMERA_POINT_CONNECTION",
+        "order_confirmed": true,
+        "order_status": "ORDERED",
+        "physical_path_observed": false,
+        "to_camera_id": "MISSING",
+        "to_observation_id": "missing",
+        "to_source_id": "S1"
+      }
+    ],
+    "coordinate_frame": "SYNTHETIC:local",
+    "detailed_walk_path_observed": false,
+    "drawing_mode": "CAMERA_POINT_CONNECTIONS",
+    "freshness": {
+      "association_matches_current": true,
+      "current_association_revision": 8,
+      "latest_version": 8,
+      "requested_scope": "CURRENT",
+      "snapshot_association_revision": 8,
+      "status": "CURRENT",
+      "valid_for_current_use": true
+    },
+    "graph_version": "SYNTHETIC:graph",
+    "observation_order": [
+      {
+        "from_observation_id": "[\"S1\",\"shared\"]",
+        "meaning": "OBSERVATION_SEQUENCE_ONLY",
+        "order_status": "ORDERED",
+        "physical_path_observed": false,
+        "to_observation_id": "[\"S1\",\"repeat\"]"
+      },
+      {
+        "from_observation_id": "[\"S1\",\"repeat\"]",
+        "meaning": "OBSERVATION_SEQUENCE_ONLY",
+        "order_status": "ORDERED",
+        "physical_path_observed": false,
+        "to_observation_id": "[\"S1\",\"late\"]"
+      },
+      {
+        "from_observation_id": "[\"S1\",\"late\"]",
+        "meaning": "OBSERVATION_SEQUENCE_ONLY",
+        "order_status": "ORDERED",
+        "physical_path_observed": false,
+        "to_observation_id": "[\"S2\",\"shared\"]"
+      },
+      {
+        "from_observation_id": "[\"S2\",\"shared\"]",
+        "meaning": "OBSERVATION_SEQUENCE_ONLY",
+        "order_status": "UNCERTAIN_CLOCK_ORDER",
+        "physical_path_observed": false,
+        "to_observation_id": "[\"S1\",\"c\"]"
+      },
+      {
+        "from_observation_id": "[\"S1\",\"c\"]",
+        "meaning": "OBSERVATION_SEQUENCE_ONLY",
+        "order_status": "UNCERTAIN_CLOCK_ORDER",
+        "physical_path_observed": false,
+        "to_observation_id": "[\"S1\",\"return\"]"
+      },
+      {
+        "from_observation_id": "[\"S1\",\"return\"]",
+        "meaning": "OBSERVATION_SEQUENCE_ONLY",
+        "order_status": "ORDERED",
+        "physical_path_observed": false,
+        "to_observation_id": "[\"S1\",\"conflict\"]"
+      },
+      {
+        "from_observation_id": "[\"S1\",\"conflict\"]",
+        "meaning": "OBSERVATION_SEQUENCE_ONLY",
+        "order_status": "ORDERED",
+        "physical_path_observed": false,
+        "to_observation_id": "[\"S1\",\"missing\"]"
+      }
+    ],
+    "observations": [
+      {
+        "attribution_evidence_id": "association:[\"S1\",\"shared\"]",
+        "camera_id": "A",
+        "captured_at_unix_ms": 1791626400000,
+        "clock_uncertainty_ms": 0,
+        "observation_id": "shared",
+        "position_candidates": [
+          {
+            "annotation_id": "point:A",
+            "local_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "name": "A",
+            "source_scene_id": "SYNTHETIC:source"
+          }
+        ],
+        "position_semantics": "CAMERA_MARKER_NOT_PERSON_FOOTPOINT",
+        "position_status": "BOUND_MARKER",
+        "source_id": "S1",
+        "status": "OBSERVED"
+      },
+      {
+        "attribution_evidence_id": "association:[\"S1\",\"repeat\"]",
+        "camera_id": "A",
+        "captured_at_unix_ms": 1791626410000,
+        "clock_uncertainty_ms": 0,
+        "observation_id": "repeat",
+        "position_candidates": [
+          {
+            "annotation_id": "point:A",
+            "local_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "name": "A",
+            "source_scene_id": "SYNTHETIC:source"
+          }
+        ],
+        "position_semantics": "CAMERA_MARKER_NOT_PERSON_FOOTPOINT",
+        "position_status": "BOUND_MARKER",
+        "source_id": "S1",
+        "status": "OBSERVED"
+      },
+      {
+        "attribution_evidence_id": "association:[\"S1\",\"late\"]",
+        "camera_id": "A",
+        "captured_at_unix_ms": 1791626420000,
+        "clock_uncertainty_ms": 0,
+        "observation_id": "late",
+        "position_candidates": [
+          {
+            "annotation_id": "point:A",
+            "local_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "name": "A",
+            "source_scene_id": "SYNTHETIC:source"
+          }
+        ],
+        "position_semantics": "CAMERA_MARKER_NOT_PERSON_FOOTPOINT",
+        "position_status": "BOUND_MARKER",
+        "source_id": "S1",
+        "status": "OBSERVED"
+      },
+      {
+        "attribution_evidence_id": "association:[\"S2\",\"shared\"]",
+        "camera_id": "B",
+        "captured_at_unix_ms": 1791626430000,
+        "clock_uncertainty_ms": 0,
+        "observation_id": "shared",
+        "position_candidates": [
+          {
+            "annotation_id": "point:B",
+            "local_xyz": [
+              15.0,
+              0.0,
+              7.0
+            ],
+            "name": "B",
+            "source_scene_id": "SYNTHETIC:source"
+          }
+        ],
+        "position_semantics": "CAMERA_MARKER_NOT_PERSON_FOOTPOINT",
+        "position_status": "BOUND_MARKER",
+        "source_id": "S2",
+        "status": "OBSERVED"
+      },
+      {
+        "attribution_evidence_id": "association:[\"S1\",\"c\"]",
+        "camera_id": "C",
+        "captured_at_unix_ms": 1791626460000,
+        "clock_uncertainty_ms": 40000,
+        "observation_id": "c",
+        "position_candidates": [
+          {
+            "annotation_id": "point:C",
+            "local_xyz": [
+              30.0,
+              0.0,
+              14.0
+            ],
+            "name": "C",
+            "source_scene_id": "SYNTHETIC:source"
+          }
+        ],
+        "position_semantics": "CAMERA_MARKER_NOT_PERSON_FOOTPOINT",
+        "position_status": "BOUND_MARKER",
+        "source_id": "S1",
+        "status": "OBSERVED"
+      },
+      {
+        "attribution_evidence_id": "association:[\"S1\",\"return\"]",
+        "camera_id": "B",
+        "captured_at_unix_ms": 1791626490000,
+        "clock_uncertainty_ms": 0,
+        "observation_id": "return",
+        "position_candidates": [
+          {
+            "annotation_id": "point:B",
+            "local_xyz": [
+              15.0,
+              0.0,
+              7.0
+            ],
+            "name": "B",
+            "source_scene_id": "SYNTHETIC:source"
+          }
+        ],
+        "position_semantics": "CAMERA_MARKER_NOT_PERSON_FOOTPOINT",
+        "position_status": "BOUND_MARKER",
+        "source_id": "S1",
+        "status": "OBSERVED"
+      },
+      {
+        "attribution_evidence_id": "association:[\"S1\",\"conflict\"]",
+        "camera_id": "CONFLICT",
+        "captured_at_unix_ms": 1791626520000,
+        "clock_uncertainty_ms": 0,
+        "observation_id": "conflict",
+        "position_candidates": [
+          {
+            "annotation_id": "conflict:other",
+            "local_xyz": [
+              90.0,
+              0.0,
+              20.0
+            ],
+            "name": "CONFLICT",
+            "source_scene_id": "SYNTHETIC:source"
+          },
+          {
+            "annotation_id": "point:CONFLICT",
+            "local_xyz": [
+              45.0,
+              0.0,
+              21.0
+            ],
+            "name": "CONFLICT",
+            "source_scene_id": "SYNTHETIC:source"
+          }
+        ],
+        "position_semantics": "CAMERA_MARKER_NOT_PERSON_FOOTPOINT",
+        "position_status": "AMBIGUOUS_POSITION",
+        "source_id": "S1",
+        "status": "OBSERVED"
+      },
+      {
+        "attribution_evidence_id": "association:[\"S1\",\"missing\"]",
+        "camera_id": "MISSING",
+        "captured_at_unix_ms": 1791626550000,
+        "clock_uncertainty_ms": 0,
+        "observation_id": "missing",
+        "position_candidates": [],
+        "position_semantics": "CAMERA_MARKER_NOT_PERSON_FOOTPOINT",
+        "position_status": "NO_PUBLISHED_CAMERA_MARKER",
+        "source_id": "S1",
+        "status": "OBSERVED"
+      }
+    ],
+    "scene_version": "SYNTHETIC:points",
+    "target_id": "PERSON",
+    "topology_is_complete": false,
+    "topology_verified": false,
+    "version": 8
+  },
+  "venue_id": "SYNTHETIC:VENUE",
+  "evidence_kind": "SYNTHETIC_INTERFACE_EXAMPLE"
+}

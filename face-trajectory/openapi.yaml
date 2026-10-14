@@ -184,6 +184,10 @@ paths:
                 required:
                 - target_id
                 properties:
+                  include_point_trace:
+                    type: boolean
+                    default: false
+                    description: Optional current point connections with separately labelled topology reference geometry; no pushes.
                   target_id:
                     type: string
                     minLength: 1
@@ -1861,7 +1865,7 @@ components:
           default: false
         evidence_id:
           type: string
-          description: Required independent provenance for reconsidering held time/policy context.
+          description: Reserved legacy evidence field; changing immutable intake under the same key returns SOURCE_CONFLICT.
       description: All original event content including activity versions, route, face, clock context and gate binding is
         immutable for the same activity/source/event key. Any changed retry is 409. reconsider is a reserved legacy field
         and does not authorize changed content in 0.13.
@@ -1914,6 +1918,15 @@ components:
       - continue_monitoring
       - possible_statuses
       properties:
+        point_connections:
+          type: array
+          description: Present only when include_point_trace is true; original camera chords with optional inferred route bends.
+          items:
+            $ref: '#/components/schemas/CameraPointConnection'
+        point_geometry:
+          type: object
+          additionalProperties: true
+          description: Optional scene, graph, frame and topology qualifications for point_connections.
         target_id:
           type: string
         category:
@@ -2050,7 +2063,7 @@ components:
           default: false
         evidence_id:
           type: string
-          description: Independent evidence when explicitly reconsidering a held gate clock context.
+          description: Reserved legacy evidence field; changing immutable gate intake under the same key returns SOURCE_CONFLICT.
       description: All original event content including activity versions, route, face, clock context and gate binding is
         immutable for the same activity/source/event key. Any changed retry is 409. reconsider is a reserved legacy field
         and does not authorize changed content in 0.13.
@@ -2431,6 +2444,19 @@ components:
             - $ref: '#/components/schemas/CameraEdge'
             - type: object
               properties:
+                waypoints:
+                  type: array
+                  minItems: 2
+                  maxItems: 4096
+                  description: Scene-local XYZ topology reference bends, never observed continuous person positions.
+                  items:
+                    $ref: '#/components/schemas/RouteWaypoint'
+                route_coordinate_frame:
+                  type: string
+                  description: Must equal the graph coordinate_frame when supplied.
+                route_geometry_kind:
+                  type: string
+                  enum: [TOPOLOGY_INFERRED_PATH]
                 travel_time_bound_verified:
                   type: boolean
                   default: false
@@ -2733,6 +2759,47 @@ components:
       required: [from_observation_id, to_observation_id, from_source_id, to_source_id, from_camera_id, to_camera_id, order_status, drawing_status,
         coordinates, physical_path_observed, meaning]
       properties:
+        geometry_kind:
+          type: string
+          enum: [CAMERA_CHORD]
+        direction_status:
+          type: string
+          enum: [CONFIRMED, ORDER_UNCERTAIN]
+        order_confirmed:
+          type: boolean
+          description: True only for nonoverlapping admitted time bounds. Topology geometry never changes this.
+        from_position:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items: {type: number}
+          description: Optional alias of coordinates[0], never replaced by a route surface point.
+        to_position:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items: {type: number}
+          description: Optional alias of coordinates[1].
+        chord_distance_m:
+          type: number
+          minimum: 0
+          description: Euclidean distance between the original camera endpoints.
+        route_status:
+          type: string
+          enum: [AVAILABLE, GEOMETRY_UNAVAILABLE, DISCONNECTED_GEOMETRY, SEARCH_LIMIT, UNKNOWN_NOT_IMPOSSIBLE, UNREACHABLE]
+        route_waypoints:
+          type: array
+          minItems: 2
+          maxItems: 4096
+          description: Only for AVAILABLE; scene-local inferred reference path, never measured continuous person positions.
+          items:
+            $ref: '#/components/schemas/RouteWaypoint'
+        route_geometry_kind:
+          type: string
+          enum: [TOPOLOGY_INFERRED_PATH]
+        route_edge_ids:
+          type: array
+          items: {type: string}
         from_observation_id:
           type: string
         to_observation_id:
@@ -2767,6 +2834,13 @@ components:
         meaning:
           type: string
           enum: [DIRECT_CAMERA_POINT_CONNECTION]
+    RouteWaypoint:
+      type: object
+      required: [x, y, z]
+      properties:
+        x: {type: number}
+        y: {type: number}
+        z: {type: number}
     PointTraceReply:
       allOf:
       - $ref: '#/components/schemas/AlgorithmReply'

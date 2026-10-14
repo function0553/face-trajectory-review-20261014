@@ -1,0 +1,21 @@
+=== RUN   TestWorkerProcess
+--- PASS: TestWorkerProcess (0.00s)
+=== RUN   TestCancellationAfterWriteReturnsCommittedReply
+--- PASS: TestCancellationAfterWriteReturnsCommittedReply (0.16s)
+=== RUN   TestCancelledQueueDoesNotWrite
+--- PASS: TestCancelledQueueDoesNotWrite (0.00s)
+=== RUN   TestStopReapsBeforeRestart
+--- PASS: TestStopReapsBeforeRestart (0.01s)
+=== RUN   TestColdRecoveryCanExceedTwentySeconds
+--- PASS: TestColdRecoveryCanExceedTwentySeconds (21.03s)
+=== RUN   TestFairCancellationAfterWriteReturnsCommittedReply
+--- PASS: TestFairCancellationAfterWriteReturnsCommittedReply (0.15s)
+=== RUN   TestWorkerLifetimeParent
+--- PASS: TestWorkerLifetimeParent (0.00s)
+=== RUN   TestParentKillTerminatesWorker
+--- PASS: TestParentKillTerminatesWorker (0.02s)
+=== RUN   TestFairActivityRoundRobin
+--- PASS: TestFairActivityRoundRobin (0.00s)
+=== RUN   TestFairPerActivityCapacityReservesOtherActivity
+--- PASS: TestFairPerActivityCapacityReservesOtherActivity (0.00s)
+PASS

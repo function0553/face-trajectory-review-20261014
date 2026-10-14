@@ -3,8 +3,9 @@
 <title>摄像头点位连接查看</title><link rel="stylesheet" href="style.css"></head>
 <body><main><header><div><p class="eyebrow">普通摄像头 · 点位经过</p><h1>摄像头点位连接</h1><p>按确认经过记录连接摄像头点位，保留时间和位置不确定性。</p></div>
 <label class="upload">读取查询结果<input id="file" type="file" accept=".json,application/json"></label></header>
-<section class="toolbar"><span id="identity">尚未读取结果</span><label>投影平面 <select id="axes"><option value="0,2">X / Z</option><option value="0,1">X / Y</option><option value="1,2">Y / Z</option></select></label><button id="sample" type="button">查看合成示例</button><button id="show-all" type="button" disabled>显示全部</button><button id="clear" type="button">清空</button></section>
-<p id="message" role="status">选择新版 /v1/point-trajectories/get 保存的 JSON 回复。文件仅在本机浏览器读取。</p>
-<div class="layout"><section class="canvas"><p id="geometry-summary" class="plot-summary">读取结果后显示连接记录编号。</p><svg id="plot" viewBox="0 0 920 560" aria-label="摄像头点位连接图" role="group"></svg><div class="legend"><span class="solid">实线＋实心箭头：顺序确定</span><span class="dash">虚线＋空心箭头：记录方向，先后待核实</span><span>编号对应连接记录，可点选查看</span></div><p id="selection" role="status"></p><p id="frame"></p></section>
+<section class="toolbar"><span id="identity">尚未读取结果</span><label>投影平面 <select id="axes"><option value="0,2">X / Z</option><option value="0,1">X / Y</option><option value="1,2">Y / Z</option></select></label><button id="sample" type="button">查看弦线示例</button><button id="topology-sample" type="button">查看拓扑示例</button><button id="show-all" type="button" disabled>显示全部</button><button id="clear" type="button">清空</button></section>
+<label>连线视图 <select id="geometry"><option value="CHORD">相机点位直连弦线</option><option value="TOPOLOGY">场景拓扑参考折线</option></select></label>
+<p id="message" role="status">选择新版 /v1/point-trajectories/get 保存的 JSON 回复。拓扑折线由场景推演，需现场核实，不是实测连续轨迹。文件仅在本机浏览器读取。</p>
+<div class="layout"><section class="canvas"><p id="geometry-summary" class="plot-summary">读取结果后显示连接记录编号。</p><svg id="plot" viewBox="0 0 920 560" aria-label="摄像头点位连接图" role="group"></svg><div class="legend"><span class="solid">实线＋实心箭头：顺序确定</span><span class="dash">虚线＋双向标识：先后待核实</span><span>编号对应连接记录，可点选查看</span></div><p id="selection" role="status"></p><p id="frame"></p></section>
 <aside><h2 id="counts">0 条经过 · 0 段连接</h2><div id="sequence"><p class="empty">读取结果后显示经过顺序与连接状态。</p></div></aside></div>
 <footer>鹰眼单镜轨迹后置。位置缺失或冲突不选坐标连线，分开的轨迹会话保留断点。</footer></main><script type="module" src="viewer.mjs"></script></body></html>

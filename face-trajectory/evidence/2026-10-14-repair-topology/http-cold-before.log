@@ -1,0 +1,5 @@
+--- FAIL: TestHTTPColdRecoveryExceedsThirtySeconds (31.01s)
+    main_test.go:36: cold HTTP reply truncated: Get "http://127.0.0.1:58427/health": EOF
+FAIL
+FAIL	face-trajectory/cmd/face-trajectoryd	31.167s
+FAIL

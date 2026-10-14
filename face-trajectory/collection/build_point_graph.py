@@ -135,6 +135,16 @@ def build(scene_path, coverage_path, max_speed_mps=2.5, slow_speed_mps=0.3,
                 "directionality_verified": False,
                 "geometry_role": "GENERAL_CONNECTIVITY_DIAGNOSTIC_NOT_PERSON_ROUTE",
                 "source_path_status": p["path_status"], "source_straight_path_status": p["straight_path_status"]}
+        if "waypoints" in p:
+            points = p["waypoints"]
+            if (not isinstance(points, list) or not 2 <= len(points) <= 4096 or
+                any(not isinstance(q, dict) or set(q) != {"x", "y", "z"} or
+                    any(isinstance(q[k], bool) or not isinstance(q[k], (int, float)) or
+                        not math.isfinite(q[k]) for k in ("x", "y", "z")) for q in points)):
+                raise ValueError("Complete model path needs bounded finite scene-local waypoints")
+            edge["waypoints"] = points
+            edge["route_geometry_kind"] = "TOPOLOGY_INFERRED_PATH"
+            edge["route_coordinate_frame"] = scene["coordinate_frame"]
         if a["camera_id"] in conflict_ids or b["camera_id"] in conflict_ids:
             ambiguous.append({**edge, "excluded_reason": "POSITION_CONFLICT_REQUIRES_CORRELATED_CANDIDATES"})
         else:

@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 
 #include <cstddef>
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -15,6 +16,13 @@
 
 namespace face_trajectory {
 class State;
+
+// Optional scene-topology reference geometry. It does not replace camera
+// marker endpoints, imply observed passages, or establish temporal direction.
+struct CameraLink {
+    std::vector<std::array<double,3>> route_waypoints;
+    std::vector<std::string> route_edge_ids;
+};
 
 struct CameraEdge {
     std::string from_camera;

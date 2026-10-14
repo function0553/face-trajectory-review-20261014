@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-14",
+  "scope": "LOCAL_IMPLEMENTATION_AND_SYNTHETIC_INTEGRATION_ONLY",
+  "production_accessed": false,
+  "production_deployed": false,
+  "field_accuracy_accepted": false,
+  "capacity_accepted": false,
+  "cpp": {
+    "msvc": "19.44",
+    "gcc": "12.3",
+    "standards": [
+      17,
+      20
+    ],
+    "ctest_targets_passed": 2,
+    "point_checks": 30
+  },
+  "go_all_packages": "PASS",
+  "go_vet": "PASS",
+  "http_cold_recovery_seconds": 31,
+  "child_cold_recovery_seconds": 21,
+  "viewer_tests": 22,
+  "python_syntax_files": 31,
+  "p1_delivery_unittest_methods": 5,
+  "p1_scope_checks": 12,
+  "p1_retention_checks": 10,
+  "p1_maintenance_checks": 8,
+  "windows_race": "NOT_RUN_CGO_UNAVAILABLE",
+  "local_tooling_only": "WSL GCC12/CMake and Python cryptography installed for isolated verification",
+  "evidence": {
+    "windows_signed_topology": {
+      "path": "windows-final-e2e/summary.json",
+      "passed": 30,
+      "sha256": "a663f07982475d47f539f5a36290c051859b2c37f56910052150370a60448bc6"
+    },
+    "linux_signed_topology": {
+      "path": "linux-e2e/summary.json",
+      "passed": 30,
+      "sha256": "91425f294d4dd883f5d35b87e44609c699014c2b365b774f2d9f1bb1f920b977"
+    },
+    "activity_core": {
+      "path": "activity-core/summary.json",
+      "passed": 40,
+      "sha256": "a1e2ae2dec8119d6b793c4106652de97d2e7fe108d65d4496b356ce62ab4524a"
+    },
+    "activity_http": {
+      "path": "activity-http/summary.json",
+      "passed": 31,
+      "sha256": "27b1f2238ea72c204148f3798c71f6164a1f48d5df945e6d69610cc4a434b6b0"
+    },
+    "retention": {
+      "path": "retention/summary.json",
+      "passed": 81,
+      "sha256": "9b6abfd9e7dc90ada909f0e61acb1226936112a9c1507f1ff70eca9bb9810bc2"
+    },
+    "retention_edges": {
+      "path": "retention-edges/summary.json",
+      "passed": 45,
+      "sha256": "b98ed2754ed9a8854808c39e75568b8bcc9661ebf058e3677fc5a7a0fa348e22"
+    },
+    "push_fairness": {
+      "path": "push-fairness/summary.json",
+      "passed": 12,
+      "sha256": "d8f81d344dbb06643bd72b25d12aab72e600f10eb736aab7d16be1834d491029"
+    },
+    "outbox_fairness": {
+      "path": "outbox-fairness/summary.json",
+      "passed": 5,
+      "sha256": "55e48b6bf5d802334d33b68c333907f47ce2d0cc87cec5abc8ece4034b7333da"
+    }
+  },
+  "model_coverage": {
+    "summary": {
+      "camera_markers": 94,
+      "bound_markers": 63,
+      "bound_devices": 62,
+      "unbound_markers": 31,
+      "markers_in_roi": 83,
+      "bound_markers_in_roi": 60,
+      "bound_markers_with_nearby_surface": 56,
+      "bound_markers_without_nearby_surface": 4,
+      "ordered_pairs_checked": 3078,
+      "complete_model_paths": 942,
+      "disconnected_partial_or_failed": 2136
+    },
+    "qualification": "LEGACY_UNVERIFIED",
+    "operational_edges_with_waypoints": 878,
+    "topology_verified": false,
+    "topology_is_complete": false
+  },
+  "reproduction_before_fix": {
+    "worker_cancellation": "transaction reply lost after cancellation: context canceled",
+    "worker_reaping": "old worker was not synchronously reaped",
+    "cpp20": "std::string cannot accept std::u8string / sqlite3_open_v2 cannot accept char8_t*",
+    "http_write_timeout": "TestHTTPColdRecoveryExceedsThirtySeconds: EOF (31.01s); see http-cold-before.log"
+  },
+  "third_party_sources": [
+    "https://pkg.go.dev/golang.org/x/sys/windows",
+    "https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects"
+  ]
+}
