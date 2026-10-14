@@ -901,6 +901,12 @@
       "bytes": 2030913,
       "sha256": "44e7f556e4f766335b64f8b51d934f758b43937af717d099b5810a2e201932aa",
       "generated_review_material": true
+    },
+    {
+      "path": ".gitattributes",
+      "bytes": 90,
+      "sha256": "5ac019c04d6fb9ae416f5538780b88f99da44956cfdc1481dd59510b9ecf29e9",
+      "generated_review_material": true
     }
   ],
   "excluded": [
@@ -986,5 +992,6 @@
     }
   ],
   "p2_current_source_payloads": 124,
-  "all_payloads_byte_identical": true
+  "all_payloads_byte_identical": true,
+  "git_byte_preservation": ".gitattributes * -text; core.autocrlf=false"
 }
