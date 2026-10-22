@@ -126,13 +126,14 @@ func (s *Sender) deliverSelected(ctx context.Context, excluded []string) (bool, 
 		return false, "", nil
 	}
 	var event struct {
-		ID                string  `json:"event_id"`
-		ActivityID        string  `json:"activity_id"`
-		ActivityNum       string  `json:"activity_num"`
-		ConfigVersion     *uint64 `json:"config_version"`
-		BindingVersion    *uint64 `json:"binding_version"`
-		MonitoringVersion *uint64 `json:"monitoring_version"`
-		Deadline          *int64  `json:"retention_deadline_unix_ms"`
+		ID                string          `json:"event_id"`
+		ActivityID        string          `json:"activity_id"`
+		ActivityNum       string          `json:"activity_num"`
+		ConfigVersion     *uint64         `json:"config_version"`
+		BindingVersion    *uint64         `json:"binding_version"`
+		MonitoringVersion *uint64         `json:"monitoring_version"`
+		Deadline          *int64          `json:"retention_deadline_unix_ms"`
+		PersonTrack       json.RawMessage `json:"person_track_event"`
 	}
 	if err := json.Unmarshal(reply.Event, &event); err != nil || event.ID == "" || event.ActivityID == "" || event.ActivityNum == "" || event.ConfigVersion == nil || event.BindingVersion == nil || event.MonitoringVersion == nil || event.Deadline == nil {
 		return false, event.ActivityID, errors.New("queued push requires explicit activity identity, versions and retention deadline")
@@ -144,13 +145,26 @@ func (s *Sender) deliverSelected(ctx context.Context, excluded []string) (bool, 
 	if err != nil || !stamp.Verified || stamp.ValidUntil <= stamp.Now {
 		return false, "", errors.New("backend push requires a fresh verified UTC lease")
 	}
-	if stamp.Now > *event.Deadline {
+	track := len(event.PersonTrack) > 0 && !bytes.Equal(event.PersonTrack, []byte("null"))
+	if !track && stamp.Now > *event.Deadline {
 		return false, event.ActivityID, errors.New("backend push deadline expired")
 	}
 	// Equality at the cutoff is retained. The receiver must independently reject
 	// delivery after the envelope deadline; sender cancellation cannot recall a
 	// request already accepted by an external receiver.
 	remaining := *event.Deadline - stamp.Now + 1
+	body := reply.Event
+	if track {
+		var identity struct {
+			ID       string `json:"event_id"`
+			Activity string `json:"activity_id"`
+		}
+		if json.Unmarshal(event.PersonTrack, &identity) != nil || identity.ID != event.ID || identity.Activity != event.ActivityID {
+			return false, event.ActivityID, errors.New("person track envelope identity mismatch")
+		}
+		body = event.PersonTrack
+		remaining = 10000 // Pending v1 events do not expire with local query history.
+	}
 	if lease := stamp.ValidUntil - stamp.Now; lease < remaining {
 		remaining = lease
 	}
@@ -159,7 +173,7 @@ func (s *Sender) deliverSelected(ctx context.Context, excluded []string) (bool, 
 	}
 	deliveryCtx, cancel := context.WithTimeout(ctx, time.Duration(remaining)*time.Millisecond)
 	defer cancel()
-	request, err := http.NewRequestWithContext(deliveryCtx, http.MethodPost, s.endpoint, bytes.NewReader(reply.Event))
+	request, err := http.NewRequestWithContext(deliveryCtx, http.MethodPost, s.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return false, event.ActivityID, errors.New("cannot create backend push request")
 	}
@@ -174,28 +188,37 @@ func (s *Sender) deliverSelected(ctx context.Context, excluded []string) (bool, 
 	if err != nil {
 		return false, event.ActivityID, errors.New("backend push transport failed")
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+	receipt, readErr := io.ReadAll(io.LimitReader(response.Body, 4097))
 	_ = response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return false, event.ActivityID, fmt.Errorf("backend push HTTP %d", response.StatusCode)
+	if track {
+		var confirmation struct {
+			Code int    `json:"code"`
+			ID   string `json:"event_id"`
+		}
+		if response.StatusCode != http.StatusOK || readErr != nil || len(receipt) > 4096 ||
+			json.Unmarshal(receipt, &confirmation) != nil || confirmation.Code != 200 || confirmation.ID != event.ID {
+			return false, event.ActivityID, fmt.Errorf("person track not confirmed (HTTP %d); verify receipt, credentials and mappings; original event retained", response.StatusCode)
+		}
+	} else {
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			return false, event.ActivityID, fmt.Errorf("backend push HTTP %d", response.StatusCode)
+		}
 	}
 	_, err = s.control(ctx, map[string]string{"op": "push_ack", "event_id": event.ID})
 	return err == nil, event.ActivityID, err
 }
 
 type activityRetry struct {
-	delay time.Duration
-	next  time.Time
+	delay   time.Duration
+	next    time.Time
+	attempt int
 }
 
 func (r *activityRetry) failed(now time.Time) {
-	if r.delay == 0 {
-		r.delay = time.Second
-	} else if r.delay < 30*time.Second {
-		r.delay *= 2
-		if r.delay > 30*time.Second {
-			r.delay = 30 * time.Second
-		}
+	delays := [...]time.Duration{time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 30 * time.Second}
+	r.delay = delays[r.attempt]
+	if r.attempt < len(delays)-1 {
+		r.attempt++
 	}
 	r.next = now.Add(r.delay)
 }

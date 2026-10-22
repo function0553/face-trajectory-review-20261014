@@ -1,0 +1,54 @@
+# Replace addresses and credentials. Synthetic registration is for isolated testing only.
+@algorithm_base_url = https://algorithm.example.test
+@platform_base_url = https://platform.example.test
+@algorithm_token = REPLACE_WITH_VALID_SIGNED_ALGORITHM_TOKEN
+@platform_push_token = REPLACE_WITH_DEDICATED_PLATFORM_TOKEN
+
+### Initialize activity
+POST {{algorithm_base_url}}/v1/activities/sync
+Authorization: Bearer {{algorithm_token}}
+Content-Type: application/json
+
+< ./examples/01-activity.json
+
+### Bind cameras
+POST {{algorithm_base_url}}/v1/activities/bindings
+Authorization: Bearer {{algorithm_token}}
+Content-Type: application/json
+
+< ./examples/02-bindings.json
+
+### Enable activity
+POST {{algorithm_base_url}}/v1/activities/monitoring
+Authorization: Bearer {{algorithm_token}}
+Content-Type: application/json
+
+< ./examples/03-monitoring.json
+
+### SYNTHETIC registration ONLY - use real prepared templates for real people
+POST {{algorithm_base_url}}/v1/monitoring/persons
+Authorization: Bearer {{algorithm_token}}
+Content-Type: application/json
+
+< ./examples/04-person.synthetic.json
+
+### Platform receiver - initial event
+POST {{platform_base_url}}/api-security/algorithm/person-track/events
+Authorization: Bearer {{platform_push_token}}
+Content-Type: application/json
+
+< ./examples/05-track-upsert.json
+
+### Platform receiver - identity correction
+POST {{platform_base_url}}/api-security/algorithm/person-track/events
+Authorization: Bearer {{platform_push_token}}
+Content-Type: application/json
+
+< ./examples/06-track-correction.json
+
+### Platform receiver - retraction
+POST {{platform_base_url}}/api-security/algorithm/person-track/events
+Authorization: Bearer {{platform_push_token}}
+Content-Type: application/json
+
+< ./examples/07-track-retract.json

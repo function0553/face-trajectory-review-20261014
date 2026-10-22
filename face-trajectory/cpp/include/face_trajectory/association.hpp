@@ -71,6 +71,7 @@ public:
                               const CameraGraph& graph, bool reconsider = false);
     AssociationResult Correct(const std::string& observation_id, const std::string& target_id,
                               const std::string& evidence_id);
+    AssociationResult Retract(const std::string& observation_id, const std::string& evidence_id);
     std::vector<SightingEvidence> Sightings(const std::string& target_id) const;
     std::uint64_t TargetRevision(const std::string& target_id) const;
     std::optional<AssociationResult> Result(const std::string& observation_id) const;

@@ -9,6 +9,7 @@
 #include "face_trajectory/reachability.hpp"
 #include "face_trajectory/point_trajectory.hpp"
 #include "face_trajectory/monitoring.hpp"
+#include "face_trajectory/person_track.hpp"
 #include "face_trajectory/activity.hpp"
 #include "face_trajectory/retention.hpp"
 #include "face_trajectory/p1_retention.hpp"
@@ -503,9 +504,10 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
              face_trajectory::AssociationStore& associations, face_trajectory::GeometryStore& geometry,
              face_trajectory::SiteContextStore& site_context, face_trajectory::ClockAdapter& clocks,
              face_trajectory::PointGraphStore& point_graphs, face_trajectory::MonitoringStore& monitoring,
-             const json& request) {
+             const json& request, const json& activity_context=json::object()) {
     const auto op = request.at("op").get<std::string>();
-    if(op=="monitoring_person_put") return monitoring.PutPerson(request,gallery);
+    if(op=="monitoring_person_put") return monitoring.PutPerson(request,gallery,face_trajectory::ActivityStore::PersonTrackMode(activity_context));
+    if(op=="monitoring_timeline_query")return monitoring.CameraTimeline(request,associations,activity_context);
     if(op=="monitoring_get") {
         auto result=monitoring.Get(request.at("target_id"),associations);
         if(request.value("include_point_trace",false)) {
@@ -532,7 +534,9 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
     if(op=="monitoring_observe") {
         monitoring.RequireDurable();
         if(const auto previous=monitoring.ObservationReceipt(request)) return *previous;
+        const bool camera_events=face_trajectory::ActivityStore::CameraEventsMode(activity_context);
         auto observation=request.at("observation");
+        const auto capture_photo=face_trajectory::MonitoringStore::PhotoUrl(observation.value("capture_photo_url",json(nullptr)));
         if(request.contains("target_id") || observation.contains("target_id") || observation.contains("person_id"))
             throw std::invalid_argument("monitoring observation cannot assert target identity");
         const auto id=observation.at("observation_id").get<std::string>();
@@ -549,7 +553,10 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
         if(policy.max_clock_uncertainty_ms<0 || policy.max_clock_uncertainty_ms>60000 ||
            options.max_clock_uncertainty_ms<0 || options.max_clock_uncertainty_ms>60000)
             throw std::invalid_argument("monitoring clock policy must be within 0..60000");
-        const auto graph=ReadGraph(request.at("graph"));
+        if(camera_events && (policy.require_topology || policy.topology_is_complete))
+            throw std::invalid_argument("UE_CAMERA_EVENTS requires an explicitly unverified, non-required topology policy");
+        const auto graph=camera_events ? ReadGraph({{"version","UE_CAMERA_EVENTS:NO_TOPOLOGY:v1"},{"edges",json::array()}})
+                                      : ReadGraph(request.at("graph"));
         auto normalized=MonitoringTime(clocks,request,camera,source);
         auto reasons=normalized.at("reason_codes");
         if(normalized.at("status")=="NORMALIZED" && ReadInt64(normalized.at("clock_uncertainty_ms"))>
@@ -559,6 +566,7 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
             {"time_admitted",reasons.empty()},
             {"receipt_scope","ORIGINAL_TRANSACTION"},
             {"reason_codes",reasons},{"association",nullptr},{"monitoring",nullptr},{"trajectories",json::array()}};
+        if(camera_events){response["output_mode"]="UE_CAMERA_EVENTS";response["camera_event"]=nullptr;}
         if(!reasons.empty()) { monitoring.SaveObservation(request,response); return response; }
         for(const auto* field:{"captured_at_unix_ms","clock_uncertainty_ms","time_source","clock_domain"})
             observation[field]=normalized.at(field);
@@ -569,7 +577,7 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
         else response["reason_codes"].push_back("FACE_"+result.decision);
         monitoring.SaveObservation(request,response);
         if(result.sighting) {
-            for(const auto& target:result.affected_target_ids) {
+            if(!camera_events)for(const auto& target:result.affected_target_ids) {
                 const auto head=trajectories.LatestVersion(target);
                 auto appended=append && append->sighting.target_id==target
                     ? trajectories.TryAppend(append->sighting,append->previous_target_revision,graph,options,"MONITORING_OBSERVATION:"+id,head)
@@ -584,6 +592,20 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
             }
             response["monitoring"]=monitoring.ObserveSummary(*result.sighting,
                 append?std::optional<std::uint64_t>(append->previous_target_revision):std::nullopt,associations);
+            if(camera_events) {
+                json camera_name=nullptr;
+                for(const auto& b:activity_context.at("bindings"))
+                    if(b.at("kind")=="CAMERA" && b.at("source_id")==source && b.at("device_id")==camera &&
+                       b.at("route_rule_id")==request.at("route_rule_id"))camera_name=b.value("camera_name",json(nullptr));
+                if(camera_name.is_null() && !face_trajectory::ActivityStore::PersonTrackMode(activity_context))throw std::invalid_argument("UE_CAMERA_EVENTS requires an authoritative camera_name binding");
+                const auto& s=*result.sighting;const auto person=monitoring.Person(s.target_id);
+                response["camera_event"]={{"event_type","PERSON_APPEARANCE"},{"person_id",s.target_id},
+                    {"category",person.at("category")},{"is_priority",person.at("category")=="PRIORITY"},
+                    {"person_revision",person.at("revision")},{"association_revision",associations.TargetRevision(s.target_id)},
+                    {"camera_id",camera},{"camera_name",camera_name},{"source_id",source},{"observation_id",id},
+                    {"capture_photo_url",capture_photo},
+                    {"captured_at_unix_ms",s.captured_at_unix_ms},{"clock_uncertainty_ms",s.clock_uncertainty_ms}};
+            }
         }
         monitoring.CompleteObservationReceipt(id,response);
         return response;
@@ -783,6 +805,11 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
             {"gallery_version", gallery.Version()}};
     }
     if (op == "association_correct") {
+        if(request.at("target_id").is_null()) {
+            if(!face_trajectory::ActivityStore::PersonTrackMode(activity_context))throw std::invalid_argument("null target retraction requires PERSON_TRACK_EVENTS");
+            return {{"ok",true},{"association",AssociationToJson(associations.Retract(
+                request.at("observation_id").get<std::string>(),request.at("evidence_id").get<std::string>()))},{"gallery_version",gallery.Version()}};
+        }
         return {{"ok", true}, {"association", AssociationToJson(associations.Correct(
             request.at("observation_id").get<std::string>(), request.at("target_id").get<std::string>(),
             request.at("evidence_id").get<std::string>()))}, {"gallery_version", gallery.Version()}};
@@ -935,6 +962,8 @@ json PushControl(face_trajectory::State* state, bool enabled, const json& reques
 }
 
 void EnqueuePush(face_trajectory::State& state, const std::string& op, const json& response,const json& request) {
+    const bool camera_events=op=="monitoring_observe" && response.value("output_mode",std::string{})=="UE_CAMERA_EVENTS";
+    if(camera_events && (!response.contains("camera_event") || !response.at("camera_event").is_object()))return;
     const auto activity=response.at("activity_id").get<std::string>();
     const auto activity_pending=state.Count("push_outbox",activity,true);
     if(activity_pending>=256||PushCounter(state,"pending")>=10000)
@@ -955,6 +984,13 @@ void EnqueuePush(face_trajectory::State& state, const std::string& op, const jso
     const auto now=request.at("_trusted_clock").at("now_unix_ms").get<std::int64_t>();
     json event = {{"schema_version", "1"}, {"event_id", *stream + ":" + number},
         {"sequence", sequence}, {"operation", op}, {"created_at_unix_ms", now}, {"result", response}};
+    if(camera_events)event["result"]={{"ok",true},{"status","ACCEPTED"},{"output_mode","UE_CAMERA_EVENTS"},
+        {"camera_event",response.at("camera_event")}};
+    if(response.contains("person_track_event")) {
+        event["person_track_event"]=response.at("person_track_event");
+        event["event_id"]=response.at("person_track_event").at("event_id");
+        event.erase("result"); // No candidates, templates or biometric data in this queue.
+    }
     for(const auto* k:{"activity_id","activity_num","config_version","binding_version","monitoring_version"})
         if(response.contains(k))event[k]=response.at(k);
     event["retention_deadline_unix_ms"]=response.value("retention_deadline_unix_ms",now+face_trajectory::ActivityStore::RetentionMs);
@@ -1077,10 +1113,15 @@ int Run(const std::vector<std::string>& args) {
                 if(op=="monitoring_observe")request["_normalization"]=MonitoringTime(clocks,request,request.at("observation").at("camera_id"),request.at("observation").at("source_id"));
                 else if(op=="monitoring_gate_event")request["_normalization"]=MonitoringTime(clocks,request);
                 const auto early=activities->Before(request,runtime->scope);
-                response=early?*early:Execute(runtime->gallery,runtime->trajectories,runtime->associations,geometry,site_context,clocks,point_graphs,runtime->monitoring,request);
+                const auto context=activities->Context(id);
+                if(face_trajectory::ActivityStore::CameraEventsMode(context) &&
+                   (op=="association_rebuild" || op=="trajectory_get" || op=="point_trace" || op=="trajectory_predict" ||
+                    op=="trajectory_geometry" || op=="timeline_query" || op=="point_prediction_compare" ||
+                    (op=="monitoring_get" && request.value("include_point_trace",false))))
+                    throw std::invalid_argument("SOURCE_CONFLICT: route computation/query is disabled in UE_CAMERA_EVENTS");
+                response=early?*early:Execute(runtime->gallery,runtime->trajectories,runtime->associations,geometry,site_context,clocks,point_graphs,runtime->monitoring,request,context);
                 if(!early)AddResultFreshness(response,request,runtime->trajectories,runtime->associations);
                 face_trajectory::ActivityStore::ExternalIds(response);
-                const auto context=activities->Context(id);
                 if(!early)for(const auto* k:{"activity_id","activity_num","venue_id","config_version","binding_version","monitoring_version"})response[k]=context.at(k);
                 if(request.contains("route_rule_id"))response["route_rule_id"]=request.at("route_rule_id");
                 if(request.contains("_source_event_key") && response.value("status","")!="EXPIRED") {
@@ -1091,7 +1132,14 @@ int Run(const std::vector<std::string>& args) {
                     if(!early)activities->Receipt(request,response,runtime->scope);
                 }
                 if(!early && !response.value("duplicate",false))activities->Notify(request,response,runtime->scope);
-                if(enqueue && !early && !response.value("duplicate",false))EnqueuePush(*state,op,response,request);
+                if(enqueue && !early && !response.value("duplicate",false)) {
+                    if(face_trajectory::ActivityStore::PersonTrackMode(context)) {
+                        if(auto event=face_trajectory::PersonTrackEvent(runtime->scope,request,context,runtime->monitoring,runtime->associations)) {
+                            auto envelope=response;envelope["person_track_event"]=*event;
+                            EnqueuePush(*state,op,envelope,request);
+                        }
+                    } else EnqueuePush(*state,op,response,request);
+                }
             }
             if(request.value("op","")=="health")response["durable_state"]=bool(state);
             if(state)state->Commit();

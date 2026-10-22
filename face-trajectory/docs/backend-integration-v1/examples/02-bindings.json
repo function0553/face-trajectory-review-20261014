@@ -1,0 +1,15 @@
+{
+  "activity_id": "ACT-001",
+  "config_version": 1,
+  "binding_version": 1,
+  "expected_binding_version": 0,
+  "bindings": [
+    {
+      "source_id": "source-01",
+      "device_id": "CAM-001",
+      "kind": "CAMERA",
+      "route_rule_id": "PERSON-TRACK",
+      "camera_name": "看台A1下入口1"
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "passed": 21,
+  "checks": [
+    {
+      "name": "event_mode_requires_authoritative_camera_name",
+      "passed": true
+    },
+    {
+      "name": "confirmed_face_reports_name_time_and_priority_without_graph_or_scene",
+      "passed": true
+    },
+    {
+      "name": "route_rebuild_is_skipped",
+      "passed": true
+    },
+    {
+      "name": "source_ids_are_external",
+      "passed": true
+    },
+    {
+      "name": "compact_ue_push_has_no_trajectory_or_face_candidates",
+      "passed": true
+    },
+    {
+      "name": "duplicate_capture_does_not_report_twice",
+      "passed": true
+    },
+    {
+      "name": "new_capture_same_camera_is_reported",
+      "passed": true
+    },
+    {
+      "name": "normal_damai_person_is_reported_and_not_marked_priority",
+      "passed": true
+    },
+    {
+      "name": "same_named_devices_keep_distinct_ids",
+      "passed": true
+    },
+    {
+      "name": "unregistered_person_is_never_invented_as_priority",
+      "passed": true
+    },
+    {
+      "name": "untrusted_time_is_held_and_not_sent_to_ue",
+      "passed": true
+    },
+    {
+      "name": "unconfirmed_face_is_not_sent_to_ue",
+      "passed": true
+    },
+    {
+      "name": "unbound_camera_is_not_reported",
+      "passed": true
+    },
+    {
+      "name": "ue_subscription_carries_camera_events",
+      "passed": true
+    },
+    {
+      "name": "no_route_snapshot_is_persisted",
+      "passed": true
+    },
+    {
+      "name": "route_query_is_explicitly_disabled",
+      "passed": true
+    },
+    {
+      "name": "damai_category_update_marks_next_appearance",
+      "passed": true
+    },
+    {
+      "name": "stale_binding_is_held",
+      "passed": true
+    },
+    {
+      "name": "all_notifications_have_no_route_geometry",
+      "passed": true
+    },
+    {
+      "name": "live_ue_push_survives_unrelated_history_pruning",
+      "passed": true
+    },
+    {
+      "name": "live_ue_subscription_survives_history_pruning",
+      "passed": true
+    }
+  ],
+  "failure": null,
+  "scope": "Real local C++ worker and fresh SQLite; synthetic people, features and clocks"
+}

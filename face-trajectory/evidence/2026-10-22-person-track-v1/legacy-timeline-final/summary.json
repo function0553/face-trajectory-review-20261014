@@ -1,0 +1,91 @@
+{
+  "passed": 21,
+  "checks": [
+    {
+      "name": "device_names_and_capture_timeline_return_without_routes",
+      "passed": true
+    },
+    {
+      "name": "priority_follows_uploaded_person_data",
+      "passed": true
+    },
+    {
+      "name": "query_does_not_enqueue_or_subscribe",
+      "passed": true
+    },
+    {
+      "name": "no_model_or_route_fields",
+      "passed": true
+    },
+    {
+      "name": "timeline_uses_capture_order_not_ingest_order",
+      "passed": true
+    },
+    {
+      "name": "time_filter_is_start_inclusive_end_exclusive",
+      "passed": true
+    },
+    {
+      "name": "bounded_page_explicitly_reports_more",
+      "passed": true
+    },
+    {
+      "name": "next_page_has_no_missing_or_repeated_rows",
+      "passed": true
+    },
+    {
+      "name": "stale_pagination_requires_refresh",
+      "passed": true
+    },
+    {
+      "name": "equal_timestamps_have_stable_source_event_tie_break",
+      "passed": true
+    },
+    {
+      "name": "invalid_limit_rejected_0",
+      "passed": true
+    },
+    {
+      "name": "invalid_limit_rejected_1001",
+      "passed": true
+    },
+    {
+      "name": "invalid_limit_rejected_True",
+      "passed": true
+    },
+    {
+      "name": "invalid_limit_rejected_1.5",
+      "passed": true
+    },
+    {
+      "name": "invalid_time_window_rejected",
+      "passed": true
+    },
+    {
+      "name": "person_with_no_observations_returns_empty_list",
+      "passed": true
+    },
+    {
+      "name": "external_json_shaped_observation_id_round_trips_once",
+      "passed": true
+    },
+    {
+      "name": "corrected_identity_removed_from_old_timeline",
+      "passed": true
+    },
+    {
+      "name": "corrected_identity_is_in_new_timeline",
+      "passed": true
+    },
+    {
+      "name": "timeline_priority_uses_current_uploaded_category",
+      "passed": true
+    },
+    {
+      "name": "query_enforces_retention_without_physical_delete",
+      "passed": true
+    }
+  ],
+  "failure": null,
+  "scope": "Local real worker/fresh SQLite; synthetic persons and clocks"
+}

@@ -1,0 +1,8 @@
+{
+  "activity_id": "ACT-001",
+  "config_version": 1,
+  "binding_version": 1,
+  "monitoring_version": 1,
+  "expected_monitoring_version": 0,
+  "enabled": true
+}

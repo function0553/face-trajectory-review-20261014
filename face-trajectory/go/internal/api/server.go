@@ -61,6 +61,7 @@ func NewAuthorized(exchanger Exchanger, verifier *trust.Verifier, clock *trust.C
 		{"/v1/monitoring/observe", "monitoring_observe", "ingest", false},
 		{"/v1/monitoring/gate-event", "monitoring_gate_event", "ingest", false},
 		{"/v1/monitoring/get", "monitoring_get", "query", false},
+		{"/v1/monitoring/timeline/query", "monitoring_timeline_query", "query", false},
 		{"/v1/visits/build", "build_visits", "ingest", false},
 		{"/v1/trajectories/raw", "raw_trajectory", "ingest", false},
 		{"/v1/trajectories/rebuild", "trajectory_rebuild", "ingest", false},

@@ -1,5 +1,11 @@
 # P2 摄像头点位时空算法交接
 
+**2026-10-22 当前：人员轨迹三方协议v1.0。** 按用户新协议改为平台手动导入固定关注名单、算法主动向平台推送单脸抓拍；驾驶舱只查平台。新增活动模式`PERSON_TRACK_EVENTS`、十二字段完整UPSERT/RETRACT、稳定抓拍复合键及持久递增修订；原查询用于联调核对。人员导入同步检查有效注册模板，首次版本1/0；档案照URL本身不算导入成功。新合同待投递消息与识别同事务落盘，跨168小时历史清理和重启原样保留；必须HTTP200且code=200且event_id匹配才删除，按1/2/5/10/30秒持续重试。详见[新接入说明与完整登记样例](docs/person-track-platform-v1.md)、[OpenAPI 0.14.0](openapi.yaml)。新服务产物在`evidence/2026-10-22-person-track-v1/face-trajectoryd.exe`，配套worker在`cpp/build-ue-camera-events/face_trajectory_worker.exe`。已修复独立审查发现的历史压缩后首次确认失败、模板删除后旧登记误报就绪两处边界。测试与范围见[本轮证据](evidence/2026-10-22-person-track-v1/README.md)。未切换生产，未接平台TDengine或修改驾驶舱，下方2026-10-21查询优先说明按当日历史解释。
+
+**2026-10-21续：UE按请求获取摄像头经过时间线。** 用户进一步明确：设备名称指地区/点位名称（非型号），前端请求一次返回一次，由UE用时间线自行绘轨迹。新增 `POST /v1/monitoring/timeline/query`，按 `person_id` 和UTC毫秒时间范围返回已确认摄像头经过序列及当前重点标记；支持显式有界分页、迟到记录排序、身份纠正、168小时查询过滤。查询不触发推送、订阅或路线计算。只用查询时不配置push-url/push-results。字段和请求例见[UE接入说明](docs/ue-camera-events.md)；本轮验证在 `evidence/2026-10-21-ue-timeline-query/`。未部署服务器或修改UE工程；本地Windows程序仅验证用，不作为UE接入方式。
+
+**2026-10-21 UE事件模式：** 用户改为按大麦上传资料报告人员出现，全部上报并标记重点。已新增 `configuration.output_mode=UE_CAMERA_EVENTS`，只生成摄像头名称/抓拍UTC时间/人员ID/重点标记等出现数据，跳过轨迹重建；无需坐标、场景、graph或NavMesh。名称来自活动设备绑定的 `camera_name`，资料重点类别沿用PRIORITY/NORMAL。原默认TRAJECTORY保留，运行活动未自动切换。新Windows静态worker位于 `cpp/build-ue-camera-events/face_trajectory_worker.exe`，兼容现有 `evidence/2026-10-14-repair-topology/face-trajectoryd.exe`，签名本地HTTP与真实loopback接收已验证。21项UE检查、原40项核心/81项保留/31项HTTP/30项拓扑HTTP回归及CTest两目标通过。详见[UE接入说明](docs/ue-camera-events.md)与[本轮证据](evidence/2026-10-21-ue-camera-events/README.md)。没有大麦原始接口合同或UE工程，未新增猜测接口、未部署生产；下方GitHub同步信息仅代表其原日期版本，本轮修改尚未同步远端。
+
 **GitHub同步已核对：** [d0c4813](https://github.com/function0553/face-trajectory-review-20261014/commit/d0c48139b6ed5707f04326eb5df215813859d32e)，远端main与本地HEAD一致，231个文件的清单与远端内容核验通过。
 
 **当前本地修复（2026-10-14）：** D-01～D-07与3D拓扑参考折线已实现并完成本地回归，见[修复与拓扑交接](docs/repair-topology-2026-10-14.md)。新worker为`cpp/build-repair20/Release/face_trajectory_worker.exe`（另有17构建），配套daemon位于`evidence/2026-10-14-repair-topology/face-trajectoryd.exe`；既有服务未切换。GitHub同步到现有审核仓库；下方旧ZIP与旧源码摘要仅代表当时快照。
@@ -632,3 +638,70 @@ $identityRun = 'face-trajectory/evidence/2026-10-12-no-downgrade-reuse/recheck-'
 **踩坑与经验：** 泛型 lambda 内调用 nlohmann JSON 的 `get<T>()`/`get_ref<T>()` 需要显式 `template` 关键字，否则 Linux g++ 会在监控文件编译时报语法错误；旧 coverage 没有折点时不写 `model_path_local_xyz: null`，避免改变旧边形状。实际 NavMesh 几何仍是一般连通性诊断，不能当作人员实测路线或现场防穿墙验收。
 
 **交接边界：** 本地 C++/Python/Node/API 契约已更新；未在生产 P2 或 64G/128G 主机应用环境变量，未做磁盘/崩溃/并发吞吐实测，未调用真实 `/v1/associations/correct`，也未接入 3D 前端。部署时先用隔离 SQLite 和 dry-run 验证缓存/同步读回，再做有界多 source_id 写入；`held_candidates` 只能作为指挥员核验辅助层，绝不合并进 confirmed points/connections。
+
+## 2026-10-17 内网同代服务器容量实测与低CPU精确优化
+
+**目标与约束：** 用户要求在内网测试机 `10.64.115.33`（`yx-PowerEdge-R730xd`，2×E5-2673 v4、80线程、62GB、无GPU，另跑Java/EMQX等业务）上测容量；数据只能在内网。优化时不能多占CPU，速度够用即可，必须保证精确度。
+
+**如何做的：** 写了 `evidence/2026-10-17-lan-capacity/bench_core.cpp`，直接链接核心库，分阶段计时纯点积、`Gallery::Search` 和内存态 `AssociationStore::Observe`。数据为合成512维向量，未接SQLite，属于乐观下界。只改了两处：
+- `cpp/src/gallery.cpp`：支持AVX时点积走AVX路径。它和SSE2路径一样是单精度输入、双精度乘加，四个累加通道和合并顺序相同，不用FMA。检索只为前top_k名复制ID字符串。新增 `FACE_TRAJECTORY_SEARCH_THREADS`（1–64，默认8）。
+- `cpp/src/association.cpp`：关联先取前64名判定；这一页看完仍未判定时，退回全量检索并从头重判。
+- 修改前原文件：`evidence/2026-10-17-lan-capacity/before/`。使用说明已写入 `docs/runtime-and-geometry.md`。
+
+**结果（同机、同种子、同输入）：**
+
+| 规模 | 版本/线程 | Observe p50 | 每条CPU时间（全部线程合计） |
+| --- | --- | --- | --- |
+| 5万人×1模板，2000条 | 原版/8 | 25.8ms | 85.0ms |
+| | 新版/8 | 8.5ms | 50.4ms |
+| | 新版/2 | 12.0ms | 21.7ms |
+| 5万人×8模板（40万），600条 | 原版/8 | 81.8ms | 382.4ms |
+| | 新版/8 | 63.4ms | 373.4ms |
+| | 新版/2 | 78.9ms | 142.6ms |
+
+**精确性：** 原版8线程、新版8线程、新版2线程三组结果逐位相同：每次Observe的决定、目标、全部候选得分（十六进制浮点）、剩余得分上界，以及每次检索前10名的ID和得分，都已逐位比对。两种规模的dump各自SHA256相同，见 `dump-sha256.txt`，原始日志和dump见 `opt-results.tgz`。项目自带2项ctest新旧版都通过。
+
+**边界与下一步：** 40万模板时每条仍需约143ms CPU，高峰仍偏重；瓶颈是每条抓拍都要完整扫一遍约800MB底库。下一步可做"小批量查询共用一次底库扫描"，同批内新增的模板单独补算后合并，仍要逐位比对。未测SQLite持久化、HTTP/Go或真实特征，未在生产部署，未改测试机上的任何服务。CPU硬上限建议由systemd控制：`CPUQuota`、`Nice`、`CPUWeight`。
+
+**同日续测：线程扫描与持久化路径（用户允许最多8核）**
+- 内存态40万模板，2/4/8线程的p50分别为78.9/69.3/63.4ms，每条CPU分别为143/235/373ms。多给线程几乎不提速，因为瓶颈是内存带宽。单写入进程串行，8核也只有约13–15条/秒。
+- 持久化路径：新增 `bench_persist.cpp`，组合与worker的monitoring_observe相同，即活动作用域State、Gallery、AssociationStore、TrajectoryStore，每条抓拍一个事务。5万人×1模板，抓拍集中在200人身上，沿500节点环形图移动：
+  - 每条p50约171ms，约7–8条/秒，CPU约156–226ms/条。
+  - 分阶段：身份关联含SQLite约16ms，轨迹追加/重建约100–150ms（平均每人仅2.3条观测），提交约2–4ms。
+- gprof（`gprof-callgraph.txt.gz`）：时间主要花在轨迹快照的共享JSON存储上。`SharedJson::Encode/Node/Find` 每条抓拍约7000次节点查找，每次都是SQLite查询。另外 `State` 每次读写都重新prepare SQL，`sqlite3RunParser` 约占7%。点积已不是主要成本。
+- 结论：持久化后真正的瓶颈是轨迹快照存储，不在人脸比对，8核也用不上。下一步应在保持事务、回滚、留存语义完全不变的前提下：①缓存预编译语句；②同一事务内复用未变化的图/选项编码，避免每条抓拍重新编码1000条边；③再评估小批量比对。每项都要和原版逐位对比输出。日志见 `ftopt-persist.tgz`。
+
+**同日续做：持久化路径两项优化（语句缓存 + 相机图编码复用），已逐位对比**
+- 改动文件（修改前原文件在 `evidence/2026-10-17-lan-capacity/before-persist/`）：
+  - `cpp/src/state.cpp`、`cpp/include/face_trajectory/state.hpp`：每个 root 连接按 SQL 原文缓存预编译语句，用完 `reset+clear_bindings` 归还；同一 SQL 被外层迭代占用时临时编译一份。新增只增不减的 `ObjectEpoch()`：任何 Erase、Rollback、Commit 失败、显式 Put 到 object 命名空间都会 +1；`Intern` 改走只插入的 `PutRow`，不 +1。关闭连接前先 finalize 全部缓存语句。
+  - `cpp/include/face_trajectory/shared_json.hpp`：只对 ≥32 元素的序列做进程内备忘（主要是相机图约1000条边），每类最多8条，代号变化整份作废。命中条件为：上一版解码结果与新值 `json ==` 相等时直接复用旧根；完全相同的 dump 曾从零构建过时复用同一根。
+  - `cpp/src/trajectory.cpp`：相机图只序列化一次；库里已有逐字节相同的文本时，不再解析比较，也不再重写同一行。
+- 验证（`10.64.115.33`，`FACE_TRAJECTORY_SEARCH_THREADS=4`，nice 10；基线为上午低CPU优化后的版本）：
+  - ctest 2项新旧都通过。`evidence/2026-10-17-lan-capacity/memo_edge_test.cpp` 覆盖删除后解码、回滚后解码、回滚后重编码、差分编码、嵌套同SQL迭代，新旧输出逐字节相同。
+  - `bench_persist2.cpp` 输出每条抓拍的决定、目标、候选得分（十六进制浮点）、追加/重建路径、版本号和受影响区段。最终数据库按 `ns,key` 全表导出后求SHA256。三组均新旧一致：5万×1共1000条；5万×1共300条且每7条注入一次回滚并重建内存索引（42次）；5万×8共1000条。
+- 结果：
+
+| 规模 | 版本 | 每条 p50 | 串行吞吐 | 每条CPU | 轨迹追加/重建 p50 | Observe p50 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 5万×1 | 优化前 | 166.7ms | 7.6条/秒 | 165.7ms | 147.2ms | 16.6ms |
+| | 优化后 | 35.7ms | 29.3条/秒 | 65.4ms | 18.4ms | 14.8ms |
+| 5万×8（40万） | 优化前 | 244.9ms | 4.8条/秒 | 359.8ms | 172.0ms | 71.9ms |
+| | 优化后 | 93.7ms | 10.6条/秒 | 267.0ms | 17.6ms | 75.4ms |
+
+- 结论：轨迹存储从约150ms降到约18ms，已不是瓶颈。40万模板时，身份关联中的底库检索（约75ms，4线程）重新成为主要成本，下一步是小批量比对。回滚组的 p95 约10s，是基准程序每次回滚都从SQLite重载5万模板所致，新旧版本相同，不是本次改动引入的。未测HTTP/Go、Windows/MSVC编译和真实特征。日志、dump和SHA见 `evidence/2026-10-17-lan-capacity/persist-opt-r5.tgz`（SHA256 `2b03d666…8e1d`）。
+
+## 2026-10-19：T00050真实抓拍空间接入核查
+
+用户认可本次0.4候选门槛、抓拍对比和现有时间顺序，明确使用足球安保v24。重新只读查询252当前发布标注及补充坐标源，排除测试v5的不同点位；已知南门-01局部坐标[-385.78,-100.593,0.772]，南门-02和一号通道车牌识别在发布标注、markers、经纬度和当前模型旧锚点的精确ID检索中无可用坐标。用户暂无点位资料。
+
+全部81条候选与选定场景的核查结果、已知点位、精确待补设备清单及证据见[evidence/2026-10-19-real-capture-spatial-route/README.md](evidence/2026-10-19-real-capture-spatial-route/README.md)。缺坐标保持null，跨镜route_waypoints不生成；实际空间路线尚未完成，没有猜点、画跨墙直线或绕过P2准入。需补两台真实模型点位后继续现有NavMesh/route_waypoints，无需替换人脸模型。全过程只读，未改生产场景或算法运行状态。
+
+## 2026-10-21：业务后端按次查询人员资料、抓拍照片和时间线
+
+用户最终接口要求为业务后端请求一次、算法返回一次 JSON，不开启主动推送/订阅，不再处理 UE 前端。沿用 `POST /v1/monitoring/timeline/query` 和既有 `query` 授权、活动版本、人员 ID、分页及保留合同，增加 `person` 当前资料（姓名、档案照 URL、重点标记）和 `timeline[].capture_photo_url`；保留摄像头位置名称、抓拍 UTC 时间。接口与上游字段见 [后端查询合同](docs/backend-person-query.md)。旧模式名 `UE_CAMERA_EVENTS` 保留兼容，无需 UE 工程。
+
+人员登记支持 `person_name/profile_photo_url`，省略保留、null清空，同修订异内容冲突；P1登记清单透传。抓拍照片 URL 由采集/后端图片存储提供，P1支持帧级及每个人脸 URL，P2保存到不可变观察记录并关联查询，不下载/托管真实图片、不续签 URL。身份先 HOLD 后人工确认也从原观察恢复照片。原通用 push 实现保留，当前部署不配置 push-url/push-results。
+
+验证证据：`evidence/2026-10-21-backend-person-photos/`，核心26项、原时间线21项、事件21项、CTest2项及P1测试8项通过；OpenAPI有效且21个实际回复符合schema。审查发现的HOLD确认照片与URL空host问题已修复并补回归。
+
+本地临时Wi-Fi模拟实例及后端请求文件在 `D:/算法/人脸算法/outputs/BACKEND-PERSON-PHOTOS-20261021-LAN/`。API为 `10.64.115.5:18081`，示意图片URL服务为 `10.64.115.5:18082`；仅放行Wi-Fi网段10.64.115.0/26，8小时后结束并移除本次防火墙规则。合成人员和无真实人脸的SVG示意图，仅本机经Wi-Fi IPv4验证，尚未验证其他后端机器跨机访问或真实大麦/摄像头/图片存储。正式部署需实际人员资料、照片URL、时间权威和签名凭证。

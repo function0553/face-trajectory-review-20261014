@@ -19,6 +19,9 @@ public:
     static std::string EventKey(const nlohmann::json& request);
     static std::string Digest(const std::string& text);
     static void ExternalIds(nlohmann::json& value);
+    // Selected by authoritative activity configuration, never an observation.
+    static bool CameraEventsMode(const nlohmann::json& context);
+    static bool PersonTrackMode(const nlohmann::json& context);
 private:
     State& root_;
 };

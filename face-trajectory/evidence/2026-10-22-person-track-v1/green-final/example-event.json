@@ -1,0 +1,14 @@
+{
+  "activity_id": "A",
+  "camera_id": "C1",
+  "camera_name": null,
+  "capture_photo_url": "https://photos.example.test/capture.jpg",
+  "captured_at_unix_ms": 1791626401000,
+  "clock_uncertainty_ms": 0,
+  "event_id": "pt:8a412e9b462df264d35ba7ba9f0acf6c4af8886d5590958fc7164f265258b3aa",
+  "event_type": "UPSERT",
+  "observation_id": "face-0",
+  "person_id": "P",
+  "revision": 1,
+  "source_id": "S"
+}

@@ -16,6 +16,10 @@
 #if defined(_M_X64) || defined(__SSE2__)
 #include <emmintrin.h>
 #endif
+#if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+#include <immintrin.h>
+#endif
+#include <cstdlib>
 
 namespace face_trajectory {
 namespace {
@@ -63,7 +67,7 @@ void Normalize(Embedding& value) {
     }
 }
 
-float Dot(const Embedding& left, const Embedding& right) {
+float DotSse2OrScalar(const Embedding& left, const Embedding& right) {
 #if defined(_M_X64) || defined(__SSE2__)
     // Float inputs, double products/accumulation. Do not lower precision near
     // identity thresholds to obtain a faster benchmark.
@@ -82,6 +86,44 @@ float Dot(const Embedding& left, const Embedding& right) {
     }
     return static_cast<float>(sum);
 #endif
+}
+
+#if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+// 同一套双精度运算的 AVX 版：4 个双精度通道依次对应 SSE2 版的 a0、a1、b0、b1，
+// 每个通道的乘、加顺序与 SSE2 版完全相同，收尾也按 (a0+b0)+(a1+b1) 合并，因此结果逐位一致。
+// 只开 avx、不开 fma：融合乘加会改变舍入，不能用它换速度。
+__attribute__((target("avx"))) float DotAvx(const Embedding& left, const Embedding& right) {
+    __m256d acc = _mm256_setzero_pd();
+    for (std::size_t i = 0; i < kEmbeddingDim; i += 4) {
+        const __m256d l = _mm256_cvtps_pd(_mm_loadu_ps(left.data() + i));
+        const __m256d r = _mm256_cvtps_pd(_mm_loadu_ps(right.data() + i));
+        acc = _mm256_add_pd(acc, _mm256_mul_pd(l, r));
+    }
+    double lanes[4];
+    _mm256_storeu_pd(lanes, acc);
+    return static_cast<float>((lanes[0] + lanes[2]) + (lanes[1] + lanes[3]));
+}
+const bool kHasAvx = [] { __builtin_cpu_init(); return __builtin_cpu_supports("avx") != 0; }();
+#endif
+
+float Dot(const Embedding& left, const Embedding& right) {
+#if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+    if (kHasAvx) return DotAvx(left, right);
+#endif
+    return DotSse2OrScalar(left, right);
+}
+
+// 检索线程上限：默认 8（原行为）；与其他业务共用服务器时用 FACE_TRAJECTORY_SEARCH_THREADS 调小（1–64）。
+// 线程数只影响耗时，不影响得分和排序结果。
+int SearchThreads() {
+    static const int value = [] {
+        const char* text = std::getenv("FACE_TRAJECTORY_SEARCH_THREADS");
+        if (!text || !*text) return 8;
+        char* end = nullptr;
+        const long parsed = std::strtol(text, &end, 10);
+        return (end && *end == '\0' && parsed >= 1 && parsed <= 64) ? static_cast<int>(parsed) : 8;
+    }();
+    return value;
 }
 
 }  // namespace
@@ -183,14 +225,15 @@ std::vector<PersonHit> Gallery::Search(
     const auto bucket = templates_by_space_.find(normalized_space);
     if (bucket != templates_by_space_.end()) {
         const auto& rows=bucket->second.rows;
+        const auto& persons=bucket->second.persons;
         std::vector<float> scores(rows.size());
 #ifdef _OPENMP
-        const int threads=std::max(1,std::min(8,omp_get_num_procs()));
-#pragma omp parallel for schedule(static) num_threads(threads) if(rows.size()>=10000)
+        const int threads=std::max(1,std::min(SearchThreads(),omp_get_num_procs()));
+#pragma omp parallel for schedule(static) num_threads(threads) if(rows.size()>=10000 && threads>1)
 #endif
         for(std::int64_t i=0;i<static_cast<std::int64_t>(rows.size());++i)
             scores[static_cast<std::size_t>(i)]=Dot(normalized_query,rows[static_cast<std::size_t>(i)].embedding);
-        std::vector<std::optional<std::size_t>> best(bucket->second.persons.size());
+        std::vector<std::optional<std::size_t>> best(persons.size());
         for (std::size_t slot=0;slot<rows.size();++slot) {
             const auto& value=rows[slot];
             const auto& id=value.template_id;
@@ -201,19 +244,24 @@ std::vector<PersonHit> Gallery::Search(
                 winner=slot;
             }
         }
-        hits.reserve(bucket->second.person_slots.size());
-        for(std::size_t i=0;i<best.size();++i)if(best[i])
-            hits.push_back({bucket->second.persons[i].id,rows[*best[i]].template_id,scores[*best[i]]});
+        // 先只按 (得分, 人员槽位) 排名，最后只为前 top_k 名复制人员/模板 ID 字符串；
+        // 排名规则与原实现相同（得分降序，同分按人员 ID 升序），因此前 top_k 名完全一致。
+        std::vector<std::size_t> ranked;
+        ranked.reserve(bucket->second.person_slots.size());
+        for(std::size_t i=0;i<best.size();++i)if(best[i])ranked.push_back(i);
+        const auto better_slot=[&](std::size_t a,std::size_t b){
+            const float sa=scores[*best[a]],sb=scores[*best[b]];
+            if(sa!=sb)return sa>sb;
+            return persons[a].id<persons[b].id;
+        };
+        if(ranked.size()>top_k){
+            std::nth_element(ranked.begin(),ranked.begin()+static_cast<std::ptrdiff_t>(top_k),ranked.end(),better_slot);
+            ranked.resize(top_k);
+        }
+        std::sort(ranked.begin(),ranked.end(),better_slot);
+        hits.reserve(ranked.size());
+        for(const auto i:ranked)hits.push_back({persons[i].id,rows[*best[i]].template_id,scores[*best[i]]});
     }
-    const auto better = [](const PersonHit& a, const PersonHit& b) {
-        if (a.similarity != b.similarity) return a.similarity > b.similarity;
-        return a.person_entity_id < b.person_entity_id;
-    };
-    if (hits.size() > top_k) {
-        std::nth_element(hits.begin(), hits.begin() + top_k, hits.end(), better);
-        hits.resize(top_k);
-    }
-    std::sort(hits.begin(), hits.end(), better);
     return hits;
 }
 

@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-22",
+  "protocol": "person-track-v1.0",
+  "openapi": "0.14.0",
+  "reports": {
+    "green-final": {
+      "passed": 26
+    },
+    "legacy-camera-final": {
+      "passed": 21
+    },
+    "legacy-timeline-final": {
+      "passed": 21
+    },
+    "legacy-photos-final": {
+      "passed": 26
+    },
+    "legacy-activity-final": {
+      "passed": 40
+    },
+    "legacy-retention-final": {
+      "passed": 81
+    },
+    "http-verified": {
+      "passed": true
+    },
+    "legacy-http-final": {
+      "passed": true
+    }
+  },
+  "go_test": "6 packages passed",
+  "go_vet": "exit 0",
+  "ctest": "2 of 2 passed",
+  "openapi_internal_refs": 603,
+  "review": "2 P2 found, reproduced, fixed and re-reviewed; no remaining high/medium issues",
+  "artifacts_sha256": {
+    "face-trajectory\\cpp\\build-ue-camera-events\\face_trajectory_worker.exe": "827889be282dd588712e4202014f5761b7c6a029788e242a4c8b91a3857163cb",
+    "face-trajectory\\evidence\\2026-10-22-person-track-v1\\face-trajectoryd.exe": "057ebd0ac1ffc9f5d77cc2ff6a9ffe86be20a98b85ed6548185c7501e7443ed3"
+  },
+  "production_deployed": false
+}

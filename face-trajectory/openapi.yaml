@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Face Trajectory Algorithm API
-  version: 0.13.0
+  version: 0.14.0
   description: C++17 activity-isolated algorithm core with Go HTTP transport. Every activity-scoped operation requires explicit
     activity_id and applicable CAS versions plus backend-signed action authorization. Activity creation, user selection and
     monitoring enablement are independent. Only qualified monitoring intake admits sightings; legacy raw bypass routes are
@@ -22,6 +22,18 @@ x-backend-result-push:
     global: 10000
     perActivity: 256
     mutation: Checked only when enqueueing a nonduplicate committed result; quota failure rolls back the whole algorithm transaction
+x-person-track-push:
+  activityOutputMode: PERSON_TRACK_EVENTS
+  receiverPath: /api-security/algorithm/person-track/events
+  payloadSchema: '#/components/schemas/PersonTrackEvent'
+  receiptSchema: '#/components/schemas/PersonTrackReceipt'
+  confirmation: HTTP 200 AND body code=200 AND matching event_id; all other responses retain the original event
+  retention: Pending events survive query history cleanup and restart until business confirmation; never rewritten by cleanup
+  retrySeconds: [1, 2, 5, 10, 30]
+  subsequentRetrySeconds: 30
+  timeoutSeconds: 10
+  identity: activity_id + source_id + observation_id; revision starts at 1 and increases on changed attribution or retraction
+  registration: Requires a currently available valid registration template; URL-only registration cannot report recognition_ready
 paths:
   /v1/monitoring/persons:
     post:
@@ -29,7 +41,8 @@ paths:
       description: Durable, versioned person category and optional same-person templates in one transaction. Categories affect
         scheduling, never recognition thresholds. Templates are added or replaced by ID; omission preserves existing templates.
         Revision reuse requires identical contents and updates use CAS. Explicit current activity_id/config_version/binding_version/monitoring_version
-        and signed monitor grant are required.
+        and signed monitor grant are required. PERSON_TRACK_EVENTS additionally requires a usable registration template;
+        success includes recognition_ready=true. Photo URL alone is insufficient.
       requestBody:
         required: true
         content:
@@ -221,6 +234,45 @@ paths:
           $ref: '#/components/responses/StateConflict'
         '502':
           $ref: '#/components/responses/WorkerUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+      x-authorization-action: query
+      x-activity-scope: activity
+  /v1/monitoring/timeline/query:
+    post:
+      operationId: queryNamedCameraTimeline
+      description: One request returns one JSON page of a person's confirmed camera appearances, ordered by nominal camera capture
+        UTC time, source_id and observation_id, with current person display data and each capture's photo URL for the business backend.
+        camera_name is the configured location/device display name, never a manufacturer model.
+        Requires UE_CAMERA_EVENTS or PERSON_TRACK_EVENTS and current activity versions. Uses current authoritative identity and uploaded person category;
+        no route, coordinates, subscription or push is generated. Time range is start-inclusive/end-exclusive and subject to 168-hour retention.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UECameraTimelineRequest'
+      responses:
+        '200':
+          description: Named-camera timeline page; no observations returns an empty timeline. has_more explicitly indicates pagination.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/AuthorizedReply'
+                - $ref: '#/components/schemas/UECameraTimelineReply'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '502':
+          $ref: '#/components/responses/WorkerUnavailable'
+        '503':
+          $ref: '#/components/responses/CapacityUnavailable'
         '504':
           $ref: '#/components/responses/RequestTimeout'
       x-authorization-action: query
@@ -1682,6 +1734,10 @@ components:
       - expected_revision
       - evidence_id
       properties:
+        person_name:
+          $ref: '#/components/schemas/BusinessPersonName'
+        profile_photo_url:
+          $ref: '#/components/schemas/HttpPhotoUrl'
         person_id:
           type: string
           minLength: 1
@@ -1731,6 +1787,9 @@ components:
       - duplicate
       - gallery_version
       properties:
+        recognition_ready:
+          type: boolean
+          description: True only when a current registration template is available after the synchronous transaction.
         ok:
           type: boolean
         person:
@@ -1741,6 +1800,10 @@ components:
           - revision
           - evidence_id
           properties:
+            person_name:
+              $ref: '#/components/schemas/BusinessPersonName'
+            profile_photo_url:
+              $ref: '#/components/schemas/HttpPhotoUrl'
             person_id:
               type: string
             category:
@@ -1801,6 +1864,8 @@ components:
         object remain immutable across retries and evidence reconsideration. Existing normalized clock fields, if present,
         do not override the time_record adapter.
       properties:
+        capture_photo_url:
+          $ref: '#/components/schemas/HttpPhotoUrl'
         observation_id:
           type: string
           minLength: 1
@@ -1848,7 +1913,6 @@ components:
       required:
       - observation
       - policy
-      - graph
       properties:
         observation:
           $ref: '#/components/schemas/MonitoringFaceObservation'
@@ -1866,7 +1930,9 @@ components:
         evidence_id:
           type: string
           description: Reserved legacy evidence field; changing immutable intake under the same key returns SOURCE_CONFLICT.
-      description: All original event content including activity versions, route, face, clock context and gate binding is
+      description: graph is required in TRAJECTORY mode. UE_CAMERA_EVENTS is selected by authoritative activity configuration;
+        in that mode graph is optional and unused, no route snapshots are built, and policy must not require or assert complete topology.
+        All original event content including activity versions, route, face, clock context and gate binding is
         immutable for the same activity/source/event key. Any changed retry is 409. reconsider is a reserved legacy field
         and does not authorize changed content in 0.13.
     MonitoringTrajectoryReference:
@@ -3663,11 +3729,72 @@ components:
           minLength: 1
         target_id:
           type: string
+          nullable: true
           minLength: 1
+          description: Verified new identity. In PERSON_TRACK_EVENTS only, null retracts the result and queues RETRACT.
         evidence_id:
           type: string
           minLength: 1
           description: Reference to independent verified attribution; the algorithm cannot inspect external evidence.
+    PersonTrackEvent:
+      type: object
+      additionalProperties: false
+      required: [event_id, event_type, revision, activity_id, source_id, observation_id, person_id, camera_id, camera_name, captured_at_unix_ms, clock_uncertainty_ms, capture_photo_url]
+      properties:
+        event_id:
+          type: string
+          minLength: 1
+        event_type:
+          type: string
+          enum: [UPSERT, RETRACT]
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+        activity_id:
+          type: string
+          minLength: 1
+        source_id:
+          type: string
+          minLength: 1
+        observation_id:
+          type: string
+          minLength: 1
+        person_id:
+          type: string
+          nullable: true
+          minLength: 1
+          description: Registered PRIORITY identity for UPSERT; null for RETRACT.
+        camera_id:
+          type: string
+          minLength: 1
+        camera_name:
+          type: string
+          nullable: true
+        captured_at_unix_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        clock_uncertainty_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 60000
+        capture_photo_url:
+          $ref: '#/components/schemas/HttpPhotoUrl'
+      description: Algorithm-to-platform wire body, not a platform endpoint implemented by this service. All capture metadata remains unchanged across corrections and retractions; retry bytes remain unchanged.
+    PersonTrackReceipt:
+      type: object
+      required: [code, message, event_id]
+      properties:
+        code:
+          type: integer
+          description: 200 confirms durable business processing only together with HTTP 200 and the matching event_id.
+        message:
+          type: string
+        event_id:
+          type: string
+          minLength: 1
     AssociationRebuildRequest:
       type: object
       required:
@@ -4968,6 +5095,14 @@ components:
         configuration:
           type: object
           additionalProperties: true
+          properties:
+            output_mode:
+              type: string
+              enum: [TRAJECTORY, UE_CAMERA_EVENTS, PERSON_TRACK_EVENTS]
+              default: TRAJECTORY
+              description: UE_CAMERA_EVENTS reports accepted face appearances with camera name, capture UTC time and priority flag;
+                it skips trajectory reconstruction and disables route queries. PERSON_TRACK_EVENTS also queues only confirmed
+                PRIORITY records as flat v1 UPSERT/RETRACT events with durable revisions and business receipts. It does not change face matching thresholds.
       description: Create stopped, or update configuration using CAS. activity_num and venue_id mapping are immutable; configuration
         has no implicit monitoring effect.
     DeviceActivityBinding:
@@ -4978,6 +5113,12 @@ components:
       - kind
       - route_rule_id
       properties:
+        camera_name:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 1024
+          description: Authoritative display name required and nonnull in UE_CAMERA_EVENTS; optional or null in PERSON_TRACK_EVENTS.
         source_id:
           type: string
           minLength: 1
@@ -5094,6 +5235,11 @@ components:
         - status
         - retention_deadline_unix_ms
         properties:
+          output_mode:
+            type: string
+            enum: [UE_CAMERA_EVENTS]
+          camera_event:
+            $ref: '#/components/schemas/UECameraEvent'
           sequence:
             type: integer
             format: int64
@@ -5487,6 +5633,214 @@ components:
             $ref: '#/components/schemas/MonitoringTrajectoryReference'
       description: Activity/binding/version HOLD or minimal EXPIRED tombstone receipt. These outcomes do not require association/normalization
         fields present in the accepted face/gate receipt.
+    BusinessPersonName:
+      type: string
+      nullable: true
+      minLength: 1
+      maxLength: 1024
+      description: Uploaded business display name. Also limited to 1024 UTF-8 bytes; no control characters. Omission on personnel update preserves the existing value; explicit null clears it.
+    HttpPhotoUrl:
+      type: string
+      nullable: true
+      format: uri
+      maxLength: 4096
+      description: Absolute HTTP(S) photo URL supplied by the acquisition/backend system, limited to 4096 bytes, with host and no whitespace, backslash or user credentials. Null means unavailable. The algorithm does not fetch, host, renew or manufacture the photo. Keep the URL usable for the query/retention period.
+    BackendPersonSummary:
+      type: object
+      required: [person_id, person_name, profile_photo_url, category, is_priority, person_revision]
+      properties:
+        person_id:
+          type: string
+        person_name:
+          $ref: '#/components/schemas/BusinessPersonName'
+        profile_photo_url:
+          $ref: '#/components/schemas/HttpPhotoUrl'
+        category:
+          type: string
+          enum: [PRIORITY, NORMAL, UNREGISTERED]
+        is_priority:
+          type: boolean
+        person_revision:
+          type: integer
+          format: int64
+          minimum: 0
+      description: Current uploaded personnel record for the requested authoritative person ID. Contains no templates or face embeddings. Unknown personnel have null display fields and category UNREGISTERED.
+    UECameraTimelineCursor:
+      type: object
+      required: [captured_at_unix_ms, source_id, observation_id]
+      properties:
+        captured_at_unix_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        source_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        observation_id:
+          type: string
+          minLength: 1
+          maxLength: 1024
+    UECameraTimelineRequest:
+      allOf:
+      - $ref: '#/components/schemas/ActivityVersions'
+      - type: object
+        required: [person_id, from_unix_ms, to_unix_ms]
+        properties:
+          person_id:
+            type: string
+            minLength: 1
+            maxLength: 1024
+            description: Uploaded business person ID, or a previously returned explicit auto ID.
+          from_unix_ms:
+            type: integer
+            format: int64
+            minimum: 0
+            description: Inclusive UTC milliseconds; older requested history is clamped to the retention boundary and reported as history_pruned.
+          to_unix_ms:
+            type: integer
+            format: int64
+            minimum: 0
+            description: Exclusive UTC milliseconds; must exceed from_unix_ms.
+          limit:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 500
+          after:
+            $ref: '#/components/schemas/UECameraTimelineCursor'
+          expected_association_revision:
+            type: integer
+            format: int64
+            minimum: 0
+            description: Required with after; use the preceding response revision. 409 indicates that a late arrival or correction requires restarting pagination.
+    UECameraTimelineRow:
+      allOf:
+      - $ref: '#/components/schemas/UECameraTimelineCursor'
+      - type: object
+        required: [camera_id, camera_name, camera_name_source, clock_uncertainty_ms, capture_photo_url]
+        properties:
+          capture_photo_url:
+            $ref: '#/components/schemas/HttpPhotoUrl'
+          camera_id:
+            type: string
+          camera_name:
+            type: string
+            nullable: true
+            description: Location/device display name such as south gate or stand A1 entrance, never a camera model or inferred location.
+          camera_name_source:
+            type: string
+            enum: [CAPTURE_EVENT, CURRENT_ACTIVITY_BINDING, UNAVAILABLE]
+            description: Prefer the immutable name recorded by the UE appearance; pre-UE records may use current authoritative binding or null if unavailable.
+          clock_uncertainty_ms:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 60000
+    UECameraTimelineReply:
+      allOf:
+      - $ref: '#/components/schemas/AlgorithmReply'
+      - $ref: '#/components/schemas/ActivityReplyContext'
+      - type: object
+        required: [person, person_id, category, is_priority, person_revision, association_revision, from_unix_ms, to_unix_ms,
+          effective_from_unix_ms, history_pruned, order_basis, timeline, count, has_more, next_after]
+        properties:
+          person:
+            $ref: '#/components/schemas/BackendPersonSummary'
+          person_id:
+            type: string
+          category:
+            type: string
+            enum: [PRIORITY, NORMAL, UNREGISTERED]
+          is_priority:
+            type: boolean
+          person_revision:
+            type: integer
+            format: int64
+            minimum: 0
+          association_revision:
+            type: integer
+            format: int64
+            minimum: 0
+          from_unix_ms:
+            type: integer
+            format: int64
+          to_unix_ms:
+            type: integer
+            format: int64
+          effective_from_unix_ms:
+            type: integer
+            format: int64
+          history_pruned:
+            type: boolean
+          order_basis:
+            type: string
+            enum: [CAPTURE_TIME_NOMINAL]
+          timeline:
+            type: array
+            maxItems: 1000
+            items:
+              $ref: '#/components/schemas/UECameraTimelineRow'
+          count:
+            type: integer
+            minimum: 0
+            maximum: 1000
+          has_more:
+            type: boolean
+          next_after:
+            oneOf:
+            - $ref: '#/components/schemas/UECameraTimelineCursor'
+            - type: object
+              nullable: true
+              enum: [null]
+    UECameraEvent:
+      type: object
+      required: [event_type, person_id, category, is_priority, person_revision, association_revision, camera_id, camera_name,
+        source_id, observation_id, captured_at_unix_ms, clock_uncertainty_ms]
+      properties:
+        capture_photo_url:
+          $ref: '#/components/schemas/HttpPhotoUrl'
+        event_type:
+          type: string
+          enum: [PERSON_APPEARANCE]
+        person_id:
+          type: string
+          description: Uploaded business person ID, or an explicit auto ID for an unregistered target. No caller-asserted identity is accepted on observations.
+        category:
+          type: string
+          enum: [PRIORITY, NORMAL, UNREGISTERED]
+        is_priority:
+          type: boolean
+          description: True exactly when the registered category at processing time is PRIORITY.
+        person_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        association_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        camera_id:
+          type: string
+        camera_name:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        source_id:
+          type: string
+        observation_id:
+          type: string
+        captured_at_unix_ms:
+          type: integer
+          format: int64
+          description: Qualified camera capture UTC milliseconds, never push or server receipt time.
+        clock_uncertainty_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 60000
+      description: A confirmed face appearance at a named camera, optionally linked to its stored capture photo URL. Contains no coordinates, route waypoints, image bytes or face embeddings.
+        Person/category and binding names are snapshots of the original transaction; corrections remain separate versioned control results.
     QualifiedMonitoringObserveReply:
       type: object
       required:
@@ -5501,6 +5855,16 @@ components:
       - monitoring
       - trajectories
       properties:
+        output_mode:
+          type: string
+          enum: [UE_CAMERA_EVENTS]
+        camera_event:
+          oneOf:
+          - $ref: '#/components/schemas/UECameraEvent'
+          - type: object
+            nullable: true
+            enum: [null]
+          description: Present only in UE_CAMERA_EVENTS; null for HOLD, populated only after time and identity admission.
         ok:
           type: boolean
         observation_id:
@@ -5651,4 +6015,4 @@ x-retention:
   defaultDeletionEnabled: false
   unknownP2: at most 168 hours from first verified quarantine receipt; retries/restarts never reset
   unknownLegacyOrP1: immediate expiry when no trustworthy original quarantine deadline exists; no new migration window
-  excluded: registered gallery, activities, necessary lifecycle/bindings, backend ticket history and camera recordings
+  excluded: registered gallery, activities, necessary lifecycle/bindings, backend ticket history, camera recordings and unacknowledged PERSON_TRACK_EVENTS outbox bodies

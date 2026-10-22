@@ -40,6 +40,12 @@ void ScrubReentry(json& v,const std::set<std::string>& expired){
 }
 json Compact(const json& response){
     json r=json::object();for(const auto* k:{"ok","status","sequence","operation","activity_id","activity_num","venue_id","config_version","binding_version","monitoring_version","route_rule_id","retention_deadline_unix_ms","reason_codes","time_admitted"})if(response.contains(k))r[k]=response.at(k);
+    // A UE appearance contains only its own capture evidence, not dependent
+    // route/history details. Its enclosing original deadline governs removal.
+    if(response.value("output_mode",std::string{})=="UE_CAMERA_EVENTS" &&
+       response.contains("camera_event") && response.at("camera_event").is_object()) {
+        r["output_mode"]="UE_CAMERA_EVENTS";r["camera_event"]=response.at("camera_event");return r;
+    }
     if(response.contains("association")&&response.at("association").is_object()){
         r["association"]=json::object();for(const auto* k:{"target_id","decision","reason","version"})if(response.at("association").contains(k))r["association"][k]=response.at("association").at(k);
     }
@@ -105,6 +111,7 @@ json Retain(State& root,std::int64_t now,bool dry_run){
             }
             if(ns=="monitoring_observation"&&expired.count(row.key))remove(ns,row.key);
             if(ns=="monitoring_observation_revision"&&expired.count(row.ref))remove(ns,row.key);
+            if(ns=="person_track_state"&&expired.count(row.key))remove(ns,row.key);
             if(ns=="monitoring_gate"||ns=="monitoring_gate_revision"){
                 const auto event=ns=="monitoring_gate"?row.key:row.ref;
                 const auto& norm=v.at("normalization");const bool known=norm.value("status","")=="NORMALIZED";
@@ -178,6 +185,9 @@ json Retain(State& root,std::int64_t now,bool dry_run){
     std::size_t pending=0,push_removed=0;
     for(const auto& row:initial)if(row.ns=="push_outbox"){
         const auto v=Parse(row.value);const auto deadline=v.value("retention_deadline_unix_ms",std::int64_t{0});
+        // v1 requires delivery after any outage, including beyond query retention.
+        // These immutable wire records are owned by successful business receipts.
+        if(v.contains("person_track_event")){++pending;continue;}
         if(deadline<now||!v.contains("activity_id")){++push_removed;if(!dry_run)root.Erase("push_outbox",row.key);}else{++pending;next=std::min<std::int64_t>(next,deadline);if(!dry_run&&changed_activities.count(v.value("activity_id",std::string{}))){auto compact=v;compact["result"]=Compact(v.at("result"));root.Put("push_outbox",row.key,compact.dump(),v.at("activity_id"),v.at("event_id"));}}
     }
     if(!dry_run){root.Put("push_meta","pending",std::to_string(pending));root.Put("retention_meta","next_deadline",std::to_string(next));root.Put("retention_meta","last_run_unix_ms",std::to_string(now));}

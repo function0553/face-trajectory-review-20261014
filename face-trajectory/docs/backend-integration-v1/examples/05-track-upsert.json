@@ -1,0 +1,14 @@
+{
+  "event_id": "evt-001-r1",
+  "event_type": "UPSERT",
+  "revision": 1,
+  "activity_id": "ACT-001",
+  "source_id": "source-01",
+  "observation_id": "capture-001-face-0",
+  "person_id": "PERSON-001",
+  "camera_id": "CAM-001",
+  "camera_name": "看台A1下入口1",
+  "captured_at_unix_ms": 1792578600000,
+  "clock_uncertainty_ms": 0,
+  "capture_photo_url": "https://photos.example.test/captures/capture-001.jpg"
+}

@@ -1,0 +1,110 @@
+{
+  "passed": 26,
+  "checks": [
+    {
+      "name": "registered_business_person_details_are_preserved",
+      "passed": true
+    },
+    {
+      "name": "backend_query_returns_person_summary",
+      "passed": true
+    },
+    {
+      "name": "each_capture_has_its_own_photo_and_legacy_null",
+      "passed": true
+    },
+    {
+      "name": "camera_names_and_times_stay_attached_to_photo",
+      "passed": true
+    },
+    {
+      "name": "no_embedding_or_input_payload_exposed",
+      "passed": true
+    },
+    {
+      "name": "pull_does_not_enable_push",
+      "passed": true
+    },
+    {
+      "name": "same_capture_retry_is_idempotent",
+      "passed": true
+    },
+    {
+      "name": "changed_photo_for_same_capture_rejected",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_0",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_1",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_2",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_3",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_4",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_5",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_6",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_7",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_8",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_9",
+      "passed": true
+    },
+    {
+      "name": "invalid_photo_url_rejected_10",
+      "passed": true
+    },
+    {
+      "name": "person_update_preserves_omitted_photo",
+      "passed": true
+    },
+    {
+      "name": "old_registration_retry_still_idempotent",
+      "passed": true
+    },
+    {
+      "name": "correction_returns_current_person_with_original_capture_photo",
+      "passed": true
+    },
+    {
+      "name": "hold_then_manual_confirmation_keeps_original_photo",
+      "passed": true
+    },
+    {
+      "name": "explicit_null_clears_person_display_fields",
+      "passed": true
+    },
+    {
+      "name": "unknown_person_has_explicit_nulls_and_empty_timeline",
+      "passed": true
+    },
+    {
+      "name": "retention_preserves_live_photo_without_resurrecting_old_capture",
+      "passed": true
+    }
+  ],
+  "failure": null
+}

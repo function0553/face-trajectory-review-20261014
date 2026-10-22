@@ -1,0 +1,9 @@
+Test project D:/算法/人脸算法/face-trajectory/cpp/build-ue-camera-events
+    Start 1: point_connections
+1/2 Test #1: point_connections ................   Passed    0.14 sec
+    Start 2: state_activity
+2/2 Test #2: state_activity ...................   Passed    0.35 sec
+
+100% tests passed out of 2
+
+Total Test time (real) =   0.52 sec

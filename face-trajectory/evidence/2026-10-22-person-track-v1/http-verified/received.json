@@ -1,0 +1,135 @@
+[
+  {
+    "event": {
+      "activity_id": "A",
+      "camera_id": "C1",
+      "camera_name": null,
+      "capture_photo_url": "https://photos.example.test/capture.jpg",
+      "captured_at_unix_ms": 1791626401000,
+      "clock_uncertainty_ms": 0,
+      "event_id": "pt:8a412e9b462df264d35ba7ba9f0acf6c4af8886d5590958fc7164f265258b3aa",
+      "event_type": "UPSERT",
+      "observation_id": "face-0",
+      "person_id": "P",
+      "revision": 1,
+      "source_id": "S"
+    },
+    "idempotency_key": "443c4368b23ce221c25d2d9b4b95ab72edef7035bcdc7bd6d42f975994cb06c5",
+    "authorization_ok": true,
+    "raw": "{\"activity_id\":\"A\",\"camera_id\":\"C1\",\"camera_name\":null,\"capture_photo_url\":\"https://photos.example.test/capture.jpg\",\"captured_at_unix_ms\":1791626401000,\"clock_uncertainty_ms\":0,\"event_id\":\"pt:8a412e9b462df264d35ba7ba9f0acf6c4af8886d5590958fc7164f265258b3aa\",\"event_type\":\"UPSERT\",\"observation_id\":\"face-0\",\"person_id\":\"P\",\"revision\":1,\"source_id\":\"S\"}"
+  },
+  {
+    "event": {
+      "activity_id": "A",
+      "camera_id": "C1",
+      "camera_name": null,
+      "capture_photo_url": "https://photos.example.test/capture.jpg",
+      "captured_at_unix_ms": 1791626401000,
+      "clock_uncertainty_ms": 0,
+      "event_id": "pt:8a412e9b462df264d35ba7ba9f0acf6c4af8886d5590958fc7164f265258b3aa",
+      "event_type": "UPSERT",
+      "observation_id": "face-0",
+      "person_id": "P",
+      "revision": 1,
+      "source_id": "S"
+    },
+    "idempotency_key": "443c4368b23ce221c25d2d9b4b95ab72edef7035bcdc7bd6d42f975994cb06c5",
+    "authorization_ok": true,
+    "raw": "{\"activity_id\":\"A\",\"camera_id\":\"C1\",\"camera_name\":null,\"capture_photo_url\":\"https://photos.example.test/capture.jpg\",\"captured_at_unix_ms\":1791626401000,\"clock_uncertainty_ms\":0,\"event_id\":\"pt:8a412e9b462df264d35ba7ba9f0acf6c4af8886d5590958fc7164f265258b3aa\",\"event_type\":\"UPSERT\",\"observation_id\":\"face-0\",\"person_id\":\"P\",\"revision\":1,\"source_id\":\"S\"}"
+  },
+  {
+    "event": {
+      "activity_id": "A",
+      "camera_id": "C1",
+      "camera_name": null,
+      "capture_photo_url": "https://photos.example.test/capture.jpg",
+      "captured_at_unix_ms": 1791626401000,
+      "clock_uncertainty_ms": 0,
+      "event_id": "pt:8a412e9b462df264d35ba7ba9f0acf6c4af8886d5590958fc7164f265258b3aa",
+      "event_type": "UPSERT",
+      "observation_id": "face-0",
+      "person_id": "P",
+      "revision": 1,
+      "source_id": "S"
+    },
+    "idempotency_key": "443c4368b23ce221c25d2d9b4b95ab72edef7035bcdc7bd6d42f975994cb06c5",
+    "authorization_ok": true,
+    "raw": "{\"activity_id\":\"A\",\"camera_id\":\"C1\",\"camera_name\":null,\"capture_photo_url\":\"https://photos.example.test/capture.jpg\",\"captured_at_unix_ms\":1791626401000,\"clock_uncertainty_ms\":0,\"event_id\":\"pt:8a412e9b462df264d35ba7ba9f0acf6c4af8886d5590958fc7164f265258b3aa\",\"event_type\":\"UPSERT\",\"observation_id\":\"face-0\",\"person_id\":\"P\",\"revision\":1,\"source_id\":\"S\"}"
+  },
+  {
+    "event": {
+      "activity_id": "A",
+      "camera_id": "C1",
+      "camera_name": null,
+      "capture_photo_url": null,
+      "captured_at_unix_ms": 1791626401000,
+      "clock_uncertainty_ms": 0,
+      "event_id": "pt:beefde013eede8ee38136b53fe7eadb4a2ab5f43c9a0b53cabdb0c925ac9bff1",
+      "event_type": "UPSERT",
+      "observation_id": "face-1",
+      "person_id": "Q",
+      "revision": 1,
+      "source_id": "S"
+    },
+    "idempotency_key": "6369bf7cc4fe6be04481413bd2f7393949993bc8b6cca5e823e32c106c3b8f03",
+    "authorization_ok": true,
+    "raw": "{\"activity_id\":\"A\",\"camera_id\":\"C1\",\"camera_name\":null,\"capture_photo_url\":null,\"captured_at_unix_ms\":1791626401000,\"clock_uncertainty_ms\":0,\"event_id\":\"pt:beefde013eede8ee38136b53fe7eadb4a2ab5f43c9a0b53cabdb0c925ac9bff1\",\"event_type\":\"UPSERT\",\"observation_id\":\"face-1\",\"person_id\":\"Q\",\"revision\":1,\"source_id\":\"S\"}"
+  },
+  {
+    "event": {
+      "activity_id": "A",
+      "camera_id": "C1",
+      "camera_name": null,
+      "capture_photo_url": "https://photos.example.test/capture.jpg",
+      "captured_at_unix_ms": 1791626401000,
+      "clock_uncertainty_ms": 0,
+      "event_id": "pt:4c79a0b430104edcfc01ceaa3522f8502ac9fb972d6f6c00363837500b99218e",
+      "event_type": "UPSERT",
+      "observation_id": "face-0",
+      "person_id": "Q",
+      "revision": 2,
+      "source_id": "S"
+    },
+    "idempotency_key": "c92c2016ec34de20141ac0a0bbf2ce5dc1af2c27b48294a078738823f095fd9a",
+    "authorization_ok": true,
+    "raw": "{\"activity_id\":\"A\",\"camera_id\":\"C1\",\"camera_name\":null,\"capture_photo_url\":\"https://photos.example.test/capture.jpg\",\"captured_at_unix_ms\":1791626401000,\"clock_uncertainty_ms\":0,\"event_id\":\"pt:4c79a0b430104edcfc01ceaa3522f8502ac9fb972d6f6c00363837500b99218e\",\"event_type\":\"UPSERT\",\"observation_id\":\"face-0\",\"person_id\":\"Q\",\"revision\":2,\"source_id\":\"S\"}"
+  },
+  {
+    "event": {
+      "activity_id": "A",
+      "camera_id": "C1",
+      "camera_name": null,
+      "capture_photo_url": "https://photos.example.test/capture.jpg",
+      "captured_at_unix_ms": 1791626401000,
+      "clock_uncertainty_ms": 0,
+      "event_id": "pt:1ad6f93eec14272d77187c38551048d70bbf9ac4862130f916993a7f1fcdae2d",
+      "event_type": "RETRACT",
+      "observation_id": "face-0",
+      "person_id": null,
+      "revision": 3,
+      "source_id": "S"
+    },
+    "idempotency_key": "761248630422a28465a78d9af6ebf97194e07f7ff164577020af7a3b297d919a",
+    "authorization_ok": true,
+    "raw": "{\"activity_id\":\"A\",\"camera_id\":\"C1\",\"camera_name\":null,\"capture_photo_url\":\"https://photos.example.test/capture.jpg\",\"captured_at_unix_ms\":1791626401000,\"clock_uncertainty_ms\":0,\"event_id\":\"pt:1ad6f93eec14272d77187c38551048d70bbf9ac4862130f916993a7f1fcdae2d\",\"event_type\":\"RETRACT\",\"observation_id\":\"face-0\",\"person_id\":null,\"revision\":3,\"source_id\":\"S\"}"
+  },
+  {
+    "event": {
+      "activity_id": "A",
+      "camera_id": "C1",
+      "camera_name": null,
+      "capture_photo_url": "https://photos.example.test/capture.jpg",
+      "captured_at_unix_ms": 1791626401000,
+      "clock_uncertainty_ms": 0,
+      "event_id": "pt:98318b9a143247fa96af4269249cd76acf9b3678a4aa1c3a7f5e0b03d871e432",
+      "event_type": "UPSERT",
+      "observation_id": "face-0",
+      "person_id": "P",
+      "revision": 4,
+      "source_id": "S"
+    },
+    "idempotency_key": "32c12bb32cb17d516da8b82b8e566d3edefacb04dd566b8cdc3b943591a85406",
+    "authorization_ok": true,
+    "raw": "{\"activity_id\":\"A\",\"camera_id\":\"C1\",\"camera_name\":null,\"capture_photo_url\":\"https://photos.example.test/capture.jpg\",\"captured_at_unix_ms\":1791626401000,\"clock_uncertainty_ms\":0,\"event_id\":\"pt:98318b9a143247fa96af4269249cd76acf9b3678a4aa1c3a7f5e0b03d871e432\",\"event_type\":\"UPSERT\",\"observation_id\":\"face-0\",\"person_id\":\"P\",\"revision\":4,\"source_id\":\"S\"}"
+  }
+]

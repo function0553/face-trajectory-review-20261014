@@ -1,5 +1,9 @@
 # 算法结果推送与按需查询（0.13.0）
 
+2026-10-21 当前后端接入明确采用**请求一次、响应一次**，返回人员资料、抓拍照片 URL、设备名称和时间线，不配置主动推送，详见[后端按人查询](backend-person-query.md)。下述主动推送是已有可选能力，本次不开启。
+
+2026-10-21新增[UE事件模式](ue-camera-events.md)：活动配置 `output_mode: UE_CAMERA_EVENTS` 后，已确认人脸的 `result.camera_event` 包含摄像头名称、抓拍时间及重点标记，不含坐标或路线；HOLD不会产生UE出现推送。
+
 C++17在同一SQLite事务中保存算法结果和可选持久出站消息；Go向运维配置的HTTP(S)接收URL POST JSON。后端收到算法结果JSON，不是JS或数据库文件。活动、鉴权、可信UTC及启动见[多活动合同](activity-service.md)，字段以[OpenAPI](../openapi.yaml)为准；本轮仅隔离本地验证，生产接收端与真实鉴权待联调。
 
 ## 消息与作用域

@@ -2,6 +2,7 @@
 #include "face_trajectory/activity.hpp"
 #include "face_trajectory/storage_json.hpp"
 #include <algorithm>
+#include <cctype>
 #include <limits>
 #include <set>
 #include <stdexcept>
@@ -147,7 +148,153 @@ json MonitoringStore::Person(const std::string& target) const {
     return {{"person_id",target},{"category","UNREGISTERED"},{"revision",0},{"evidence_id",nullptr}};
 }
 
-json MonitoringStore::PutPerson(const json& request, Gallery& gallery) {
+json MonitoringStore::PhotoUrl(const json& value) {
+    if(value.is_null())return nullptr;
+    if(!value.is_string())throw std::invalid_argument("photo URL must be an absolute HTTP(S) URL or null");
+    const auto url=value.get<std::string>();
+    const auto separator=url.find("://");
+    auto scheme=url.substr(0,separator);
+    std::transform(scheme.begin(),scheme.end(),scheme.begin(),[](unsigned char c){return static_cast<char>(std::tolower(c));});
+    if(url.size()>4096 || separator==std::string::npos || (scheme!="https" && scheme!="http") ||
+       std::any_of(url.begin(),url.end(),[](unsigned char c){return c<=32 || c==127 || c=='\\';}))
+        throw std::invalid_argument("photo URL must be an absolute HTTP(S) URL without whitespace, limited to 4096 bytes");
+    const auto start=separator+3,end=url.find_first_of("/?#",start);
+    const auto authority=url.substr(start,end==std::string::npos?end:end-start);
+    if(authority.empty() || authority.find('@')!=std::string::npos)
+        throw std::invalid_argument("photo URL requires a host and must not contain user credentials");
+    std::string host,port;
+    if(authority.front()=='[') {
+        const auto close=authority.find(']');
+        if(close==std::string::npos || close<=1 || authority.substr(1,close-1).find(':')==std::string::npos)
+            throw std::invalid_argument("photo URL has an invalid bracketed host");
+        host=authority.substr(0,close+1);
+        if(close+1<authority.size()) {
+            if(authority[close+1]!=':')throw std::invalid_argument("photo URL has an invalid host/port");
+            port=authority.substr(close+2);
+            if(port.empty())throw std::invalid_argument("photo URL port must be numeric");
+        }
+    } else {
+        const auto colon=authority.find(':');
+        host=authority.substr(0,colon);
+        if(colon!=std::string::npos) {
+            port=authority.substr(colon+1);
+            if(port.empty())throw std::invalid_argument("photo URL port must be numeric");
+        }
+        if(host.find_first_of("[]")!=std::string::npos)
+            throw std::invalid_argument("photo URL has an invalid host");
+    }
+    if(host.empty() || (!port.empty() && (port.size()>5 ||
+       !std::all_of(port.begin(),port.end(),[](unsigned char c){return c>='0' && c<='9';}) || std::stoul(port)>65535)))
+        throw std::invalid_argument("photo URL requires a nonempty host and a valid port");
+    return value;
+}
+
+json MonitoringStore::PersonSummary(const std::string& target) const {
+    const auto person=Person(target);
+    return {{"person_id",target},{"person_name",person.value("person_name",json(nullptr))},
+        {"profile_photo_url",person.value("profile_photo_url",json(nullptr))},{"category",person.at("category")},
+        {"is_priority",person.at("category")=="PRIORITY"},{"person_revision",person.at("revision")}};
+}
+
+json MonitoringStore::CameraTimeline(const json& request,const AssociationStore& associations,const json& context) const {
+    RequireDurable();
+    if(!ActivityStore::CameraEventsMode(context))
+        throw std::invalid_argument("SOURCE_CONFLICT: named camera timeline requires UE_CAMERA_EVENTS");
+    const auto timestamp=[](const json& object,const char* field)->std::int64_t {
+        const auto& v=object.at(field);
+        if(!v.is_number_integer() || (v.is_number_unsigned() && v.get<std::uint64_t>()>static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) ||
+           (!v.is_number_unsigned() && v.get<std::int64_t>()<0))
+            throw std::invalid_argument(std::string(field)+" must be nonnegative UTC milliseconds within int64");
+        return v.get<std::int64_t>();
+    };
+    const auto target=Required(request,"person_id");
+    const auto from=timestamp(request,"from_unix_ms"),to=timestamp(request,"to_unix_ms");
+    if(from>=to)throw std::invalid_argument("from_unix_ms must precede to_unix_ms (end exclusive)");
+    const auto limit=request.contains("limit")?Revision(request,"limit"):500;
+    if(limit<1 || limit>1000)throw std::invalid_argument("timeline limit must be within 1..1000");
+    const auto revision=associations.TargetRevision(target);
+    if(request.contains("expected_association_revision") && Revision(request,"expected_association_revision")!=revision)
+        throw std::invalid_argument("VERSION_CONFLICT: appearance timeline changed; restart pagination");
+    const auto now=timestamp(request.at("_trusted_clock"),"now_unix_ms");
+    const auto effective_from=std::max(from,now-ActivityStore::RetentionMs);
+    using Order=std::tuple<std::int64_t,std::string,std::string>;
+    const auto identity=[](const SightingEvidence& s) {
+        auto source=s.source_id,id=s.observation_id;
+        const auto parsed=json::parse(id,nullptr,false);
+        if(parsed.is_array() && parsed.size()==2 && parsed[0].is_string() && parsed[1].is_string()) {
+            source=parsed[0].get<std::string>();id=parsed[1].get<std::string>();
+        }
+        return std::make_pair(source,id);
+    };
+    const auto order=[&](const SightingEvidence& s) {
+        const auto key=identity(s);return Order{s.captured_at_unix_ms,key.first,key.second};
+    };
+    std::optional<Order> after;
+    if(request.contains("after")) {
+        const auto& c=request.at("after");
+        if(!c.is_object())throw std::invalid_argument("after must be a timeline cursor object");
+        if(!request.contains("expected_association_revision"))
+            throw std::invalid_argument("expected_association_revision is required with after");
+        after=Order{timestamp(c,"captured_at_unix_ms"),Required(c,"source_id"),Required(c,"observation_id")};
+    }
+    std::vector<SightingEvidence> sightings;
+    if(revision) {
+        try{sightings=associations.Sightings(target);}catch(const std::out_of_range&){}
+    }
+    sightings.erase(std::remove_if(sightings.begin(),sightings.end(),[&](const auto& s) {
+        return s.captured_at_unix_ms<effective_from || s.captured_at_unix_ms>=to ||
+            s.link_status!=TargetLinkStatus::Confirmed || s.time_source!=TimeSource::UtcCapture || s.clock_domain!="UTC" ||
+            s.clock_uncertainty_ms<0 || s.clock_uncertainty_ms>60000 || (after && order(s)<=*after);
+    }),sightings.end());
+    std::sort(sightings.begin(),sightings.end(),[&](const auto& a,const auto& b){return order(a)<order(b);});
+    const bool more=sightings.size()>limit;
+    if(more)sightings.resize(static_cast<std::size_t>(limit));
+    auto timeline=json::array();
+    for(const auto& s:sightings) {
+        const auto key=identity(s);
+        json name=nullptr,photo=nullptr;std::string name_source="UNAVAILABLE";
+        if(const auto saved=state_->Get("monitoring_observation",s.observation_id)) {
+            const auto record=ObservationRecord(state_,*saved,false);
+            const auto event=record.at("response").value("camera_event",json(nullptr));
+            if(event.is_object() && event.value("camera_id",std::string{})==s.camera_id &&
+               event.value("captured_at_unix_ms",std::int64_t{-1})==s.captured_at_unix_ms && event.contains("camera_name")) {
+                name=event.at("camera_name");name_source="CAPTURE_EVENT";
+                photo=event.value("capture_photo_url",json(nullptr));
+            }
+            // A HOLD receipt never acquires a camera_event when identity is
+            // later corrected. The immutable observation still owns its photo.
+            if(photo.is_null()) {
+                const auto full=ObservationRecord(state_,*saved,true);
+                const auto observation=full.value("payload",json::object()).value("observation",json::object());
+                if(observation.value("camera_id",std::string{})==s.camera_id) {
+                    try{photo=PhotoUrl(observation.value("capture_photo_url",json(nullptr)));}
+                    catch(const std::invalid_argument&){} // Legacy unvalidated metadata is unavailable.
+                }
+            }
+        }
+        if(name.is_null())for(const auto& b:context.value("bindings",json::array())) {
+            if(b.at("kind")=="CAMERA" && b.at("source_id")==key.first && b.at("device_id")==s.camera_id && b.contains("camera_name")) {
+                name=b.at("camera_name");name_source="CURRENT_ACTIVITY_BINDING";break;
+            }
+        }
+        timeline.push_back({{"camera_id",s.camera_id},{"camera_name",name},{"camera_name_source",name_source},
+            {"capture_photo_url",photo},
+            {"captured_at_unix_ms",s.captured_at_unix_ms},{"clock_uncertainty_ms",s.clock_uncertainty_ms},
+            {"source_id",key.first},{"observation_id",s.observation_id}});
+    }
+    json next=nullptr;
+    if(more && !timeline.empty()) {
+        const auto& last=timeline.back();next={{"captured_at_unix_ms",last.at("captured_at_unix_ms")},
+            {"source_id",last.at("source_id")},{"observation_id",last.at("observation_id")}};
+    }
+    const auto person=Person(target);
+    return {{"ok",true},{"person_id",target},{"category",person.at("category")},{"is_priority",person.at("category")=="PRIORITY"},
+        {"person",PersonSummary(target)},{"person_revision",person.at("revision")},{"association_revision",revision},{"from_unix_ms",from},{"to_unix_ms",to},
+        {"effective_from_unix_ms",effective_from},{"history_pruned",effective_from>from},{"order_basis","CAPTURE_TIME_NOMINAL"},
+        {"timeline",timeline},{"count",timeline.size()},{"has_more",more},{"next_after",next}};
+}
+
+json MonitoringStore::PutPerson(const json& request, Gallery& gallery, bool require_ready) {
     RequireDurable();
     const auto target = Required(request,"person_id");
     const auto category = Required(request,"category");
@@ -157,12 +304,28 @@ json MonitoringStore::PutPerson(const json& request, Gallery& gallery) {
     if (!revision || revision <= expected) throw std::invalid_argument("revision must exceed expected_revision");
     const auto evidence = Required(request,"evidence_id");
     json content = {{"person_id",target},{"category",category},{"revision",revision},{"evidence_id",evidence}};
+    if(request.contains("person_name")) {
+        const auto& name=request.at("person_name");
+        if(!name.is_null() && (!name.is_string() || name.get_ref<const std::string&>().empty() ||
+           name.get_ref<const std::string&>().size()>1024 ||
+           std::any_of(name.get_ref<const std::string&>().begin(),name.get_ref<const std::string&>().end(),[](unsigned char c){return c<32 || c==127;})))
+            throw std::invalid_argument("person_name must be nonempty text limited to 1024 bytes, or null");
+        content["person_name"]=name;
+    }
+    if(request.contains("profile_photo_url"))content["profile_photo_url"]=PhotoUrl(request.at("profile_photo_url"));
     if (request.contains("templates")) content["templates"] = request.at("templates");
+    bool ready=false;
+    state_->Scan("template",[&](const std::string& id,const std::string& text){
+        if(id.rfind("assoc-template:",0)!=0 && json::parse(text).at("person_entity_id")==target)ready=true;
+    });
     const auto history = state_->Get("monitoring_person_revision", Key(target,revision));
     if (history) {
         if (json::parse(*history) != content) throw std::invalid_argument("SOURCE_CONFLICT: person revision changed");
-        return {{"ok",true},{"person",Person(target)},{"submitted_revision",revision},{"duplicate",true},{"gallery_version",gallery.Version()}};
+        if(require_ready && !ready)throw std::invalid_argument("registration template is no longer available; submit a new revision with templates");
+        return {{"ok",true},{"person",Person(target)},{"submitted_revision",revision},{"duplicate",true},{"gallery_version",gallery.Version()},{"recognition_ready",ready}};
     }
+    if(request.contains("templates") && request.at("templates").is_array() && !request.at("templates").empty())ready=true;
+    if(require_ready && !ready)throw std::invalid_argument("registration requires a valid recognition template; profile photo URL alone is insufficient");
     if (Person(target).at("revision").get<std::uint64_t>() != expected)
         throw std::runtime_error("VERSION_CONFLICT: person expected_revision is stale");
     std::vector<FaceTemplate> templates;
@@ -193,8 +356,11 @@ json MonitoringStore::PutPerson(const json& request, Gallery& gallery) {
     for (const auto& value : templates) gallery.Add(value);
     state_->Put("monitoring_person_revision",Key(target,revision),content.dump(),target);
     content.erase("templates");
+    const auto previous=Person(target);
+    for(const auto* field:{"person_name","profile_photo_url"})
+        if(!content.contains(field) && previous.contains(field))content[field]=previous.at(field);
     state_->Put("monitoring_person",target,content.dump());
-    return {{"ok",true},{"person",content},{"submitted_revision",revision},{"duplicate",false},{"gallery_version",gallery.Version()}};
+    return {{"ok",true},{"person",content},{"submitted_revision",revision},{"duplicate",false},{"gallery_version",gallery.Version()},{"recognition_ready",ready}};
 }
 
 std::optional<json> MonitoringStore::ObservationReceipt(const json& request) const {

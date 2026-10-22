@@ -793,6 +793,9 @@ def enroll_manifest(path, extractor, store):
             template_id = 'enrolled:'+hashlib.sha256(encoded([context['activity_id'], person['person_id'], person['revision'], digest]).encode()).hexdigest()
             templates.append(dict(template_id=template_id, embedding=observation['embedding'], feature_space=extractor.feature_space))
         payload = {key: person[key] for key in ('person_id', 'category', 'revision', 'expected_revision', 'evidence_id')}
+        for field in ('person_name', 'profile_photo_url'):
+            if field in person:
+                payload[field] = person[field]
         payload.update(context, source_id=person['source_id'], event_id=person['event_id'])
         payload['templates'] = templates
         key = delivery_key('/v1/monitoring/persons', payload)

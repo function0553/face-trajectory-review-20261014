@@ -18,6 +18,32 @@ class SharedJson {
     State& state_;
     std::map<std::string,J> cache_;
     std::map<std::string,J> values_;
+    // ---- 跨操作备忘（同一 State 连接内共享，随 State::ObjectEpoch() 失效）----
+    // 只备忘元素数 >= kMemoMinItems 的序列，主要是相机图的约 1000 条边；
+    // 小序列重新读取本来就便宜，不值得占内存。每类最多 kMemoCapacity 条，先进先出淘汰。
+    // 正确性只依赖"对象只增不改"：Intern 只插入不存在的键，删除/回滚都会使代号变化。
+    static constexpr std::size_t kMemoMinItems = 32;
+    static constexpr std::size_t kMemoCapacity = 8;
+    struct Memo {
+        std::uint64_t epoch = 0;
+        // 作用域 + AVL 根引用 → 该序列真实 Decode 的结果（只由 Decode 写入，类型与读库一致）
+        std::map<std::string,J> decoded; std::vector<std::string> decoded_order;
+        // 作用域 + 是否按观测键 + 原值 dump → 从零 Build 得到的根引用（dump 相同才命中）
+        std::map<std::string,std::string> built; std::vector<std::string> built_order;
+    };
+    Memo& M() {
+        auto& slot=state_.SharedJsonMemo();
+        if(!slot) slot=std::make_shared<Memo>();
+        auto& memo=*static_cast<Memo*>(slot.get());
+        if(memo.epoch!=state_.ObjectEpoch()) { memo=Memo{}; memo.epoch=state_.ObjectEpoch(); }
+        return memo;
+    }
+    std::string MemoKey(const std::string& text) const { return state_.PhysicalNamespace("object")+'\x1f'+text; }
+    template<class V> static void Remember(std::map<std::string,V>& map,std::vector<std::string>& order,const std::string& key,const V& value) {
+        if(!map.emplace(key,value).second) return;
+        order.push_back(key);
+        if(order.size()>kMemoCapacity) { map.erase(order.front()); order.erase(order.begin()); }
+    }
     J Node(const std::string& ref) {
         if(ref.empty()) return {{"h",0}};
         auto found=cache_.find(ref);
@@ -116,6 +142,13 @@ public:
         if(value.is_array()) {
             if(previous && previous->is_object() && previous->contains("$avl") && previous->at("keyed")==evidence) {
                 auto root=previous->at("$avl").get<std::string>();
+                // 快速路径：上一版序列解码后与新值相等（逐元素 json ==，与下面差分里的 != 判据相同），
+                // 差分路径不会 Put、也不会 Erase，根必然不变，直接返回同样的结果，省掉逐边 Find。
+                if(value.size()>=kMemoMinItems && !root.empty()) {
+                    auto& memo=M(); const auto found=memo.decoded.find(MemoKey(root));
+                    if(found!=memo.decoded.end() && found->second==value)
+                        return {{"$avl",root},{"count",value.size()},{"keyed",evidence}};
+                }
                 std::set<std::string> removed; Keys(root,removed);
                 for(std::size_t i=0;i<value.size();++i) {
                     const auto key=evidence?value[i].at("observation_id").get<std::string>():Ordinal(i);
@@ -126,11 +159,24 @@ public:
                 for(const auto& key:removed) root=Erase(root,key);
                 return {{"$avl",root},{"count",value.size()},{"keyed",evidence}};
             }
+            // 快速路径：完全相同的序列（dump 逐字节相同，区分 1 与 1.0、0.0 与 -0.0）从零构建过，
+            // 而对象库只增不改，再次 Build 的每个 Intern 都会命中同一键，根必然相同。
+            std::string built_key;
+            if(value.size()>=kMemoMinItems) {
+                try { built_key=MemoKey(std::string(evidence?"K":"O")+value.dump()); }
+                catch(const J::exception&) { built_key.clear(); }   // 非法 UTF-8：交给原路径按原样报错
+                if(!built_key.empty()) {
+                    auto& memo=M(); const auto found=memo.built.find(built_key);
+                    if(found!=memo.built.end()) return {{"$avl",found->second},{"count",value.size()},{"keyed",evidence}};
+                }
+            }
             std::vector<std::pair<std::string,J>> items; items.reserve(value.size());
             for(std::size_t i=0;i<value.size();++i)
                 items.emplace_back(evidence?value[i].at("observation_id").get<std::string>():Ordinal(i),Encode(value[i]));
             if(evidence) std::sort(items.begin(),items.end(),[](const auto& a,const auto& b){return a.first<b.first;});
-            return {{"$avl",Build(items,0,items.size())},{"count",items.size()},{"keyed",evidence}};
+            auto root=Build(items,0,items.size());
+            if(!built_key.empty()) { auto& memo=M(); Remember(memo.built,memo.built_order,built_key,root); }
+            return {{"$avl",root},{"count",items.size()},{"keyed",evidence}};
         }
         if(value.is_object()) { J result=J::object();
             for(auto it=value.begin();it!=value.end();++it) result[it.key()]=Encode(it.value(),it.key()=="evidence",
@@ -141,8 +187,22 @@ public:
     }
     J Decode(const J& value) {
         if(value.is_object() && value.contains("$avl")) {
-            J result=J::array(); Values(value.at("$avl"),result);
+            const auto root=value.at("$avl").get<std::string>();
+            // 只在 count 为合法无符号数且足够大时备忘；其余情况完全走原路径（含原有的报错顺序）。
+            const auto count=value.find("count");
+            std::string key;
+            if(!root.empty() && count!=value.end() && count->is_number_unsigned() &&
+               count->get<std::size_t>()>=kMemoMinItems) {
+                key=MemoKey(root);
+                auto& memo=M(); const auto found=memo.decoded.find(key);
+                if(found!=memo.decoded.end()) {
+                    if(found->second.size()!=Count(value)) throw std::runtime_error("shared trajectory sequence count mismatch");
+                    return found->second;
+                }
+            }
+            J result=J::array(); Values(root,result);
             if(result.size()!=Count(value)) throw std::runtime_error("shared trajectory sequence count mismatch");
+            if(!key.empty()) { auto& memo=M(); Remember(memo.decoded,memo.decoded_order,key,result); }
             return result;
         }
         if(value.is_object()) { J result=J::object(); for(auto it=value.begin();it!=value.end();++it) result[it.key()]=Decode(it.value()); return result; }

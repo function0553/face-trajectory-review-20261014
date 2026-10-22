@@ -363,18 +363,16 @@ AssociationResult AssociationStore::Observe(FaceObservation observation, const A
         if (!reconsider || previous->result.target_id) return previous->result;
     }
     std::optional<std::uint64_t> append_previous_target_revision;
-    // Search all persons in the feature space; a TopK cutoff can hide the runner-up
-    // after camera filtering. The gallery also validates the contract and vector.
+    // Decisions consider every person in the feature space; a TopK cutoff can hide the
+    // runner-up after camera filtering. The gallery also validates the contract and vector.
     Gallery::ValidateQuery(o.feature_space,o.embedding);
-    const auto hits = UsableTime(o,policy) && UsableFace(o,policy)
-        ? gallery_.Search(o.feature_space, o.embedding, std::numeric_limits<std::size_t>::max())
-        : std::vector<PersonHit>{};
     Record next{std::move(observation), {}};
     auto& result = next.result;
     result.observation_id = next.observation.observation_id;
     result.policy_id = policy.policy_id;
     result.graph_version = graph.version;
     const auto& current = next.observation;
+    std::vector<PersonHit> hits;
     if (!UsableTime(current, policy)) {
         result.decision = "UNASSIGNED";
         result.reason = "capture time is not qualified UTC evidence";
@@ -383,22 +381,37 @@ AssociationResult AssociationStore::Observe(FaceObservation observation, const A
         result.reason = "face does not pass configured detection and size gates";
     } else {
         std::vector<AssociationCandidate> eligible;
-        for (const auto& hit : hits) {
-            // Sorted lower scores cannot alter a decision once both feasible
-            // leaders are known and the visual Top8 has been classified.
-            if (result.candidates.size()>=8 && eligible.size()>=2) break;
-            if (result.candidates.size()>=8 && eligible.empty() && hit.similarity<policy.new_target_threshold) break;
-            if(result.candidates.size()>=8 && eligible.size()==1 &&
-                (eligible[0].hit.similarity<policy.match_threshold ||
-                 eligible[0].hit.similarity-hit.similarity>=policy.min_margin)) {
-                result.remaining_similarity_upper_bound=hit.similarity;
-                break;
+        // 返回 true 表示按下列规则提前结束；false 表示把 hits 全部看完了。
+        const auto classify = [&]() {
+            for (const auto& hit : hits) {
+                // Sorted lower scores cannot alter a decision once both feasible
+                // leaders are known and the visual Top8 has been classified.
+                if (result.candidates.size()>=8 && eligible.size()>=2) return true;
+                if (result.candidates.size()>=8 && eligible.empty() && hit.similarity<policy.new_target_threshold) return true;
+                if(result.candidates.size()>=8 && eligible.size()==1 &&
+                    (eligible[0].hit.similarity<policy.match_threshold ||
+                     eligible[0].hit.similarity-hit.similarity>=policy.min_margin)) {
+                    result.remaining_similarity_upper_bound=hit.similarity;
+                    return true;
+                }
+                const auto compatibility = Compatible(current, hit.person_entity_id, policy, graph);
+                AssociationCandidate candidate{hit, compatibility};
+                if (result.candidates.size() < 8) result.candidates.push_back(candidate);
+                if (compatibility != CameraCompatibility::Conflict)
+                    eligible.push_back(candidate);
             }
-            const auto compatibility = Compatible(current, hit.person_entity_id, policy, graph);
-            AssociationCandidate candidate{hit, compatibility};
-            if (result.candidates.size() < 8) result.candidates.push_back(candidate);
-            if (compatibility != CameraCompatibility::Conflict)
-                eligible.push_back(candidate);
+            return false;
+        };
+        // 先取前 kFirstPage 名（与全量排序的前缀完全相同）。绝大多数抓拍在前 8～10 名内就能判定；
+        // 只有这一页看完仍未判定、且可能还有更多人时，才退回全量检索并从头重判，结论与原实现一致。
+        constexpr std::size_t kFirstPage = 64;
+        hits = gallery_.Search(current.feature_space, current.embedding, kFirstPage);
+        if (!classify() && hits.size() == kFirstPage) {
+            result.candidates.clear();
+            eligible.clear();
+            result.remaining_similarity_upper_bound.reset();
+            hits = gallery_.Search(current.feature_space, current.embedding, std::numeric_limits<std::size_t>::max());
+            classify();
         }
         // Keep the visual Top8 and the decision's feasible winner/runner-up.
         for (std::size_t i = 0; i < std::min<std::size_t>(2, eligible.size()); ++i) {
@@ -487,6 +500,26 @@ AssociationResult AssociationStore::Correct(const std::string& observation_id, c
     record.result.version = ++version_;
     SaveRecord(record);
     return record.result;
+}
+
+AssociationResult AssociationStore::Retract(const std::string& observation_id, const std::string& evidence) {
+    last_append_.reset();
+    if(evidence.empty())throw std::invalid_argument("retraction evidence is required");
+    auto record=LoadRecord(observation_id);
+    if(!record)throw std::out_of_range("observation not found");
+    if(!record->result.target_id && record->result.decision=="RETRACTED")return record->result;
+    auto& result=record->result;
+    result.affected_target_ids.clear();
+    if(result.target_id) {
+        const auto old=*result.target_id;
+        ForgetTemplate(observation_id,old);
+        if(!state_)target_observations_[old].erase(observation_id);
+        result.affected_target_ids.push_back(old);
+    }
+    result.target_id.reset();result.sighting.reset();result.template_added=false;
+    result.decision="RETRACTED";result.reason="external verified retraction: "+evidence;
+    result.version=++version_;SaveRecord(*record);
+    return result;
 }
 
 std::vector<SightingEvidence> AssociationStore::Sightings(const std::string& target) const {

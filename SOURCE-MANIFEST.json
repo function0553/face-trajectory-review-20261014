@@ -1,11 +1,12 @@
 {
-  "date": "2026-10-14",
-  "timezone": "Asia/Singapore",
-  "scope": "Locally repaired P1/P2 source, pinned vendor, synthetic examples and compact test evidence",
-  "original_git_history_available": false,
-  "production_accessed": false,
-  "algorithm_source_changed": true,
+  "date": "2026-10-22",
+  "timezone": "Asia/Shanghai",
+  "scope": "Current P2 source, related P1 source, backend interface examples and selected synthetic evidence",
   "local_validation": "PASS",
+  "production_accessed": false,
+  "private_runtime_data_exported": false,
+  "selected_source_files": 250,
+  "source_payloads_byte_identical": true,
   "files": [
     {
       "path": ".gitattributes",
@@ -89,13 +90,13 @@
     },
     {
       "path": "face-recognition-engine/HANDOFF.md",
-      "bytes": 726,
-      "sha256": "8600e94e0af17e3c932d6590a196292fd05d3bd38aed6df608aaff4ea5f87844"
+      "bytes": 90637,
+      "sha256": "30b11bf59ad9da349827a83256d6a42233bf44cd1ebd72c69a7408b82a8595a5"
     },
     {
       "path": "face-recognition-engine/pyproject.toml",
-      "bytes": 469,
-      "sha256": "10fa9fb7435d894303515a03a05aaa72926e85ba78c070fab9258ff6838c0912"
+      "bytes": 502,
+      "sha256": "aa3491d530599d14ef1700b9ef306cc54061f71639250e2fa3cd9c8aa0b94ce5"
     },
     {
       "path": "face-recognition-engine/README.md",
@@ -106,6 +107,11 @@
       "path": "face-recognition-engine/requirements.txt",
       "bytes": 19,
       "sha256": "fee3005c8202ec711207f0a8430ecdee69a8b33126b9adfcb925f10a0eada770"
+    },
+    {
+      "path": "face-recognition-engine/scripts/run_dual_3090_workers.py",
+      "bytes": 7104,
+      "sha256": "a489e014df5b595617a4ed7e28fbb9b939d0c7eb96f23c1da34625787eeb7346"
     },
     {
       "path": "face-recognition-engine/src/face_engine/__init__.py",
@@ -153,6 +159,11 @@
       "sha256": "00572ed6e6e7e6aab21522e621645a8a345d92bbbc05cd6839587114db00f322"
     },
     {
+      "path": "face-recognition-engine/src/face_engine/camera_table.py",
+      "bytes": 7388,
+      "sha256": "f5208d9514d7637dfde4d2b44b9d2e8529f5035c4594e0e10aa95ecc5cf407b5"
+    },
+    {
       "path": "face-recognition-engine/src/face_engine/capacity.py",
       "bytes": 6072,
       "sha256": "bf0748b6e60e534a076656c838dd457f60a01822a7db34e032f1f5092be5272a"
@@ -164,8 +175,8 @@
     },
     {
       "path": "face-recognition-engine/src/face_engine/config.py",
-      "bytes": 1634,
-      "sha256": "76b7ed575c9cfc886d434841500933a986a6ed334a85ca642ed41a2da95b93c9"
+      "bytes": 1898,
+      "sha256": "a8efa48ccb2cf41afad58e72f16cc731c9e7a26a2480194f02efef6fa819b6af"
     },
     {
       "path": "face-recognition-engine/src/face_engine/detector/__init__.py",
@@ -209,13 +220,13 @@
     },
     {
       "path": "face-recognition-engine/src/face_engine/monitoring_service.py",
-      "bytes": 46270,
-      "sha256": "34c079a31cce25ed85264ea2a3b54968f73efdb2762a3fa0e54e6a68ed7ddb73"
+      "bytes": 46664,
+      "sha256": "fa03780723fd37182031ab2929ee95511a1b74baaa770acbe4bf6a449994b2da"
     },
     {
       "path": "face-recognition-engine/src/face_engine/onnx_backend.py",
-      "bytes": 3327,
-      "sha256": "e8bc52287529c313f55bda3524fe9b28eed1510651305c551b083a962ca0eff5"
+      "bytes": 5184,
+      "sha256": "83865e962c1a50665967bc1e2f481c11c8789bf0004b02bf1470cf198d48581c"
     },
     {
       "path": "face-recognition-engine/src/face_engine/pipeline/__init__.py",
@@ -259,13 +270,23 @@
     },
     {
       "path": "face-recognition-engine/src/face_engine/trajectory_bridge.py",
-      "bytes": 29368,
-      "sha256": "deff83472e89c833fe356f7ee24723e51a2dc84309057d940ffd759635f9923c"
+      "bytes": 29736,
+      "sha256": "239de00bc21b3983f9b00a8b6c780d25c96942cb22156f019a47e854fdcf287e"
+    },
+    {
+      "path": "face-recognition-engine/tests/test_camera_table.py",
+      "bytes": 3598,
+      "sha256": "a1ec9a487f60b908f6d88ddff73f7dbe4e64cfe28e67914ce62803d2be62d42b"
     },
     {
       "path": "face-recognition-engine/tests/test_delivery_isolation.py",
       "bytes": 5320,
       "sha256": "befa139497cb492359c15b374545aca709e4820e99d592232ac172e117f83b84"
+    },
+    {
+      "path": "face-recognition-engine/tests/test_photo_metadata.py",
+      "bytes": 3647,
+      "sha256": "1688b4e86b2a9c68fed24dc2349be29c19ab80c79630682f3592b1873d5e9cf4"
     },
     {
       "path": "face-trajectory/.gitignore",
@@ -284,13 +305,13 @@
     },
     {
       "path": "face-trajectory/collection/build_point_graph.py",
-      "bytes": 17885,
-      "sha256": "79c3eb3a7309c445a6fd9cc1d7994dc7dbca3419967650958aef2a9d628a3fc5"
+      "bytes": 18494,
+      "sha256": "ce87a023965e6272f2423481125080083f3b46c58bae418f2b54d9347aac7371"
     },
     {
       "path": "face-trajectory/collection/check_model_coverage.mjs",
-      "bytes": 14193,
-      "sha256": "9d20339105203a020c5d44e18f4faaf42083d2d4a856e6d846433e6dacb2d03d"
+      "bytes": 14321,
+      "sha256": "63c7ba35f92fc21c1d09e337c37013fe974168a8400e381a23bde5620127286c"
     },
     {
       "path": "face-trajectory/collection/import_published_scene.py",
@@ -339,18 +360,18 @@
     },
     {
       "path": "face-trajectory/cpp/CMakeLists.txt",
-      "bytes": 1683,
-      "sha256": "09c0b9b94bdca9af0ff2fbc1a0a8965566601d914411b6700ba541c50a9f0b56"
+      "bytes": 1906,
+      "sha256": "bd9068634d66c270cc1898c3fd924a571f7dc5ba298b03f6be7f146a1b743c0d"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/activity.hpp",
-      "bytes": 1113,
-      "sha256": "eaebbf1ecf10f6128a73010f25cb90885bbe967d4ebaad8da1d1c2609247d46b"
+      "bytes": 1321,
+      "sha256": "26e63ecc677a98f20cad43a436affbddc7fa4cad4cd3a95fe8a8a875bab77e7f"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/association.hpp",
-      "bytes": 5533,
-      "sha256": "ea9f3af672e8e4e16bb5db3b43ff9a9191c469e7f01b5f18fcea8618451cdf4d"
+      "bytes": 5631,
+      "sha256": "1cfef2fa73a59d792ebb7212974fc9c1914e2c5ea623a6dca5a34d3c12a37e58"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/clock_adapter.hpp",
@@ -369,8 +390,8 @@
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/monitoring.hpp",
-      "bytes": 1518,
-      "sha256": "28aad8f9d924047e6d76bb7279378a284501d94908340e725132d274dccc46c7"
+      "bytes": 1833,
+      "sha256": "eb185f8b6ffb6c72d10fbbf199356914825d11cd44a49e4738eba9442c02a688"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/p1_retention.hpp",
@@ -381,6 +402,11 @@
       "path": "face-trajectory/cpp/include/face_trajectory/path_utf8.hpp",
       "bytes": 235,
       "sha256": "909ac139615f858f49989d7c8224c4f8d27f42ed7ad6ef8194fe544caf1cd92d"
+    },
+    {
+      "path": "face-trajectory/cpp/include/face_trajectory/person_track.hpp",
+      "bytes": 442,
+      "sha256": "5aab133f95fd9c758a7a4bb1a0ca7215a2be5d8d4f0d8fe7714aa0da1b73987e"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/point_trajectory.hpp",
@@ -399,8 +425,8 @@
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/shared_json.hpp",
-      "bytes": 9362,
-      "sha256": "a4651cabe06509e3fafc1be1e66213d677bf4418c1151f4067cadae3a3e9ed82"
+      "bytes": 13525,
+      "sha256": "33a934dd98cf97e6567785b839f9a2f35b33510e5dbb1455f654d84a445f14aa"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/site_context.hpp",
@@ -409,8 +435,8 @@
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/state.hpp",
-      "bytes": 3879,
-      "sha256": "1583f81cfb2d8e53dc2097288d739d7c49e750de25ecc3df21f0a6c3bfcadb65"
+      "bytes": 4994,
+      "sha256": "3baa97e5a00c3d3ca07790b6d9012e3c25ec6eb882ced0f4adca37cec65ff569"
     },
     {
       "path": "face-trajectory/cpp/include/face_trajectory/storage_json.hpp",
@@ -434,13 +460,13 @@
     },
     {
       "path": "face-trajectory/cpp/src/activity.cpp",
-      "bytes": 19875,
-      "sha256": "717d48c041357eb1e226b0a2d8d54e853911e178baddd185e69c4928af274395"
+      "bytes": 21830,
+      "sha256": "e2e03e542ae52bb3ca23f2dc0471ed733bafff1b3f9fc98a40510e79bd423028"
     },
     {
       "path": "face-trajectory/cpp/src/association.cpp",
-      "bytes": 29844,
-      "sha256": "12dedfc15713bf04d9583334662c7c851e6f927ab880f77a74018b88271854c6"
+      "bytes": 31684,
+      "sha256": "60a870e6d549b7cd6253149e27951f722a3475d6f7be8b59e52de4c7e9dee16b"
     },
     {
       "path": "face-trajectory/cpp/src/clock_adapter.cpp",
@@ -449,8 +475,8 @@
     },
     {
       "path": "face-trajectory/cpp/src/gallery.cpp",
-      "bytes": 10050,
-      "sha256": "32335d7fa026fc41f639eacc3f451bdd46e89f19e1c3674ac231694ec06d167a"
+      "bytes": 12499,
+      "sha256": "487dbb30414549f49bf8f51582f57a780258ad1bdf62a27dcb1a90c7e9f0013d"
     },
     {
       "path": "face-trajectory/cpp/src/geometry.cpp",
@@ -459,13 +485,18 @@
     },
     {
       "path": "face-trajectory/cpp/src/monitoring.cpp",
-      "bytes": 24170,
-      "sha256": "0e9fa3b6a5a06fc9589ab50e7240fc145cf0c77226b2045d473ec44bb97fea02"
+      "bytes": 40283,
+      "sha256": "76ff907bd6dda788a1fcd876437cf898d9c1bc4d3312b7da438c5ee32fa4f4b5"
     },
     {
       "path": "face-trajectory/cpp/src/p1_retention.cpp",
       "bytes": 25099,
       "sha256": "d10d3727545a24442d44bb1d60c33dfedc4ff6def77400c14286d3fceef4d267"
+    },
+    {
+      "path": "face-trajectory/cpp/src/person_track.cpp",
+      "bytes": 3342,
+      "sha256": "6a196a71b98d5865a8dbcb4b91a968dd41e5a0a83d421317cc55528e5c59beae"
     },
     {
       "path": "face-trajectory/cpp/src/point_trajectory.cpp",
@@ -479,8 +510,8 @@
     },
     {
       "path": "face-trajectory/cpp/src/retention.cpp",
-      "bytes": 17161,
-      "sha256": "d49fe87e626925688dc53b2dfe233d3ec18c37d91353ddab236ee12b377d7628"
+      "bytes": 17901,
+      "sha256": "e73b7e8b28b7e128fa2cfffc06a21b1525dd87d1b59486eed0dfd1865dc75865"
     },
     {
       "path": "face-trajectory/cpp/src/site_context.cpp",
@@ -489,8 +520,8 @@
     },
     {
       "path": "face-trajectory/cpp/src/state.cpp",
-      "bytes": 13893,
-      "sha256": "1313cec15e69331e95c5767a806d9d98a9b8e3c8c4ad6671b2701b8bd15c56b6"
+      "bytes": 19438,
+      "sha256": "2ae2f726ba4c9a8d4673701a955354c65f211720750b91825836407ddcb5b366"
     },
     {
       "path": "face-trajectory/cpp/src/time_constraints.cpp",
@@ -499,8 +530,8 @@
     },
     {
       "path": "face-trajectory/cpp/src/trajectory.cpp",
-      "bytes": 54837,
-      "sha256": "72a7ff3ed7ea3031bf4a50cc988b3959d86b031308e77077d73e53419f8dcfac"
+      "bytes": 55075,
+      "sha256": "21857f3af5c86d6ca2e3966457d7b95a91c35391270904000b6204b65a574d3d"
     },
     {
       "path": "face-trajectory/cpp/src/visits.cpp",
@@ -509,8 +540,8 @@
     },
     {
       "path": "face-trajectory/cpp/src/worker.cpp",
-      "bytes": 72307,
-      "sha256": "7f7bc0a2f9af0dd0298cf8199d7936db5823e941b8d0067df82439db5d48eaa5"
+      "bytes": 76746,
+      "sha256": "07e6919c62546a2c6eec3113d2ab9a18f7da917f2bc2ee4bd8dd540a6c8dd7e1"
     },
     {
       "path": "face-trajectory/cpp/tests/point_connections_test.cpp",
@@ -568,9 +599,74 @@
       "sha256": "a95f32e4c875fc32cf383fa79c93524d3cf15037f8f7502381c28ab70b15725b"
     },
     {
+      "path": "face-trajectory/docs/backend-integration-v1/examples/01-activity.json",
+      "bytes": 228,
+      "sha256": "7cab64eb5f0e7990f59064eb580be816f687c734cdbcc8e0a7bcc64493750198"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/examples/02-bindings.json",
+      "bytes": 326,
+      "sha256": "d84f6e59c62559552f02ba33bfaa6c2fe55036b0186938910c1df982e8521332"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/examples/03-monitoring.json",
+      "bytes": 168,
+      "sha256": "c4e3e2547450e3d08533e0fd57b31efc713600ab074c3ff2b2c984281fe81f0b"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/examples/04-person.synthetic.json",
+      "bytes": 8139,
+      "sha256": "0ce80d465a6cd0309173c18e54016cc0f4e56e114962a9185fbfb86a8a2de2e0"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/examples/05-track-upsert.json",
+      "bytes": 428,
+      "sha256": "b068ee98a802cb2bb5fc287f314abe3e0903ae9151f5084b2cf703cadcaf07f9"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/examples/06-track-correction.json",
+      "bytes": 428,
+      "sha256": "8d5c77b6ad9bd3544cb9195632d2bc3ea55a690d33e4d05ea59d298fc63814dd"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/examples/07-track-retract.json",
+      "bytes": 421,
+      "sha256": "30f948cca6af0cfacec5cd61b7ef8ce54404b1d36a19c6eabc86fe4c9c74af4c"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/examples/08-receipt-success.json",
+      "bytes": 80,
+      "sha256": "86bd3076c6bcfd0fa6801a10422462d7bdac8b3684a418865ba795f89002b1c8"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/examples/09-receipt-conflict.json",
+      "bytes": 104,
+      "sha256": "df6e17b607be618b4d59f2632f3d080b86c7ccd920c585524b9abe64b7921ebb"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/requests.http",
+      "bytes": 1811,
+      "sha256": "41e5469db8b22f35e852cf3f5c1399a780432936bd6efb10d23548cdcea36353"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/先读我.txt",
+      "bytes": 470,
+      "sha256": "7d05e8b54728093589de6afbcaa0597961fb3a52cf253b04b211d3024760c107"
+    },
+    {
+      "path": "face-trajectory/docs/backend-integration-v1/时空算法-后端接口对接说明.md",
+      "bytes": 13659,
+      "sha256": "ad2f4580fddaa7566397e117a872eb576c04eaa4ce71b1eaac5bc6554563c0b7"
+    },
+    {
+      "path": "face-trajectory/docs/backend-person-query.md",
+      "bytes": 6257,
+      "sha256": "05a00388f2b29ae754ec98f39613432ed72bbc05e26f51d57093de59d3d9ed0b"
+    },
+    {
       "path": "face-trajectory/docs/backend-push.md",
-      "bytes": 5967,
-      "sha256": "99adea877af1193f4dc0c4606074e15a4173e3466b0d918932f152e51a5123e1"
+      "bytes": 6514,
+      "sha256": "98700470262ac0212ea95acf13ca64307c8087e09cd9e7fcace89f62085a8895"
     },
     {
       "path": "face-trajectory/docs/clock-adapter.md",
@@ -599,8 +695,8 @@
     },
     {
       "path": "face-trajectory/docs/monitoring.md",
-      "bytes": 14976,
-      "sha256": "f65d95759918f9d04db135251056b9e6c2380287f00c3014dcff7ed25aec85c1"
+      "bytes": 15220,
+      "sha256": "370fea3bebcb63bdf6303f67553cebb7dfae7143077dc1d860a2d15973e4fe00"
     },
     {
       "path": "face-trajectory/docs/open-source-reuse-audit-2026-10-12.md",
@@ -611,6 +707,16 @@
       "path": "face-trajectory/docs/open-source-security-comparison-2026-10-12.md",
       "bytes": 13449,
       "sha256": "9d3b2a33045ffaa90808e7f320852affc03a22c8b74474a035495cb70a6151ec"
+    },
+    {
+      "path": "face-trajectory/docs/person-track-platform-v1.md",
+      "bytes": 9422,
+      "sha256": "1b36919703f494cecf841a8ab8b22fdb3acef076f8180d52385c33b014f98dbd"
+    },
+    {
+      "path": "face-trajectory/docs/plans/2026-10-22-person-track-v1.md",
+      "bytes": 2020,
+      "sha256": "66895651502da3fbdde1beb7be844b2aa62d4cc3798ad38650821e9649c50db9"
     },
     {
       "path": "face-trajectory/docs/point-connections.md",
@@ -639,8 +745,8 @@
     },
     {
       "path": "face-trajectory/docs/README.md",
-      "bytes": 5408,
-      "sha256": "ab0c6dd163cee377557fdcef42a7f244289845dc678019f3cc025484e3a83471"
+      "bytes": 5718,
+      "sha256": "11a0630f8885bf437d7199ce27f89aaf463a0fae0e393ee61aa58e1023d495a1"
     },
     {
       "path": "face-trajectory/docs/repair-topology-2026-10-14.md",
@@ -649,8 +755,13 @@
     },
     {
       "path": "face-trajectory/docs/runtime-and-geometry.md",
-      "bytes": 9411,
-      "sha256": "35e46e134532bbf66dd2896e1149579b0fa7995609118e968e079987085e6f3a"
+      "bytes": 10331,
+      "sha256": "7658d0d4e811c464d5a7defda8c8145439c4bdffd39f36d3b2947e375bce8092"
+    },
+    {
+      "path": "face-trajectory/docs/ue-camera-events.md",
+      "bytes": 8932,
+      "sha256": "a56f16c9b9b49a5ff3323d84743d58f78eb72f3343a7db654bb8fa9bf575d96a"
     },
     {
       "path": "face-trajectory/docs/validate_activity_contract.py",
@@ -798,6 +909,91 @@
       "sha256": "4f665ba26738cb12c1417b0f94752a3715a55aa34f3addb5ea3fc8370f3698c6"
     },
     {
+      "path": "face-trajectory/evidence/2026-10-21-ue-camera-events/green-02/calls.json",
+      "bytes": 221632,
+      "sha256": "59f55554e02a12740c66b8517c98b5fc3b0cb9b4bbf31770c14cbc7faafe1803"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/ctest.txt",
+      "bytes": 350,
+      "sha256": "04bb9765d8050bcba811297993f83ab2117c133891fef8753b6a56dde446d55d"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/go-test.txt",
+      "bytes": 274,
+      "sha256": "1b847d485778a12b6bf8c5f6ff2c6ac2bae8268060aa5bbbbd813e355f2a8c0b"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/green-final/calls.json",
+      "bytes": 262898,
+      "sha256": "f11be0374da686ce71d3810fe7503ea98c2d974ac664cc2c693b42548d5a907f"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/green-final/example-event.json",
+      "bytes": 414,
+      "sha256": "220ba794d63b060faf0c3fbdf47725fa3b1bf92ef41f6622af85457f0b1fe622"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/green-final/summary.json",
+      "bytes": 2524,
+      "sha256": "9f6eefa5e08fa9a58959bac1d5a8308622ce0f9d2556681d17bc94de69699405"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/http-verified/received.json",
+      "bytes": 7090,
+      "sha256": "8ba5b998583cb191fe358172d9b58e47290725235c852a20301c16213ca3b403"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/http-verified/summary.json",
+      "bytes": 330,
+      "sha256": "34e2d16da3bbabe94086ce93b02fd34860b72d3ce889876ca7d8879a8a68059c"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/legacy-activity-final/summary.json",
+      "bytes": 3568,
+      "sha256": "ada0b1a118673004935595d4cc8c8f6fb5938ad2713fb025626d9184204b2cde"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/legacy-camera-final/summary.json",
+      "bytes": 2157,
+      "sha256": "98ecd92b7d4956a78c10734c12a29392bb9faa575f8e77d602648f970bba6b46"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/legacy-http-final/summary.json",
+      "bytes": 331,
+      "sha256": "ad418e51d4cf690a64b28dd27899089a1245cc5c8419990f6d91c2d085537dc8"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/legacy-photos-final/summary.json",
+      "bytes": 2477,
+      "sha256": "549251f198a8deca0d694141b179378344afcb1aee173d22fda4dcf91788062c"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/legacy-retention-final/summary.json",
+      "bytes": 155573,
+      "sha256": "e9aef35ee128174cc4cea7049b62ebb216467dd6c48f9daeb3f6dd308e7839e1"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/legacy-timeline-final/summary.json",
+      "bytes": 2119,
+      "sha256": "53e6b87fff414716887e5386d8084ee1a618a33670e5d71503484fa570420dfe"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/README.md",
+      "bytes": 4064,
+      "sha256": "bd03ad7ad3a34523cd67b2b8ad1fd570ffba90d884a2b26b4468b28baf13e254"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/sample-extraction-negative.log",
+      "bytes": 4572,
+      "sha256": "b9615fb3c652643d9340b5dcc4d2d0aafd62816b1d092deffeea6e220fc62e6a"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-22-person-track-v1/verification-summary.json",
+      "bytes": 1147,
+      "sha256": "4f710ffb2aae53264eb093ddb53baa2e507d2ffccbb38dc953de1f7537290733"
+    },
+    {
       "path": "face-trajectory/go/cmd/face-trajectoryd/main.go",
       "bytes": 5968,
       "sha256": "372037ea8e00445a3f52b07cea3955596e442eb2d5029fb45767c9053ab684bf"
@@ -824,13 +1020,13 @@
     },
     {
       "path": "face-trajectory/go/internal/api/server.go",
-      "bytes": 9946,
-      "sha256": "2f6315f0a54c798b6edd1dd586ac2e5b2c35954cca8b3d2965e980a5fbc7042f"
+      "bytes": 10028,
+      "sha256": "f6d2e173f4cbaabb9fed73dfb9e1c8d61c00b3ae45da45ad85875d07232600cd"
     },
     {
       "path": "face-trajectory/go/internal/api/server_test.go",
-      "bytes": 11323,
-      "sha256": "35d842640c993a84379667449ec9b17dc891c3faa0a1b66be2ca6f3387ae7a4d"
+      "bytes": 11379,
+      "sha256": "32a61cc07f031a584c5648c0677039ce7c203d959af9f9afdb17ff7f0ee9d3b9"
     },
     {
       "path": "face-trajectory/go/internal/api/subscriptions.go",
@@ -838,9 +1034,14 @@
       "sha256": "44574cdc77cf71f2cabcefe59bf73240643009e30d00f4aefdee22b659edd2fa"
     },
     {
+      "path": "face-trajectory/go/internal/push/person_track_test.go",
+      "bytes": 3555,
+      "sha256": "e9951f9278dee0ab287b7255e47123d21ff342ff0fbf643f5c8d7bce2b625325"
+    },
+    {
       "path": "face-trajectory/go/internal/push/sender.go",
-      "bytes": 8667,
-      "sha256": "cf76a7803522a15618fd7afd785d83a70a69a1875975f989761b7bc55b0a7fcd"
+      "bytes": 9890,
+      "sha256": "0334587e461284fc86f9e0a2adc9f60c111bbce3657e54d87417c4cdd8963d10"
     },
     {
       "path": "face-trajectory/go/internal/push/sender_test.go",
@@ -1069,18 +1270,18 @@
     },
     {
       "path": "face-trajectory/HANDOFF.md",
-      "bytes": 106476,
-      "sha256": "fd8544fee826d8317c9948757d895750323a96e083125ad4ef20a3c0aa6e44a8"
+      "bytes": 125170,
+      "sha256": "1ca47405f05cdc1f559e16ea880a2a8146f910478d89730ae1e8d72ca322acf7"
     },
     {
       "path": "face-trajectory/openapi.yaml",
-      "bytes": 184869,
-      "sha256": "2985b01452e7d37f23f08bb6aad049c94c3c6426e99425fcae9c43a9b9bb6032"
+      "bytes": 202213,
+      "sha256": "5a7e0aaf7d858fd43de5216072db32eacca8f55e2142c648bf36702ef498b89c"
     },
     {
       "path": "face-trajectory/README.md",
-      "bytes": 4816,
-      "sha256": "84cb84d04eee118ca0ab35f3c4f28aa61262a1787f0f2db95515d57ad64c8936"
+      "bytes": 5437,
+      "sha256": "2b9a2131798c530ad8bdc82ef45ec35179fb78cf36ce41096b04efc7f6fd093a"
     },
     {
       "path": "face-trajectory/tools/evaluate_identity_events.py",
@@ -1143,9 +1344,44 @@
       "sha256": "d8501f62904a3107437eef4bdc6fdae248e4a48ae7be21c9f5736d445f864cb0"
     },
     {
+      "path": "face-trajectory/tools/prepare_person_track_import.py",
+      "bytes": 3368,
+      "sha256": "b8ac59e86c69a54b9103e3c9a71e7ad2b1ed4656f8c3d475c705e4800ccebce2"
+    },
+    {
+      "path": "face-trajectory/tools/run_ue_lan_demo.py",
+      "bytes": 17924,
+      "sha256": "7dfb8f926f8e23a483ac10d8f9a3d85798a7e9a9cd825d3acd1b342dd0975b59"
+    },
+    {
+      "path": "face-trajectory/tools/verify_backend_person_photos.py",
+      "bytes": 8682,
+      "sha256": "7a9e325d83b40231c3b7298f57de7c5e4f20b1179b14d7d84c6f97c27f94131e"
+    },
+    {
+      "path": "face-trajectory/tools/verify_person_track_push.py",
+      "bytes": 10457,
+      "sha256": "9d80414e916129d93932016b86548711b299a6c7ae6e7b97f4bc58655d622c09"
+    },
+    {
       "path": "face-trajectory/tools/verify_point_connections.py",
       "bytes": 17070,
       "sha256": "14208b9372fdbbf4020fd3113c51b0c49b37235b671e1940f799c6c1f3be8d4d"
+    },
+    {
+      "path": "face-trajectory/tools/verify_ue_camera_events.py",
+      "bytes": 9730,
+      "sha256": "ed1a41251385440410907a8ea7fd75ec8da5c4e898dfa1c5214088a0c90945c9"
+    },
+    {
+      "path": "face-trajectory/tools/verify_ue_camera_http.py",
+      "bytes": 10938,
+      "sha256": "4000c010153924464c217ba8483d2c36026467bb541e622dd8c19d861bae81e1"
+    },
+    {
+      "path": "face-trajectory/tools/verify_ue_timeline.py",
+      "bytes": 7497,
+      "sha256": "43d9cb2f39257be2dabd875f8404fd7314e28eb2948a4d6b19b876968763ab5c"
     },
     {
       "path": "GEMINI_REVIEW_PROMPT.md",
@@ -1154,28 +1390,18 @@
     },
     {
       "path": "HANDOFF.md",
-      "bytes": 981,
-      "sha256": "362d3eb9c134c425828faa58035566c7c6d549ba95137964f3686ee0364aa584"
+      "bytes": 262,
+      "sha256": "4038f561276bc82b5d1e4a586718eb7286eac829d6b481cf9aa2ae681d3bce79"
     },
     {
       "path": "README.md",
-      "bytes": 5016,
-      "sha256": "b0d313985875ed153bb97bc97e09751863540d7ad43c17d2fa9c557a4b427418"
+      "bytes": 5923,
+      "sha256": "f09bbd63af12216145902ecdd17b9707cd872c274e5d7f486813727b68facad0"
+    },
+    {
+      "path": "audit_bundle.txt",
+      "bytes": 2276124,
+      "sha256": "b1a078da73a3acc737c736b073f35d7fa2a41f81c8a4d69e103bfaf461cbc7f4"
     }
-  ],
-  "file_count": 231,
-  "all_payloads_byte_identical": true,
-  "byte_identity_scope": "Every mirrored workspace source copied and compared above; audit README/manifest/bundle are generated",
-  "excluded": [
-    "models and weights",
-    "state/databases/lockfiles",
-    "captured images",
-    "original scene/navmesh/geometry",
-    "authorization and trusted UTC proofs",
-    "raw event logs",
-    "build outputs and environments",
-    "before-source backups"
-  ],
-  "git_byte_preservation": "* -text in .gitattributes",
-  "p2_current_source_payloads": 176
+  ]
 }

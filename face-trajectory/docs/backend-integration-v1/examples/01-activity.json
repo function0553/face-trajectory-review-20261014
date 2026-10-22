@@ -1,0 +1,10 @@
+{
+  "activity_id": "ACT-001",
+  "activity_num": "PLATFORM-ACT-001",
+  "venue_id": "VENUE-001",
+  "config_version": 1,
+  "expected_config_version": 0,
+  "configuration": {
+    "output_mode": "PERSON_TRACK_EVENTS"
+  }
+}

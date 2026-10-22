@@ -549,8 +549,10 @@ TrajectoryRevision TrajectoryStore::Rebuild(
             throw std::runtime_error("VERSION_CONFLICT: rebuild requires current expected_version=" + std::to_string(current));
     };
     if(state_) {
+        // 相机图文本只序列化一次；库里已有逐字节相同的文本时，既不必解析比较，也不必重写同一行。
+        const auto graph_text=nlohmann::json(canonical_graph).dump();
         auto known=state_->Get("trajectory_graph",canonical_graph.version);
-        if(known && !SameGraph(nlohmann::json::parse(*known).get<CameraGraph>(),canonical_graph))
+        if(known && *known!=graph_text && !SameGraph(nlohmann::json::parse(*known).get<CameraGraph>(),canonical_graph))
             throw std::invalid_argument("graph edges changed without a new graph version");
         auto head=state_->Get("trajectory_head",target_id);
         std::optional<TrajectorySnapshot> previous;
@@ -577,7 +579,7 @@ TrajectoryRevision TrajectoryStore::Rebuild(
         payload["append_tail"]=AppendTailProof(next);
         state_->Put("trajectory",key,payload.dump(),target_id);
         state_->Put("trajectory_head",target_id,std::to_string(version));
-        state_->Put("trajectory_graph",canonical_graph.version,nlohmann::json(canonical_graph).dump());
+        if(!known || *known!=graph_text) state_->Put("trajectory_graph",canonical_graph.version,graph_text);
         auto timed=BuildTimelineIndex(next);
         cold_cache_=StoredSnapshot{std::move(next),std::move(timed)};
         return revision;

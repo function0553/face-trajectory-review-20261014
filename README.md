@@ -1,5 +1,13 @@
 # 时空算法完整源码审核
 
+**2026-10-22 当前算法侧接口：** 已按人员轨迹三方协议v1.0实现固定名单登记、已确认单脸点位UPSERT/RETRACT推送、持久修订及失败重试，HTTP200/code=200/event_id匹配才确认交付。当前接口版本为0.14.0。
+
+- [可转发给后端的接口说明与完整JSON/HTTP样例](face-trajectory/docs/backend-integration-v1/时空算法-后端接口对接说明.md)
+- [算法侧部署接入与实际模板准备](face-trajectory/docs/person-track-platform-v1.md)
+- [本轮验证证据](face-trajectory/evidence/2026-10-22-person-track-v1/README.md)
+
+算法负责识别后上报人员经过的摄像头点位；本次不实现后端存储、查询或UE显示。真实摄像头表、人员数据、凭证、状态库、图片、模型及编译产物不公开。下面的10-14说明保留其历史上下文；当前文件及SOURCE-MANIFEST.json为本轮源码。
+
 **2026-10-14本地修复后更新：** D-01～D-07与可选3D拓扑折线已完成本地验证，见[修复与交接](face-trajectory/docs/repair-topology-2026-10-14.md)与[本轮验证摘要](face-trajectory/evidence/2026-10-14-repair-topology/validation-summary.json)。Windows MSVC和Linux GCC12支持C++17/20；Go全包、31秒HTTP恢复和两平台签名端到端均通过。新测试、固定Windows依赖vendor、合成拓扑示例与最新SHA清单一起同步。现场联调、生产、准确率及容量仍待验收。
 
 这是算法开发交付方为外部源码审核提供的2026-10-14快照，时区Asia/Singapore。主要对象是P2 `face-trajectory`，并提供P1 `face-recognition-engine`的相关完整自有Python源码供跨模块合同审核。仓库没有Windows程序、运行数据库、图像、模型权重、历史服务器原始资料或开发环境。
@@ -13,7 +21,7 @@
 | P2完整交接与当前能力/限制 | [face-trajectory/HANDOFF.md](face-trajectory/HANDOFF.md) |
 | P2完整C++核心、头文件、当前C++测试与内置依赖 | [face-trajectory/cpp](face-trajectory/cpp) |
 | P2 Go服务、鉴权、UTC、进程管理、清理、推送及现有测试 | [face-trajectory/go](face-trajectory/go) |
-| HTTP合同 | [OpenAPI 0.13.0](face-trajectory/openapi.yaml) |
+| HTTP合同 | [OpenAPI 0.14.0](face-trajectory/openapi.yaml) |
 | 活动隔离、可信时间、保留/恢复与后台生命周期 | [activity-service.md](face-trajectory/docs/activity-service.md) |
 | 身份入流和P1/P2对接 | [monitoring.md](face-trajectory/docs/monitoring.md)、[P1运行合同](face-recognition-engine/docs/monitoring-runtime.md) |
 | 点位连接、方向与不确定性 | [point-connections.md](face-trajectory/docs/point-connections.md) |

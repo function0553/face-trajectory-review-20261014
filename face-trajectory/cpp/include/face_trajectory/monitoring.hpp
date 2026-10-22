@@ -12,8 +12,12 @@ class MonitoringStore {
 public:
     explicit MonitoringStore(State* state) : state_(state) {}
     void RequireDurable() const;
-    nlohmann::json PutPerson(const nlohmann::json& request, Gallery& gallery);
+    nlohmann::json PutPerson(const nlohmann::json& request, Gallery& gallery, bool require_ready=false);
     nlohmann::json Person(const std::string& target) const;
+    nlohmann::json PersonSummary(const std::string& target) const;
+    static nlohmann::json PhotoUrl(const nlohmann::json& value);
+    nlohmann::json CameraTimeline(const nlohmann::json& request,
+        const AssociationStore& associations,const nlohmann::json& activity_context) const;
     std::optional<nlohmann::json> ObservationReceipt(const nlohmann::json& request) const;
     void SaveObservation(const nlohmann::json& request, const nlohmann::json& response);
     void CompleteObservationReceipt(const std::string& id, const nlohmann::json& response);

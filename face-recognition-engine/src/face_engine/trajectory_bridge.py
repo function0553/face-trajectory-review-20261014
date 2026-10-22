@@ -280,6 +280,10 @@ class TrajectoryExtractor:
                 face_meta = per_face_meta.get(str(index), {})
                 if not isinstance(face_meta, dict):
                     raise ValueError("per-face metadata must be a dictionary")
+                # URLs refer to photos stored by the acquisition/backend system.
+                # Per-face URLs override the whole-frame URL, including null.
+                if 'capture_photo_url' in face_meta or 'capture_photo_url' in meta:
+                    observation['capture_photo_url'] = face_meta.get('capture_photo_url', meta.get('capture_photo_url'))
                 for key in ("local_track_id", "track_session_id", "reentry_evidence_id"):
                     if key in face_meta:
                         if not isinstance(face_meta[key], str):

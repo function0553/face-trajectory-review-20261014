@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "failure": null,
+  "request_only_timeline": false,
+  "received_camera_events": 3,
+  "person_track_protocol": false,
+  "received_person_track_attempts": 0,
+  "scope": "Real signed local Go/C++/SQLite and loopback HTTP receiver; synthetic identities and clocks; no UE project or production connection"
+}

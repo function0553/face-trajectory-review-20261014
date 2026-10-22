@@ -137,6 +137,7 @@ func (f *apiFixture) request(t *testing.T, path string, body any, claims *trust.
 func TestEveryActivityRouteRequiresAuthorizedAction(t *testing.T) {
 	f := fixture(t)
 	paths := []string{"/v1/activities/sync", "/v1/activities/bindings", "/v1/activities/monitoring", "/v1/activities/get", "/v1/templates", "/v1/search", "/v1/associations/observe", "/v1/associations/correct", "/v1/associations/rebuild", "/v1/monitoring/persons", "/v1/monitoring/observe", "/v1/monitoring/gate-event", "/v1/monitoring/get", "/v1/visits/build", "/v1/trajectories/raw", "/v1/trajectories/rebuild", "/v1/trajectories/get", "/v1/timeline/query", "/v1/trajectories/geometry", "/v1/point-trajectories/rebuild", "/v1/point-trajectories/get", "/v1/point-trajectories/predict", "/v1/point-trajectories/compare"}
+	paths = append(paths, "/v1/monitoring/timeline/query")
 	denied := f.claims
 	denied.Grants = nil
 	for _, path := range paths {

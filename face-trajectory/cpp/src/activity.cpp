@@ -36,6 +36,31 @@ json WithContext(json r,const json& c) {
     for(const auto* k:{"activity_id","activity_num","venue_id","config_version","binding_version","monitoring_version","enabled"})r[k]=c.at(k);
     return r;
 }
+void ValidateCameraNames(const json& bindings,bool required) {
+    for(const auto& b:bindings) {
+        if(b.at("kind")!="CAMERA")continue;
+        if(!b.contains("camera_name")) {
+            if(required)throw std::invalid_argument("UE_CAMERA_EVENTS requires camera_name in every camera binding");
+            continue;
+        }
+        if(!required && b.at("camera_name").is_null())continue;
+        const auto name=Text(b,"camera_name");
+        if(name.find_first_not_of(" \t\r\n")==std::string::npos)
+            throw std::invalid_argument("camera_name must not be blank");
+    }
+}
+}
+
+bool ActivityStore::CameraEventsMode(const json& context) {
+    const auto config=context.value("configuration",json::object());
+    if(!config.is_object())throw std::invalid_argument("activity configuration must be an object");
+    const auto mode=config.value("output_mode",std::string("TRAJECTORY"));
+    if(mode!="TRAJECTORY" && mode!="UE_CAMERA_EVENTS" && mode!="PERSON_TRACK_EVENTS")
+        throw std::invalid_argument("output_mode must be TRAJECTORY, UE_CAMERA_EVENTS or PERSON_TRACK_EVENTS");
+    return mode=="UE_CAMERA_EVENTS" || mode=="PERSON_TRACK_EVENTS";
+}
+bool ActivityStore::PersonTrackMode(const json& context) {
+    return context.value("configuration",json::object()).value("output_mode",std::string{})=="PERSON_TRACK_EVENTS";
 }
 
 // SHA-256 is a content fingerprint, not identity or authorization. This small
@@ -118,6 +143,7 @@ json ActivityStore::Control(const json& r) {
         if(c.at("activity_num")!=num || c.at("venue_id")!=venue)throw std::invalid_argument("SOURCE_CONFLICT: activity identity mapping is immutable");
         if(auto owner=root_.Get("activity_num",num);owner && *owner!=id)throw std::invalid_argument("SOURCE_CONFLICT: activity_num already mapped");
         c["config_version"]=version;c["configuration"]=r.value("configuration",json::object());
+        ValidateCameraNames(c.value("bindings",json::array()),CameraEventsMode(c) && !PersonTrackMode(c));
         root_.Put("activity_revision",key,content,id);root_.Put("activity",id,c.dump());root_.Put("activity_num",num,id);
         return WithContext({{"ok",true},{"duplicate",false}},c);
     }
@@ -135,6 +161,7 @@ json ActivityStore::Control(const json& r) {
         const auto bindings=r.at("bindings");if(!bindings.is_array() || bindings.size()>10000)throw std::invalid_argument("bounded bindings array required");
         std::set<std::string> unique;
         for(const auto& b:bindings){auto kind=Text(b,"kind");if(kind!="CAMERA" && kind!="GATE")throw std::invalid_argument("binding kind CAMERA or GATE required");Text(b,"route_rule_id");const auto k=json::array({Text(b,"source_id"),Text(b,"device_id"),kind}).dump();if(!unique.insert(k).second)throw std::invalid_argument("SOURCE_CONFLICT: ambiguous duplicate device binding");}
+        ValidateCameraNames(bindings,CameraEventsMode(c) && !PersonTrackMode(c));
         c["bindings"]=bindings;c["binding_version"]=v;
         root_.Put("activity_binding_revision",key,content,id);root_.Put("activity",id,c.dump());
         return WithContext({{"ok",true},{"duplicate",false}},c);
@@ -234,12 +261,18 @@ void ActivityStore::Receipt(const json& r,const json& response,State& scope) {
 }
 void ActivityStore::Notify(const json& r,const json& response,State& scope) {
     if(!Event(r) || response.value("duplicate",false) || response.value("status","")=="EXPIRED")return;
+    const bool camera_events=CameraEventsMode(Context(r.at("activity_id")));
+    if(camera_events && (r.at("op")!="monitoring_observe" || !response.contains("camera_event") || !response.at("camera_event").is_object()))return;
     auto seq=std::stoull(scope.Get("activity_result_meta","sequence").value_or("0"))+1;
     // Notification is a compact committed algorithm result, independent of
     // backend delivery acknowledgements. Full trajectory history stays queried.
     json e={{"sequence",seq},{"operation",r.at("op")},{"status",response.value("status","")},
         {"retention_deadline_unix_ms",response.at("retention_deadline_unix_ms")}};
-    for(const auto* k:{"activity_id","activity_num","venue_id","config_version","binding_version","monitoring_version","route_rule_id","association","monitoring","reason_codes"})
+    for(const auto* k:{"activity_id","activity_num","venue_id","config_version","binding_version","monitoring_version","route_rule_id"})
+        if(response.contains(k))e[k]=response.at(k);
+    if(camera_events) {
+        e["output_mode"]="UE_CAMERA_EVENTS";e["camera_event"]=response.at("camera_event");
+    } else for(const auto* k:{"association","monitoring","reason_codes"})
         if(response.contains(k))e[k]=response.at(k);
     // Nested monitoring may contain session history; retention removes results
     // whenever their activity's dependent evidence is pruned.

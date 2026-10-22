@@ -1,0 +1,111 @@
+{
+  "passed": 26,
+  "checks": [
+    {
+      "name": "photo_url_only_is_not_successful_import",
+      "passed": true
+    },
+    {
+      "name": "template_is_ready_P",
+      "passed": true
+    },
+    {
+      "name": "import_retry_is_idempotent_P",
+      "passed": true
+    },
+    {
+      "name": "template_is_ready_Q",
+      "passed": true
+    },
+    {
+      "name": "import_retry_is_idempotent_Q",
+      "passed": true
+    },
+    {
+      "name": "template_is_ready_N",
+      "passed": true
+    },
+    {
+      "name": "import_retry_is_idempotent_N",
+      "passed": true
+    },
+    {
+      "name": "deleted_template_is_not_ready_on_historical_retry",
+      "passed": true
+    },
+    {
+      "name": "registration_does_not_push",
+      "passed": true
+    },
+    {
+      "name": "flat_protocol_fields",
+      "passed": true
+    },
+    {
+      "name": "retry_does_not_add_event",
+      "passed": true
+    },
+    {
+      "name": "same_millisecond_faces_are_distinct",
+      "passed": true
+    },
+    {
+      "name": "normal_unknown_and_hold_are_not_pushed",
+      "passed": true
+    },
+    {
+      "name": "correction_keeps_capture_metadata_and_increments_revision",
+      "passed": true
+    },
+    {
+      "name": "correction_updates_query",
+      "passed": true
+    },
+    {
+      "name": "same_identity_correction_does_not_repush",
+      "passed": true
+    },
+    {
+      "name": "retraction_full_record_and_null_person",
+      "passed": true
+    },
+    {
+      "name": "retraction_removes_query_point",
+      "passed": true
+    },
+    {
+      "name": "retract_retry_does_not_repush",
+      "passed": true
+    },
+    {
+      "name": "revision_survives_restart",
+      "passed": true
+    },
+    {
+      "name": "queue_capacity_rolls_back_identity_and_delivery_revision",
+      "passed": true
+    },
+    {
+      "name": "undelivered_event_survives_168h_cleanup_unchanged",
+      "passed": true
+    },
+    {
+      "name": "live_unpushed_capture_can_be_confirmed_after_history_compaction",
+      "passed": true
+    },
+    {
+      "name": "undelivered_event_survives_restart_unchanged",
+      "passed": true
+    },
+    {
+      "name": "first_push_after_compaction_has_original_capture",
+      "passed": true
+    },
+    {
+      "name": "only_explicit_ack_removes_event",
+      "passed": true
+    }
+  ],
+  "failure": null,
+  "scope": "Real local worker and isolated SQLite; synthetic faces and clock; no production writes"
+}

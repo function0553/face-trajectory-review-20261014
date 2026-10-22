@@ -1,0 +1,4949 @@
+{
+  "scope": "SYNTHETIC real C++ and isolated local SQLite; no production/capacity acceptance",
+  "checks": [
+    {
+      "name": "known_capture_deadline_uses_capture_only",
+      "passed": true
+    },
+    {
+      "name": "unknown_time_enters_quarantine",
+      "passed": true
+    },
+    {
+      "name": "over60_enters_quarantine",
+      "passed": true
+    },
+    {
+      "name": "dry_run_preserves_every_persisted_column",
+      "passed": true
+    },
+    {
+      "name": "dry_run_exact_boundary_count",
+      "passed": true
+    },
+    {
+      "name": "dry_run_predicts_expired_rows",
+      "passed": true
+    },
+    {
+      "name": "dry_run_exact_live_counts_match_real_pass_None",
+      "passed": true
+    },
+    {
+      "name": "dry_run_exact_snapshot_counts_match_real_pass_None",
+      "passed": true
+    },
+    {
+      "name": "dry_run_exact_live_counts_match_real_pass_A",
+      "passed": true
+    },
+    {
+      "name": "dry_run_exact_snapshot_counts_match_real_pass_A",
+      "passed": true
+    },
+    {
+      "name": "dry_run_exact_live_counts_match_real_pass_B",
+      "passed": true
+    },
+    {
+      "name": "dry_run_exact_snapshot_counts_match_real_pass_B",
+      "passed": true
+    },
+    {
+      "name": "explicit_cleanup_reports_physical_storage",
+      "passed": true,
+      "evidence": {
+        "before": {
+          "freelist_count": 0,
+          "logical_bytes": 227651,
+          "main_bytes": 20480,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 35604,
+              "rows": 6
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 7833,
+              "rows": 6
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 762,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 151,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 169,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 279,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 919,
+              "rows": 6
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 1273,
+              "rows": 6
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_projection\"]": {
+              "logical_bytes": 1541,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 56922,
+              "rows": 72
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 18145,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"owned_template\"]": {
+              "logical_bytes": 267,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 5143,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 4947,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 145,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "[\"activity\",\"B\",\"activity_intake\"]": {
+              "logical_bytes": 6518,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result\"]": {
+              "logical_bytes": 1674,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_frame\"]": {
+              "logical_bytes": 144,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_summary\"]": {
+              "logical_bytes": 108,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation\"]": {
+              "logical_bytes": 146,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 197,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person\"]": {
+              "logical_bytes": 143,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2604,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_projection\"]": {
+              "logical_bytes": 696,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"object\"]": {
+              "logical_bytes": 11439,
+              "rows": 15
+            },
+            "[\"activity\",\"B\",\"observation\"]": {
+              "logical_bytes": 4367,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory\"]": {
+              "logical_bytes": 1165,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 664,
+              "rows": 2
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 572,
+              "rows": 2
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 322,
+              "rows": 2
+            },
+            "activity_num": {
+              "logical_bytes": 36,
+              "rows": 2
+            },
+            "activity_revision": {
+              "logical_bytes": 266,
+              "rows": 2
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "monitoring_observation": {
+              "logical_bytes": 478,
+              "rows": 3
+            },
+            "monitoring_observation_revision": {
+              "logical_bytes": 616,
+              "rows": 3
+            },
+            "object": {
+              "logical_bytes": 16877,
+              "rows": 10
+            },
+            "observation": {
+              "logical_bytes": 8738,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 21268,
+              "rows": 9
+            },
+            "retention_meta": {
+              "logical_bytes": 1292,
+              "rows": 4
+            },
+            "template": {
+              "logical_bytes": 2496,
+              "rows": 1
+            },
+            "trajectory": {
+              "logical_bytes": 2991,
+              "rows": 1
+            },
+            "trajectory_head": {
+              "logical_bytes": 22,
+              "rows": 1
+            }
+          },
+          "page_count": 100,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 214,
+          "shm_bytes": 32768,
+          "wal_bytes": 959992
+        },
+        "after_logical": {
+          "freelist_count": 45,
+          "logical_bytes": 121512,
+          "main_bytes": 20480,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 15626,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 1752,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 312,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 151,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 169,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 614,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 848,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 521,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 20614,
+              "rows": 31
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 8854,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 374,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 3454,
+              "rows": 3
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 145,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "[\"activity\",\"B\",\"activity_intake\"]": {
+              "logical_bytes": 6518,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result\"]": {
+              "logical_bytes": 1674,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_frame\"]": {
+              "logical_bytes": 144,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_summary\"]": {
+              "logical_bytes": 108,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation\"]": {
+              "logical_bytes": 146,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 197,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person\"]": {
+              "logical_bytes": 143,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2604,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_projection\"]": {
+              "logical_bytes": 696,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"object\"]": {
+              "logical_bytes": 9396,
+              "rows": 14
+            },
+            "[\"activity\",\"B\",\"observation\"]": {
+              "logical_bytes": 4367,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory\"]": {
+              "logical_bytes": 1165,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 664,
+              "rows": 2
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 572,
+              "rows": 2
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 322,
+              "rows": 2
+            },
+            "activity_num": {
+              "logical_bytes": 36,
+              "rows": 2
+            },
+            "activity_revision": {
+              "logical_bytes": 266,
+              "rows": 2
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "monitoring_observation": {
+              "logical_bytes": 124,
+              "rows": 1
+            },
+            "monitoring_observation_revision": {
+              "logical_bytes": 168,
+              "rows": 1
+            },
+            "object": {
+              "logical_bytes": 6524,
+              "rows": 14
+            },
+            "observation": {
+              "logical_bytes": 4354,
+              "rows": 1
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 7546,
+              "rows": 7
+            },
+            "retention_meta": {
+              "logical_bytes": 6522,
+              "rows": 4
+            },
+            "template": {
+              "logical_bytes": 2496,
+              "rows": 1
+            },
+            "trajectory": {
+              "logical_bytes": 1102,
+              "rows": 1
+            },
+            "trajectory_head": {
+              "logical_bytes": 22,
+              "rows": 1
+            }
+          },
+          "page_count": 102,
+          "page_size": 4096,
+          "reusable_bytes": 184320,
+          "rows": 154,
+          "shm_bytes": 32768,
+          "wal_bytes": 959992
+        },
+        "after_physical": {
+          "freelist_count": 0,
+          "logical_bytes": 121512,
+          "main_bytes": 221184,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 15626,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 1752,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 312,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 151,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 169,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 614,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 848,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 521,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 20614,
+              "rows": 31
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 8854,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 374,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 3454,
+              "rows": 3
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 145,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "[\"activity\",\"B\",\"activity_intake\"]": {
+              "logical_bytes": 6518,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result\"]": {
+              "logical_bytes": 1674,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_frame\"]": {
+              "logical_bytes": 144,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_summary\"]": {
+              "logical_bytes": 108,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation\"]": {
+              "logical_bytes": 146,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 197,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person\"]": {
+              "logical_bytes": 143,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2604,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_projection\"]": {
+              "logical_bytes": 696,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"object\"]": {
+              "logical_bytes": 9396,
+              "rows": 14
+            },
+            "[\"activity\",\"B\",\"observation\"]": {
+              "logical_bytes": 4367,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory\"]": {
+              "logical_bytes": 1165,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 664,
+              "rows": 2
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 572,
+              "rows": 2
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 322,
+              "rows": 2
+            },
+            "activity_num": {
+              "logical_bytes": 36,
+              "rows": 2
+            },
+            "activity_revision": {
+              "logical_bytes": 266,
+              "rows": 2
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "monitoring_observation": {
+              "logical_bytes": 124,
+              "rows": 1
+            },
+            "monitoring_observation_revision": {
+              "logical_bytes": 168,
+              "rows": 1
+            },
+            "object": {
+              "logical_bytes": 6524,
+              "rows": 14
+            },
+            "observation": {
+              "logical_bytes": 4354,
+              "rows": 1
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 7546,
+              "rows": 7
+            },
+            "retention_meta": {
+              "logical_bytes": 6522,
+              "rows": 4
+            },
+            "template": {
+              "logical_bytes": 2496,
+              "rows": 1
+            },
+            "trajectory": {
+              "logical_bytes": 1102,
+              "rows": 1
+            },
+            "trajectory_head": {
+              "logical_bytes": 22,
+              "rows": 1
+            }
+          },
+          "page_count": 54,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 154,
+          "shm_bytes": 32768,
+          "wal_bytes": 0
+        }
+      }
+    },
+    {
+      "name": "capture_equal_cutoff_retained",
+      "passed": true
+    },
+    {
+      "name": "capture_before_cutoff_removed",
+      "passed": true
+    },
+    {
+      "name": "valid_capture_retained",
+      "passed": true
+    },
+    {
+      "name": "A_cleanup_leaves_B_valid_trajectory_identical",
+      "passed": true
+    },
+    {
+      "name": "all_historical_versions_scrubbed_1",
+      "passed": true
+    },
+    {
+      "name": "all_historical_versions_scrubbed_2",
+      "passed": true
+    },
+    {
+      "name": "all_historical_versions_scrubbed_3",
+      "passed": true
+    },
+    {
+      "name": "expired_marker_absent_all_state_columns",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "name": "legacy_refs_v1_expired_marker_removed",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "name": "legacy_refs_v1_live_shared_object_retained",
+      "passed": true
+    },
+    {
+      "name": "legacy_orphan_held_intake_does_not_gain_new_lease",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "name": "registered_gallery_excluded",
+      "passed": true
+    },
+    {
+      "name": "legacy_registered_gallery_excluded",
+      "passed": true
+    },
+    {
+      "name": "expired_automatic_template_removed",
+      "passed": true
+    },
+    {
+      "name": "anonymous_runtime_identity_retained_without_points",
+      "passed": true
+    },
+    {
+      "name": "minimal_runtime_remains_active",
+      "passed": true
+    },
+    {
+      "name": "runtime_seed_has_no_expired_time_camera_or_event",
+      "passed": true
+    },
+    {
+      "name": "expired_duplicate_cannot_resurrect",
+      "passed": true
+    },
+    {
+      "name": "expired_late_new_key_rejected",
+      "passed": true
+    },
+    {
+      "name": "expired_tombstone_changed_content_conflicts",
+      "passed": true
+    },
+    {
+      "name": "live_retry_remains_idempotent",
+      "passed": true
+    },
+    {
+      "name": "live_retry_has_no_persisted_business_side_effect",
+      "passed": true
+    },
+    {
+      "name": "live_retry_changed_content_conflicts",
+      "passed": true
+    },
+    {
+      "name": "unknown_retry_uses_same_first_quarantine",
+      "passed": true
+    },
+    {
+      "name": "unknown_first_quarantine_unchanged",
+      "passed": true
+    },
+    {
+      "name": "quarantine_equal_deadline_retained_after_restart",
+      "passed": true
+    },
+    {
+      "name": "quarantine_one_ms_after_deadline_expired",
+      "passed": true
+    },
+    {
+      "name": "quarantine_payload_removed_from_all_columns",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "name": "over60_payload_removed_at_first_deadline",
+      "passed": true
+    },
+    {
+      "name": "unknown_A_first_deadline_does_not_prematurely_expire_known_B",
+      "passed": true
+    },
+    {
+      "name": "expired_restart_retry_cannot_resurrect",
+      "passed": true
+    },
+    {
+      "name": "unknown_restart_retry_cannot_renew",
+      "passed": true
+    },
+    {
+      "name": "changed_unknown_requarantine_cannot_renew_key",
+      "passed": true
+    },
+    {
+      "name": "subscription_replay_has_no_expired_markers",
+      "passed": true
+    },
+    {
+      "name": "pending_delivery_has_no_expired_markers",
+      "passed": true
+    },
+    {
+      "name": "expired_marker_absent_file_main",
+      "passed": true
+    },
+    {
+      "name": "expired_marker_absent_file_-wal",
+      "passed": true
+    },
+    {
+      "name": "interrupted_cleanup_rolls_back_all_partial_state",
+      "passed": true,
+      "evidence": {
+        "error": "SYNTHETIC_INTERRUPT",
+        "ok": false
+      }
+    },
+    {
+      "name": "actual_process_kill_interrupts_uncompleted_cleanup",
+      "passed": true
+    },
+    {
+      "name": "actual_process_kill_recovers_partial_transaction",
+      "passed": true
+    },
+    {
+      "name": "terminated_process_cleanup_resumes",
+      "passed": true
+    },
+    {
+      "name": "resumed_cleanup_retry_stays_expired",
+      "passed": true
+    },
+    {
+      "name": "automatic_query_initially_sees_valid_point",
+      "passed": true
+    },
+    {
+      "name": "automatic_query_equal_cutoff_retains_point",
+      "passed": true
+    },
+    {
+      "name": "automatic_query_prunes_before_serving_expired_point",
+      "passed": true
+    },
+    {
+      "name": "automatic_cleanup_physically_erases_replay_marker",
+      "passed": true
+    },
+    {
+      "name": "automatic_cleanup_observable_last_report",
+      "passed": true
+    },
+    {
+      "name": "automatic_expired_retry_stays_expired",
+      "passed": true
+    },
+    {
+      "name": "cycle_0_no_expired_observation_or_object_payload",
+      "passed": true
+    },
+    {
+      "name": "cycle_0_head_empty_and_runtime_active",
+      "passed": true
+    },
+    {
+      "name": "cycle_0_expired_retry_cannot_restore",
+      "passed": true
+    },
+    {
+      "name": "cycle_1_no_expired_observation_or_object_payload",
+      "passed": true
+    },
+    {
+      "name": "cycle_1_head_empty_and_runtime_active",
+      "passed": true
+    },
+    {
+      "name": "cycle_1_expired_retry_cannot_restore",
+      "passed": true
+    },
+    {
+      "name": "cycle_2_no_expired_observation_or_object_payload",
+      "passed": true
+    },
+    {
+      "name": "cycle_2_head_empty_and_runtime_active",
+      "passed": true
+    },
+    {
+      "name": "cycle_2_expired_retry_cannot_restore",
+      "passed": true
+    },
+    {
+      "name": "cycle_3_no_expired_observation_or_object_payload",
+      "passed": true
+    },
+    {
+      "name": "cycle_3_head_empty_and_runtime_active",
+      "passed": true
+    },
+    {
+      "name": "cycle_3_expired_retry_cannot_restore",
+      "passed": true
+    },
+    {
+      "name": "cycle_4_no_expired_observation_or_object_payload",
+      "passed": true
+    },
+    {
+      "name": "cycle_4_head_empty_and_runtime_active",
+      "passed": true
+    },
+    {
+      "name": "cycle_4_expired_retry_cannot_restore",
+      "passed": true
+    },
+    {
+      "name": "cycle_5_no_expired_observation_or_object_payload",
+      "passed": true
+    },
+    {
+      "name": "cycle_5_head_empty_and_runtime_active",
+      "passed": true
+    },
+    {
+      "name": "cycle_5_expired_retry_cannot_restore",
+      "passed": true
+    },
+    {
+      "name": "multi_cycle_trajectory_storage_growth_bounded",
+      "passed": true,
+      "evidence": {
+        "baseline_non_tombstone_bytes": 13591,
+        "final": {
+          "rows": 100,
+          "logical_bytes": 26607,
+          "tombstone_rows": 72,
+          "tombstone_bytes": 13464,
+          "non_tombstone_bytes": 13143,
+          "page_count": 18,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 73728,
+            "-wal": 0,
+            "-shm": 32768
+          }
+        },
+        "limit_extra_bytes": 65536
+      }
+    },
+    {
+      "name": "minimal_hash_tombstone_growth_separately_measured",
+      "passed": true,
+      "evidence": {
+        "rows": 72,
+        "bytes": 13464,
+        "note": "This residual idempotency state grows; trajectory payload storage is bounded."
+      }
+    }
+  ],
+  "passed": 81,
+  "failures": [],
+  "evidence": {
+    "boundary": {
+      "report": {
+        "activities": [
+          {
+            "activity_id": null,
+            "direct_existing_rows_deleted": 5,
+            "expired_event_count": 2,
+            "observations_after": 1,
+            "observations_before": 2,
+            "rows_deleted": 5,
+            "shared_object_count_is_pre_rewrite": false,
+            "shared_objects_collected": 10,
+            "snapshots": {
+              "cutoff_unix_ms": 1791626400000,
+              "distinct_removed_observations": 1,
+              "dry_run": false,
+              "earliest_retained_capture_unix_ms": 1791626400001,
+              "empty_versions": 0,
+              "evidence_after": 1,
+              "evidence_before": 2,
+              "evidence_removed": 1,
+              "reentry_ids_removed": 0,
+              "rejected_ids_removed": 0,
+              "revision_ids_removed": 0,
+              "unknown_time_evidence_removed": 0,
+              "versions_deleted": 0,
+              "versions_rewritten": 1,
+              "versions_scanned": 1
+            }
+          },
+          {
+            "activity_id": "A",
+            "direct_existing_rows_deleted": 18,
+            "expired_event_count": 2,
+            "observations_after": 2,
+            "observations_before": 4,
+            "rows_deleted": 18,
+            "shared_object_count_is_pre_rewrite": false,
+            "shared_objects_collected": 64,
+            "snapshots": {
+              "cutoff_unix_ms": 1791626400000,
+              "distinct_removed_observations": 2,
+              "dry_run": false,
+              "earliest_retained_capture_unix_ms": 1791626400000,
+              "empty_versions": 2,
+              "evidence_after": 3,
+              "evidence_before": 7,
+              "evidence_removed": 4,
+              "reentry_ids_removed": 0,
+              "rejected_ids_removed": 0,
+              "revision_ids_removed": 0,
+              "unknown_time_evidence_removed": 0,
+              "versions_deleted": 1,
+              "versions_rewritten": 3,
+              "versions_scanned": 4
+            }
+          },
+          {
+            "activity_id": "B",
+            "direct_existing_rows_deleted": 0,
+            "expired_event_count": 0,
+            "observations_after": 1,
+            "observations_before": 1,
+            "rows_deleted": 0,
+            "shared_object_count_is_pre_rewrite": false,
+            "shared_objects_collected": 1,
+            "snapshots": {
+              "cutoff_unix_ms": 1791626400000,
+              "distinct_removed_observations": 0,
+              "dry_run": false,
+              "earliest_retained_capture_unix_ms": 1791626405000,
+              "empty_versions": 0,
+              "evidence_after": 1,
+              "evidence_before": 1,
+              "evidence_removed": 0,
+              "reentry_ids_removed": 0,
+              "rejected_ids_removed": 0,
+              "revision_ids_removed": 0,
+              "unknown_time_evidence_removed": 0,
+              "versions_deleted": 0,
+              "versions_rewritten": 0,
+              "versions_scanned": 1
+            }
+          }
+        ],
+        "after_logical": {
+          "freelist_count": 45,
+          "logical_bytes": 121512,
+          "main_bytes": 20480,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 15626,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 1752,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 312,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 151,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 169,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 614,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 848,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 521,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 20614,
+              "rows": 31
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 8854,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 374,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 3454,
+              "rows": 3
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 145,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "[\"activity\",\"B\",\"activity_intake\"]": {
+              "logical_bytes": 6518,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result\"]": {
+              "logical_bytes": 1674,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_frame\"]": {
+              "logical_bytes": 144,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_summary\"]": {
+              "logical_bytes": 108,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation\"]": {
+              "logical_bytes": 146,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 197,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person\"]": {
+              "logical_bytes": 143,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2604,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_projection\"]": {
+              "logical_bytes": 696,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"object\"]": {
+              "logical_bytes": 9396,
+              "rows": 14
+            },
+            "[\"activity\",\"B\",\"observation\"]": {
+              "logical_bytes": 4367,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory\"]": {
+              "logical_bytes": 1165,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 664,
+              "rows": 2
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 572,
+              "rows": 2
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 322,
+              "rows": 2
+            },
+            "activity_num": {
+              "logical_bytes": 36,
+              "rows": 2
+            },
+            "activity_revision": {
+              "logical_bytes": 266,
+              "rows": 2
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "monitoring_observation": {
+              "logical_bytes": 124,
+              "rows": 1
+            },
+            "monitoring_observation_revision": {
+              "logical_bytes": 168,
+              "rows": 1
+            },
+            "object": {
+              "logical_bytes": 6524,
+              "rows": 14
+            },
+            "observation": {
+              "logical_bytes": 4354,
+              "rows": 1
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 7546,
+              "rows": 7
+            },
+            "retention_meta": {
+              "logical_bytes": 6522,
+              "rows": 4
+            },
+            "template": {
+              "logical_bytes": 2496,
+              "rows": 1
+            },
+            "trajectory": {
+              "logical_bytes": 1102,
+              "rows": 1
+            },
+            "trajectory_head": {
+              "logical_bytes": 22,
+              "rows": 1
+            }
+          },
+          "page_count": 102,
+          "page_size": 4096,
+          "reusable_bytes": 184320,
+          "rows": 154,
+          "shm_bytes": 32768,
+          "wal_bytes": 959992
+        },
+        "after_physical": {
+          "freelist_count": 0,
+          "logical_bytes": 121512,
+          "main_bytes": 221184,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 15626,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 1752,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 312,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 151,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 169,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 614,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 848,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 521,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 20614,
+              "rows": 31
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 8854,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 374,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 3454,
+              "rows": 3
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 145,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "[\"activity\",\"B\",\"activity_intake\"]": {
+              "logical_bytes": 6518,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result\"]": {
+              "logical_bytes": 1674,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_frame\"]": {
+              "logical_bytes": 144,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_summary\"]": {
+              "logical_bytes": 108,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation\"]": {
+              "logical_bytes": 146,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 197,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person\"]": {
+              "logical_bytes": 143,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2604,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_projection\"]": {
+              "logical_bytes": 696,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"object\"]": {
+              "logical_bytes": 9396,
+              "rows": 14
+            },
+            "[\"activity\",\"B\",\"observation\"]": {
+              "logical_bytes": 4367,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory\"]": {
+              "logical_bytes": 1165,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 664,
+              "rows": 2
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 572,
+              "rows": 2
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 322,
+              "rows": 2
+            },
+            "activity_num": {
+              "logical_bytes": 36,
+              "rows": 2
+            },
+            "activity_revision": {
+              "logical_bytes": 266,
+              "rows": 2
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "monitoring_observation": {
+              "logical_bytes": 124,
+              "rows": 1
+            },
+            "monitoring_observation_revision": {
+              "logical_bytes": 168,
+              "rows": 1
+            },
+            "object": {
+              "logical_bytes": 6524,
+              "rows": 14
+            },
+            "observation": {
+              "logical_bytes": 4354,
+              "rows": 1
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 7546,
+              "rows": 7
+            },
+            "retention_meta": {
+              "logical_bytes": 6522,
+              "rows": 4
+            },
+            "template": {
+              "logical_bytes": 2496,
+              "rows": 1
+            },
+            "trajectory": {
+              "logical_bytes": 1102,
+              "rows": 1
+            },
+            "trajectory_head": {
+              "logical_bytes": 22,
+              "rows": 1
+            }
+          },
+          "page_count": 54,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 154,
+          "shm_bytes": 32768,
+          "wal_bytes": 0
+        },
+        "before": {
+          "freelist_count": 0,
+          "logical_bytes": 227651,
+          "main_bytes": 20480,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 35604,
+              "rows": 6
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 7833,
+              "rows": 6
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 762,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 151,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 169,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 279,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 919,
+              "rows": 6
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 1273,
+              "rows": 6
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_projection\"]": {
+              "logical_bytes": 1541,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 56922,
+              "rows": 72
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 18145,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"owned_template\"]": {
+              "logical_bytes": 267,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 5143,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 4947,
+              "rows": 4
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 145,
+              "rows": 2
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "[\"activity\",\"B\",\"activity_intake\"]": {
+              "logical_bytes": 6518,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result\"]": {
+              "logical_bytes": 1674,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_frame\"]": {
+              "logical_bytes": 144,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"association_target_summary\"]": {
+              "logical_bytes": 108,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation\"]": {
+              "logical_bytes": 146,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 197,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person\"]": {
+              "logical_bytes": 143,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2604,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"monitoring_projection\"]": {
+              "logical_bytes": 696,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"object\"]": {
+              "logical_bytes": 11439,
+              "rows": 15
+            },
+            "[\"activity\",\"B\",\"observation\"]": {
+              "logical_bytes": 4367,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory\"]": {
+              "logical_bytes": 1165,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"B\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 664,
+              "rows": 2
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 572,
+              "rows": 2
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 322,
+              "rows": 2
+            },
+            "activity_num": {
+              "logical_bytes": 36,
+              "rows": 2
+            },
+            "activity_revision": {
+              "logical_bytes": 266,
+              "rows": 2
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "monitoring_observation": {
+              "logical_bytes": 478,
+              "rows": 3
+            },
+            "monitoring_observation_revision": {
+              "logical_bytes": 616,
+              "rows": 3
+            },
+            "object": {
+              "logical_bytes": 16877,
+              "rows": 10
+            },
+            "observation": {
+              "logical_bytes": 8738,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 21268,
+              "rows": 9
+            },
+            "retention_meta": {
+              "logical_bytes": 1292,
+              "rows": 4
+            },
+            "template": {
+              "logical_bytes": 2496,
+              "rows": 1
+            },
+            "trajectory": {
+              "logical_bytes": 2991,
+              "rows": 1
+            },
+            "trajectory_head": {
+              "logical_bytes": 22,
+              "rows": 1
+            }
+          },
+          "page_count": 100,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 214,
+          "shm_bytes": 32768,
+          "wal_bytes": 959992
+        },
+        "complete": true,
+        "count_semantics": "EXACT_INITIAL_ROW_KEYS_REMOVED; REWRITTEN_VALUES_REPORTED_SEPARATELY",
+        "cutoff_unix_ms": 1791626400000,
+        "dry_run": false,
+        "erase_operations": 100,
+        "maintenance_status": "COMPLETE",
+        "next_deadline_unix_ms": 1792231200000,
+        "ok": true,
+        "p1": {
+          "databases": [],
+          "dry_run": false,
+          "status": "COMPLETE"
+        },
+        "push_rows_removed": 2,
+        "rows_deleted": 101,
+        "trusted_now_unix_ms": 1792231200000
+      },
+      "final_storage": {
+        "rows": 85,
+        "logical_bytes": 56569,
+        "tombstone_rows": 7,
+        "tombstone_bytes": 1309,
+        "non_tombstone_bytes": 55260,
+        "page_count": 29,
+        "page_size": 4096,
+        "freelist_count": 0,
+        "reusable_bytes": 0,
+        "files": {
+          "main": 118784,
+          "-wal": 16512,
+          "-shm": 32768
+        }
+      }
+    },
+    "interruption": {
+      "failure": {
+        "error": "SYNTHETIC_INTERRUPT",
+        "ok": false
+      },
+      "resumed": {
+        "activities": [
+          {
+            "activity_id": null,
+            "direct_existing_rows_deleted": 0,
+            "expired_event_count": 0,
+            "observations_after": 0,
+            "observations_before": 0,
+            "rows_deleted": 0,
+            "shared_object_count_is_pre_rewrite": false,
+            "shared_objects_collected": 0,
+            "snapshots": {
+              "cutoff_unix_ms": 1791626400001,
+              "distinct_removed_observations": 0,
+              "dry_run": false,
+              "earliest_retained_capture_unix_ms": 9223372036854775807,
+              "empty_versions": 0,
+              "evidence_after": 0,
+              "evidence_before": 0,
+              "evidence_removed": 0,
+              "reentry_ids_removed": 0,
+              "rejected_ids_removed": 0,
+              "revision_ids_removed": 0,
+              "unknown_time_evidence_removed": 0,
+              "versions_deleted": 0,
+              "versions_rewritten": 0,
+              "versions_scanned": 0
+            }
+          },
+          {
+            "activity_id": "A",
+            "direct_existing_rows_deleted": 8,
+            "expired_event_count": 1,
+            "observations_after": 0,
+            "observations_before": 1,
+            "rows_deleted": 8,
+            "shared_object_count_is_pre_rewrite": false,
+            "shared_objects_collected": 15,
+            "snapshots": {
+              "cutoff_unix_ms": 1791626400001,
+              "distinct_removed_observations": 1,
+              "dry_run": false,
+              "earliest_retained_capture_unix_ms": 9223372036854775807,
+              "empty_versions": 1,
+              "evidence_after": 0,
+              "evidence_before": 1,
+              "evidence_removed": 1,
+              "reentry_ids_removed": 0,
+              "rejected_ids_removed": 0,
+              "revision_ids_removed": 0,
+              "unknown_time_evidence_removed": 0,
+              "versions_deleted": 0,
+              "versions_rewritten": 1,
+              "versions_scanned": 1
+            }
+          }
+        ],
+        "after_logical": {
+          "freelist_count": 11,
+          "logical_bytes": 13731,
+          "main_bytes": 81920,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 187,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 958,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 538,
+              "rows": 1
+            },
+            "retention_meta": {
+              "logical_bytes": 3896,
+              "rows": 4
+            }
+          },
+          "page_count": 20,
+          "page_size": 4096,
+          "reusable_bytes": 45056,
+          "rows": 30,
+          "shm_bytes": 32768,
+          "wal_bytes": 28872
+        },
+        "after_physical": {
+          "freelist_count": 0,
+          "logical_bytes": 13731,
+          "main_bytes": 36864,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 187,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 958,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 538,
+              "rows": 1
+            },
+            "retention_meta": {
+              "logical_bytes": 3896,
+              "rows": 4
+            }
+          },
+          "page_count": 9,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 30,
+          "shm_bytes": 32768,
+          "wal_bytes": 0
+        },
+        "before": {
+          "freelist_count": 0,
+          "logical_bytes": 40418,
+          "main_bytes": 81920,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 6624,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 1715,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 170,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 108,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 158,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 222,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_projection\"]": {
+              "logical_bytes": 711,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 11712,
+              "rows": 15
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 4497,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 1179,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 4107,
+              "rows": 2
+            },
+            "retention_meta": {
+              "logical_bytes": 1292,
+              "rows": 4
+            }
+          },
+          "page_count": 20,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 52,
+          "shm_bytes": 32768,
+          "wal_bytes": 28872
+        },
+        "complete": true,
+        "count_semantics": "EXACT_INITIAL_ROW_KEYS_REMOVED; REWRITTEN_VALUES_REPORTED_SEPARATELY",
+        "cutoff_unix_ms": 1791626400001,
+        "dry_run": false,
+        "erase_operations": 24,
+        "maintenance_status": "COMPLETE",
+        "next_deadline_unix_ms": 1792231201000,
+        "ok": true,
+        "p1": {
+          "databases": [],
+          "dry_run": false,
+          "status": "COMPLETE"
+        },
+        "push_rows_removed": 1,
+        "rows_deleted": 24,
+        "trusted_now_unix_ms": 1792231200001
+      }
+    },
+    "automatic": {
+      "enabled": true,
+      "last_report": {
+        "activities": [
+          {
+            "activity_id": null,
+            "direct_existing_rows_deleted": 0,
+            "expired_event_count": 0,
+            "observations_after": 0,
+            "observations_before": 0,
+            "rows_deleted": 0,
+            "shared_object_count_is_pre_rewrite": false,
+            "shared_objects_collected": 0,
+            "snapshots": {
+              "cutoff_unix_ms": 1791626400001,
+              "distinct_removed_observations": 0,
+              "dry_run": false,
+              "earliest_retained_capture_unix_ms": 9223372036854775807,
+              "empty_versions": 0,
+              "evidence_after": 0,
+              "evidence_before": 0,
+              "evidence_removed": 0,
+              "reentry_ids_removed": 0,
+              "rejected_ids_removed": 0,
+              "revision_ids_removed": 0,
+              "unknown_time_evidence_removed": 0,
+              "versions_deleted": 0,
+              "versions_rewritten": 0,
+              "versions_scanned": 0
+            }
+          },
+          {
+            "activity_id": "A",
+            "direct_existing_rows_deleted": 8,
+            "expired_event_count": 1,
+            "observations_after": 0,
+            "observations_before": 1,
+            "rows_deleted": 8,
+            "shared_object_count_is_pre_rewrite": false,
+            "shared_objects_collected": 15,
+            "snapshots": {
+              "cutoff_unix_ms": 1791626400001,
+              "distinct_removed_observations": 1,
+              "dry_run": false,
+              "earliest_retained_capture_unix_ms": 9223372036854775807,
+              "empty_versions": 1,
+              "evidence_after": 0,
+              "evidence_before": 1,
+              "evidence_removed": 1,
+              "reentry_ids_removed": 0,
+              "rejected_ids_removed": 0,
+              "revision_ids_removed": 0,
+              "unknown_time_evidence_removed": 0,
+              "versions_deleted": 0,
+              "versions_rewritten": 1,
+              "versions_scanned": 1
+            }
+          }
+        ],
+        "before": {
+          "freelist_count": 0,
+          "logical_bytes": 40263,
+          "main_bytes": 20480,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 6600,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 1706,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 48,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 164,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 53,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 108,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 156,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 217,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_projection\"]": {
+              "logical_bytes": 708,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 11654,
+              "rows": 15
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 4467,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 1176,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 41,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 72,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 85,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 4092,
+              "rows": 2
+            },
+            "retention_meta": {
+              "logical_bytes": 1292,
+              "rows": 4
+            }
+          },
+          "page_count": 20,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 52,
+          "shm_bytes": 32768,
+          "wal_bytes": 164832
+        },
+        "count_semantics": "EXACT_INITIAL_ROW_KEYS_REMOVED; REWRITTEN_VALUES_REPORTED_SEPARATELY",
+        "cutoff_unix_ms": 1791626400001,
+        "dry_run": false,
+        "erase_operations": 24,
+        "next_deadline_unix_ms": 1792231201000,
+        "ok": true,
+        "push_rows_removed": 1,
+        "rows_deleted": 24,
+        "trusted_now_unix_ms": 1792231200001
+      },
+      "ok": true,
+      "storage": {
+        "freelist_count": 0,
+        "logical_bytes": 13732,
+        "main_bytes": 36864,
+        "namespaces": {
+          "[\"activity\",\"A\",\"activity_result_meta\"]": {
+            "logical_bytes": 48,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"association_graph\"]": {
+            "logical_bytes": 97,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"association_target\"]": {
+            "logical_bytes": 44,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"association_target_revision\"]": {
+            "logical_bytes": 53,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"monitoring_person\"]": {
+            "logical_bytes": 145,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+            "logical_bytes": 2606,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+            "logical_bytes": 229,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"policy\"]": {
+            "logical_bytes": 406,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"retention_tombstone\"]": {
+            "logical_bytes": 187,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"template\"]": {
+            "logical_bytes": 2490,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"trajectory\"]": {
+            "logical_bytes": 958,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"trajectory_graph\"]": {
+            "logical_bytes": 96,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"trajectory_head\"]": {
+            "logical_bytes": 41,
+            "rows": 1
+          },
+          "[\"activity\",\"A\",\"version\"]": {
+            "logical_bytes": 72,
+            "rows": 2
+          },
+          "activity": {
+            "logical_bytes": 332,
+            "rows": 1
+          },
+          "activity_binding_revision": {
+            "logical_bytes": 286,
+            "rows": 1
+          },
+          "activity_monitor_revision": {
+            "logical_bytes": 161,
+            "rows": 1
+          },
+          "activity_num": {
+            "logical_bytes": 18,
+            "rows": 1
+          },
+          "activity_revision": {
+            "logical_bytes": 133,
+            "rows": 1
+          },
+          "clock_profile": {
+            "logical_bytes": 810,
+            "rows": 2
+          },
+          "push_meta": {
+            "logical_bytes": 85,
+            "rows": 3
+          },
+          "push_outbox": {
+            "logical_bytes": 538,
+            "rows": 1
+          },
+          "retention_meta": {
+            "logical_bytes": 3897,
+            "rows": 4
+          }
+        },
+        "page_count": 9,
+        "page_size": 4096,
+        "reusable_bytes": 0,
+        "rows": 30,
+        "shm_bytes": 32768,
+        "wal_bytes": 0
+      }
+    },
+    "cycles": [
+      {
+        "cycle": 0,
+        "written": {
+          "rows": 426,
+          "logical_bytes": 381541,
+          "tombstone_rows": 0,
+          "tombstone_bytes": 0,
+          "non_tombstone_bytes": 381541,
+          "page_count": 166,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 20480,
+            "-wal": 2014712,
+            "-shm": 32768
+          }
+        },
+        "pruned": {
+          "rows": 41,
+          "logical_bytes": 15835,
+          "tombstone_rows": 12,
+          "tombstone_bytes": 2244,
+          "non_tombstone_bytes": 13591,
+          "page_count": 10,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 40960,
+            "-wal": 0,
+            "-shm": 32768
+          }
+        },
+        "report_before": {
+          "freelist_count": 0,
+          "logical_bytes": 381541,
+          "main_bytes": 20480,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 78551,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 20232,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 1800,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 110,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 1783,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 2431,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_projection\"]": {
+              "logical_bytes": 703,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 158975,
+              "rows": 301
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 52767,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 14037,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 87,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 40931,
+              "rows": 13
+            },
+            "retention_meta": {
+              "logical_bytes": 1292,
+              "rows": 4
+            }
+          },
+          "page_count": 166,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 426,
+          "shm_bytes": 32768,
+          "wal_bytes": 2014712
+        },
+        "report_after": {
+          "freelist_count": 157,
+          "logical_bytes": 15835,
+          "main_bytes": 20480,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 2244,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 538,
+              "rows": 1
+            },
+            "retention_meta": {
+              "logical_bytes": 3933,
+              "rows": 4
+            }
+          },
+          "page_count": 167,
+          "page_size": 4096,
+          "reusable_bytes": 643072,
+          "rows": 41,
+          "shm_bytes": 32768,
+          "wal_bytes": 2014712
+        },
+        "report_physical": {
+          "freelist_count": 0,
+          "logical_bytes": 15835,
+          "main_bytes": 40960,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 2244,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 538,
+              "rows": 1
+            },
+            "retention_meta": {
+              "logical_bytes": 3933,
+              "rows": 4
+            }
+          },
+          "page_count": 10,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 41,
+          "shm_bytes": 32768,
+          "wal_bytes": 0
+        }
+      },
+      {
+        "cycle": 1,
+        "written": {
+          "rows": 438,
+          "logical_bytes": 385986,
+          "tombstone_rows": 12,
+          "tombstone_bytes": 2244,
+          "non_tombstone_bytes": 383742,
+          "page_count": 166,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 81920,
+            "-wal": 1944672,
+            "-shm": 32768
+          }
+        },
+        "pruned": {
+          "rows": 52,
+          "logical_bytes": 17630,
+          "tombstone_rows": 24,
+          "tombstone_bytes": 4488,
+          "non_tombstone_bytes": 13142,
+          "page_count": 10,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 40960,
+            "-wal": 0,
+            "-shm": 32768
+          }
+        },
+        "report_before": {
+          "freelist_count": 0,
+          "logical_bytes": 385986,
+          "main_bytes": 81920,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 78606,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 20259,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 1800,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 110,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 1783,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 2431,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 159116,
+              "rows": 301
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 52776,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 2244,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 15052,
+              "rows": 13
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 87,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 40302,
+              "rows": 12
+            },
+            "retention_meta": {
+              "logical_bytes": 3349,
+              "rows": 4
+            }
+          },
+          "page_count": 166,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 438,
+          "shm_bytes": 32768,
+          "wal_bytes": 1944672
+        },
+        "report_after": {
+          "freelist_count": 155,
+          "logical_bytes": 17630,
+          "main_bytes": 81920,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 4488,
+              "rows": 24
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4022,
+              "rows": 4
+            }
+          },
+          "page_count": 167,
+          "page_size": 4096,
+          "reusable_bytes": 634880,
+          "rows": 52,
+          "shm_bytes": 32768,
+          "wal_bytes": 1944672
+        },
+        "report_physical": {
+          "freelist_count": 0,
+          "logical_bytes": 17630,
+          "main_bytes": 40960,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 4488,
+              "rows": 24
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4022,
+              "rows": 4
+            }
+          },
+          "page_count": 10,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 52,
+          "shm_bytes": 32768,
+          "wal_bytes": 0
+        }
+      },
+      {
+        "cycle": 2,
+        "written": {
+          "rows": 450,
+          "logical_bytes": 388806,
+          "tombstone_rows": 24,
+          "tombstone_bytes": 4488,
+          "non_tombstone_bytes": 384318,
+          "page_count": 167,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 40960,
+            "-wal": 2068272,
+            "-shm": 32768
+          }
+        },
+        "pruned": {
+          "rows": 64,
+          "logical_bytes": 19874,
+          "tombstone_rows": 36,
+          "tombstone_bytes": 6732,
+          "non_tombstone_bytes": 13142,
+          "page_count": 15,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 61440,
+            "-wal": 0,
+            "-shm": 32768
+          }
+        },
+        "report_before": {
+          "freelist_count": 0,
+          "logical_bytes": 388806,
+          "main_bytes": 40960,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 78606,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 20259,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 1800,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 110,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 1781,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 2429,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 159036,
+              "rows": 301
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 52776,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 4488,
+              "rows": 24
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 15045,
+              "rows": 13
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 87,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 40302,
+              "rows": 12
+            },
+            "retention_meta": {
+              "logical_bytes": 4016,
+              "rows": 4
+            }
+          },
+          "page_count": 167,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 450,
+          "shm_bytes": 32768,
+          "wal_bytes": 2068272
+        },
+        "report_after": {
+          "freelist_count": 155,
+          "logical_bytes": 19874,
+          "main_bytes": 40960,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 6732,
+              "rows": 36
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4022,
+              "rows": 4
+            }
+          },
+          "page_count": 170,
+          "page_size": 4096,
+          "reusable_bytes": 634880,
+          "rows": 64,
+          "shm_bytes": 32768,
+          "wal_bytes": 2068272
+        },
+        "report_physical": {
+          "freelist_count": 0,
+          "logical_bytes": 19874,
+          "main_bytes": 61440,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 6732,
+              "rows": 36
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4022,
+              "rows": 4
+            }
+          },
+          "page_count": 15,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 64,
+          "shm_bytes": 32768,
+          "wal_bytes": 0
+        }
+      },
+      {
+        "cycle": 3,
+        "written": {
+          "rows": 462,
+          "logical_bytes": 391022,
+          "tombstone_rows": 36,
+          "tombstone_bytes": 6732,
+          "non_tombstone_bytes": 384290,
+          "page_count": 173,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 61440,
+            "-wal": 2142432,
+            "-shm": 32768
+          }
+        },
+        "pruned": {
+          "rows": 76,
+          "logical_bytes": 22118,
+          "tombstone_rows": 48,
+          "tombstone_bytes": 8976,
+          "non_tombstone_bytes": 13142,
+          "page_count": 15,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 61440,
+            "-wal": 0,
+            "-shm": 32768
+          }
+        },
+        "report_before": {
+          "freelist_count": 0,
+          "logical_bytes": 391022,
+          "main_bytes": 61440,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 78606,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 20259,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 1800,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 110,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 1783,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 2431,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 159004,
+              "rows": 301
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 52776,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 6732,
+              "rows": 36
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 15045,
+              "rows": 13
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 87,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 40302,
+              "rows": 12
+            },
+            "retention_meta": {
+              "logical_bytes": 4016,
+              "rows": 4
+            }
+          },
+          "page_count": 173,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 462,
+          "shm_bytes": 32768,
+          "wal_bytes": 2142432
+        },
+        "report_after": {
+          "freelist_count": 159,
+          "logical_bytes": 22118,
+          "main_bytes": 61440,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 8976,
+              "rows": 48
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4022,
+              "rows": 4
+            }
+          },
+          "page_count": 174,
+          "page_size": 4096,
+          "reusable_bytes": 651264,
+          "rows": 76,
+          "shm_bytes": 32768,
+          "wal_bytes": 2142432
+        },
+        "report_physical": {
+          "freelist_count": 0,
+          "logical_bytes": 22118,
+          "main_bytes": 61440,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 8976,
+              "rows": 48
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4022,
+              "rows": 4
+            }
+          },
+          "page_count": 15,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 76,
+          "shm_bytes": 32768,
+          "wal_bytes": 0
+        }
+      },
+      {
+        "cycle": 4,
+        "written": {
+          "rows": 474,
+          "logical_bytes": 393312,
+          "tombstone_rows": 48,
+          "tombstone_bytes": 8976,
+          "non_tombstone_bytes": 384336,
+          "page_count": 173,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 61440,
+            "-wal": 2146552,
+            "-shm": 32768
+          }
+        },
+        "pruned": {
+          "rows": 88,
+          "logical_bytes": 24362,
+          "tombstone_rows": 60,
+          "tombstone_bytes": 11220,
+          "non_tombstone_bytes": 13142,
+          "page_count": 16,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 65536,
+            "-wal": 0,
+            "-shm": 32768
+          }
+        },
+        "report_before": {
+          "freelist_count": 0,
+          "logical_bytes": 393312,
+          "main_bytes": 61440,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 78606,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 20259,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 1800,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 110,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 1781,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 2429,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 159048,
+              "rows": 301
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 52776,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 8976,
+              "rows": 48
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 15051,
+              "rows": 13
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 87,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 40302,
+              "rows": 12
+            },
+            "retention_meta": {
+              "logical_bytes": 4016,
+              "rows": 4
+            }
+          },
+          "page_count": 173,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 474,
+          "shm_bytes": 32768,
+          "wal_bytes": 2146552
+        },
+        "report_after": {
+          "freelist_count": 155,
+          "logical_bytes": 24362,
+          "main_bytes": 61440,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 11220,
+              "rows": 60
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4022,
+              "rows": 4
+            }
+          },
+          "page_count": 173,
+          "page_size": 4096,
+          "reusable_bytes": 634880,
+          "rows": 88,
+          "shm_bytes": 32768,
+          "wal_bytes": 2146552
+        },
+        "report_physical": {
+          "freelist_count": 0,
+          "logical_bytes": 24362,
+          "main_bytes": 65536,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 11220,
+              "rows": 60
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4022,
+              "rows": 4
+            }
+          },
+          "page_count": 16,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 88,
+          "shm_bytes": 32768,
+          "wal_bytes": 0
+        }
+      },
+      {
+        "cycle": 5,
+        "written": {
+          "rows": 486,
+          "logical_bytes": 395569,
+          "tombstone_rows": 60,
+          "tombstone_bytes": 11220,
+          "non_tombstone_bytes": 384349,
+          "page_count": 172,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 65536,
+            "-wal": 2179512,
+            "-shm": 32768
+          }
+        },
+        "pruned": {
+          "rows": 100,
+          "logical_bytes": 26607,
+          "tombstone_rows": 72,
+          "tombstone_bytes": 13464,
+          "non_tombstone_bytes": 13143,
+          "page_count": 18,
+          "page_size": 4096,
+          "freelist_count": 0,
+          "reusable_bytes": 0,
+          "files": {
+            "main": 73728,
+            "-wal": 0,
+            "-shm": 32768
+          }
+        },
+        "report_before": {
+          "freelist_count": 0,
+          "logical_bytes": 395569,
+          "main_bytes": 65536,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_intake\"]": {
+              "logical_bytes": 78606,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result\"]": {
+              "logical_bytes": 20259,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_frame\"]": {
+              "logical_bytes": 1800,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_summary\"]": {
+              "logical_bytes": 110,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_observation\"]": {
+              "logical_bytes": 1782,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_observation_revision\"]": {
+              "logical_bytes": 2430,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"object\"]": {
+              "logical_bytes": 159065,
+              "rows": 301
+            },
+            "[\"activity\",\"A\",\"observation\"]": {
+              "logical_bytes": 52776,
+              "rows": 12
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 11220,
+              "rows": 60
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 15045,
+              "rows": 13
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 87,
+              "rows": 3
+            },
+            "push_outbox": {
+              "logical_bytes": 40302,
+              "rows": 12
+            },
+            "retention_meta": {
+              "logical_bytes": 4016,
+              "rows": 4
+            }
+          },
+          "page_count": 172,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 486,
+          "shm_bytes": 32768,
+          "wal_bytes": 2179512
+        },
+        "report_after": {
+          "freelist_count": 152,
+          "logical_bytes": 26607,
+          "main_bytes": 65536,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 13464,
+              "rows": 72
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4023,
+              "rows": 4
+            }
+          },
+          "page_count": 172,
+          "page_size": 4096,
+          "reusable_bytes": 622592,
+          "rows": 100,
+          "shm_bytes": 32768,
+          "wal_bytes": 2179512
+        },
+        "report_physical": {
+          "freelist_count": 0,
+          "logical_bytes": 26607,
+          "main_bytes": 73728,
+          "namespaces": {
+            "[\"activity\",\"A\",\"activity_result_meta\"]": {
+              "logical_bytes": 49,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_graph\"]": {
+              "logical_bytes": 97,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target\"]": {
+              "logical_bytes": 44,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"association_target_revision\"]": {
+              "logical_bytes": 54,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person\"]": {
+              "logical_bytes": 145,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_person_revision\"]": {
+              "logical_bytes": 2606,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"monitoring_runtime\"]": {
+              "logical_bytes": 229,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"policy\"]": {
+              "logical_bytes": 406,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"retention_tombstone\"]": {
+              "logical_bytes": 13464,
+              "rows": 72
+            },
+            "[\"activity\",\"A\",\"template\"]": {
+              "logical_bytes": 2490,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory\"]": {
+              "logical_bytes": 963,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_graph\"]": {
+              "logical_bytes": 96,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"trajectory_head\"]": {
+              "logical_bytes": 42,
+              "rows": 1
+            },
+            "[\"activity\",\"A\",\"version\"]": {
+              "logical_bytes": 73,
+              "rows": 2
+            },
+            "activity": {
+              "logical_bytes": 332,
+              "rows": 1
+            },
+            "activity_binding_revision": {
+              "logical_bytes": 286,
+              "rows": 1
+            },
+            "activity_monitor_revision": {
+              "logical_bytes": 161,
+              "rows": 1
+            },
+            "activity_num": {
+              "logical_bytes": 18,
+              "rows": 1
+            },
+            "activity_revision": {
+              "logical_bytes": 133,
+              "rows": 1
+            },
+            "clock_profile": {
+              "logical_bytes": 810,
+              "rows": 2
+            },
+            "push_meta": {
+              "logical_bytes": 86,
+              "rows": 3
+            },
+            "retention_meta": {
+              "logical_bytes": 4023,
+              "rows": 4
+            }
+          },
+          "page_count": 18,
+          "page_size": 4096,
+          "reusable_bytes": 0,
+          "rows": 100,
+          "shm_bytes": 32768,
+          "wal_bytes": 0
+        }
+      }
+    ]
+  },
+  "worker_sha256": "827889be282dd588712e4202014f5761b7c6a029788e242a4c8b91a3857163cb",
+  "storage_report": "Query/replay checks, live rows, reusable pages, main/WAL bytes and multi-cycle payload growth are reported separately."
+}

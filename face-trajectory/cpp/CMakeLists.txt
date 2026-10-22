@@ -12,6 +12,7 @@ add_library(face_trajectory_core src/gallery.cpp src/visits.cpp src/trajectory.c
 # geometry.hpp exposes the fixed JSON type; consumers need its headers too.
 target_include_directories(face_trajectory_core PUBLIC include vendor)
 target_link_libraries(face_trajectory_core PUBLIC sqlite_state)
+target_sources(face_trajectory_core PRIVATE src/person_track.cpp)
 find_package(OpenMP QUIET)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(face_trajectory_core PRIVATE OpenMP::OpenMP_CXX)
@@ -20,6 +21,10 @@ endif()
 add_executable(face_trajectory_worker src/worker.cpp)
 target_include_directories(face_trajectory_worker PRIVATE vendor)
 target_link_libraries(face_trajectory_worker PRIVATE face_trajectory_core)
+if(MINGW)
+    # worker uses wmain to preserve Unicode command-line/database paths.
+    target_link_options(face_trajectory_worker PRIVATE -municode)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)

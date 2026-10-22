@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <stdexcept>
+#include <unordered_map>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
@@ -17,6 +18,24 @@
 #include <fcntl.h>
 #endif
 namespace face_trajectory {
+namespace detail {
+// 每个 SQLite 连接（root）一份。语句按 SQL 原文缓存，编译一次、反复 reset 复用；
+// 原实现每次 Get/Put 都 prepare+finalize，性能分析中 SQL 解析约占 7%。
+struct StateCache {
+    struct Entry {
+        sqlite3_stmt* stmt = nullptr;
+        bool busy = false;   // 正被某个 Statement 使用（嵌套迭代时改用临时语句）
+    };
+    std::unordered_map<std::string, Entry> statements;   // 节点式容器：插入不使已有 Entry* 失效
+    std::uint64_t object_epoch = 0;
+    std::shared_ptr<void> shared_json_memo;
+    // sqlite3_close 前必须调用：存在未 finalize 的语句时 close 会返回 BUSY 并泄漏连接。
+    void Finalize() noexcept {
+        for (auto& item : statements) if (item.second.stmt) sqlite3_finalize(item.second.stmt);
+        statements.clear();
+    }
+};
+}
 namespace {
 constexpr std::uint64_t kDefaultSqliteCacheKb = 262144; // 256 MiB
 constexpr std::uint64_t kMaxSqliteCacheKb = 1048576;    // 1 GiB
@@ -55,10 +74,29 @@ const char* SqliteSynchronousMode() {
 struct Statement {
     sqlite3* db;
     sqlite3_stmt* value = nullptr;
-    Statement(sqlite3* d,const char* sql):db(d) {
-        if (sqlite3_prepare_v2(db,sql,-1,&value,nullptr)!=SQLITE_OK) throw std::runtime_error(sqlite3_errmsg(db));
+    detail::StateCache::Entry* entry = nullptr;   // 非空 = 借用缓存语句，析构时归还
+    Statement(detail::StateCache& cache,sqlite3* d,const char* sql):db(d) {
+        auto& cached=cache.statements[sql];
+        if(!cached.busy) {
+            if(!cached.stmt && sqlite3_prepare_v2(db,sql,-1,&cached.stmt,nullptr)!=SQLITE_OK) {
+                const std::string message=sqlite3_errmsg(db);
+                sqlite3_finalize(cached.stmt);cached.stmt=nullptr;throw std::runtime_error(message);
+            }
+            cached.busy=true;entry=&cached;value=cached.stmt;return;
+        }
+        // 同一条 SQL 正被外层迭代占用（例如 Scan 回调里再查同一语句）：临时编译一份，用完即弃。
+        if (sqlite3_prepare_v2(db,sql,-1,&value,nullptr)!=SQLITE_OK) {
+            const std::string message=sqlite3_errmsg(db);
+            sqlite3_finalize(value);value=nullptr;throw std::runtime_error(message);
+        }
     }
-    ~Statement(){sqlite3_finalize(value);}
+    Statement(const Statement&)=delete;
+    Statement& operator=(const Statement&)=delete;
+    ~Statement(){
+        // reset 释放读游标和锁，clear_bindings 防止上次的参数被下次误用；结果与重新编译一致。
+        if(entry){sqlite3_reset(value);sqlite3_clear_bindings(value);entry->busy=false;}
+        else sqlite3_finalize(value);
+    }
     void Bind(int index,const std::string& text) {
         if (sqlite3_bind_text(value,index,text.data(),static_cast<int>(text.size()),SQLITE_TRANSIENT)!=SQLITE_OK)
             throw std::runtime_error(sqlite3_errmsg(db));
@@ -90,6 +128,7 @@ State::State(const std::string& path,std::uint64_t max_bytes) {
     if (fd<0 || flock(fd,LOCK_EX|LOCK_NB)!=0) {if(fd>=0)close(fd);throw std::runtime_error("state file already owned or lock unavailable");}
     lock_=reinterpret_cast<void*>(static_cast<intptr_t>(fd+1));
 #endif
+    cache_=std::make_unique<detail::StateCache>();
     try {
         if (sqlite3_open_v2(path_.c_str(),&db_,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,nullptr)!=SQLITE_OK)
             throw std::runtime_error("cannot open SQLite state");
@@ -99,12 +138,12 @@ State::State(const std::string& path,std::uint64_t max_bytes) {
             SqliteSynchronousMode() + "; PRAGMA cache_size=-" + std::to_string(cache_size_kb) +
             "; PRAGMA temp_store=MEMORY; PRAGMA mmap_size=268435456; PRAGMA secure_delete=ON;";
         Sql(pragmas.c_str());
-        {Statement version(db_,"PRAGMA user_version");version.Step();
+        {Statement version(*cache_,db_,"PRAGMA user_version");version.Step();
         if (sqlite3_column_int(version.value,0)>1) throw std::runtime_error("unsupported newer state schema");}
         std::uint64_t page_size;
-        {Statement size(db_,"PRAGMA page_size");size.Step();page_size=sqlite3_column_int64(size.value,0);}
+        {Statement size(*cache_,db_,"PRAGMA page_size");size.Step();page_size=sqlite3_column_int64(size.value,0);}
         if(max_bytes<page_size*16)throw std::invalid_argument("state size limit too small");
-        {Statement count(db_,"PRAGMA page_count");count.Step();if(static_cast<std::uint64_t>(sqlite3_column_int64(count.value,0))>max_bytes/page_size)
+        {Statement count(*cache_,db_,"PRAGMA page_count");count.Step();if(static_cast<std::uint64_t>(sqlite3_column_int64(count.value,0))>max_bytes/page_size)
             throw std::runtime_error("existing state exceeds configured size limit");}
         Sql(("PRAGMA max_page_count="+std::to_string(max_bytes/page_size)).c_str());
         Sql("CREATE TABLE IF NOT EXISTS state(ns TEXT NOT NULL,key TEXT NOT NULL,value TEXT NOT NULL,ref TEXT NOT NULL,track TEXT NOT NULL,meta TEXT NOT NULL,PRIMARY KEY(ns,key)) WITHOUT ROWID;"
@@ -115,7 +154,7 @@ State::State(const std::string& path,std::uint64_t max_bytes) {
             "WHERE ns='push_outbox' AND json_valid(value) AND json_type(value,'$.activity_id')='text' "
             "AND json_type(value,'$.event_id')='text' AND (ref='' OR track='');");
     } catch (...) {
-        if(db_){sqlite3_close(db_);db_=nullptr;}
+        if(db_){cache_->Finalize();sqlite3_close(db_);db_=nullptr;}
 #ifdef _WIN32
         CloseHandle(lock_);
 #else
@@ -134,6 +173,7 @@ State::State(State& root,const std::string& activity_id) {
     scope_=activity_id;
 }
 State::State(MemoryOnly) {
+    cache_=std::make_unique<detail::StateCache>();
     if(sqlite3_open_v2(":memory:",&db_,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,nullptr)!=SQLITE_OK)throw std::runtime_error("cannot create retention planning state");
     Sql("CREATE TABLE state(ns TEXT NOT NULL,key TEXT NOT NULL,value TEXT NOT NULL,ref TEXT NOT NULL,track TEXT NOT NULL,meta TEXT NOT NULL,PRIMARY KEY(ns,key)) WITHOUT ROWID; CREATE INDEX state_ref ON state(ns,ref); CREATE INDEX state_track ON state(ns,track);");
 }
@@ -144,7 +184,7 @@ std::unique_ptr<State> State::PlanningCopy() const {
 }
 State::~State() {
     if(root_)return;
-    Rollback();if(db_)sqlite3_close(db_);
+    Rollback();if(db_){if(cache_)cache_->Finalize();sqlite3_close(db_);}
 #ifdef _WIN32
     if(lock_)CloseHandle(lock_);
 #else
@@ -152,20 +192,45 @@ State::~State() {
 #endif
 }
 void State::RequireOwner() const {if(root_)throw std::logic_error("state operation requires the owning connection");}
+detail::StateCache& State::Caches() const {return root_ ? *root_->cache_ : *cache_;}
+std::uint64_t State::ObjectEpoch() const {return Caches().object_epoch;}
+std::shared_ptr<void>& State::SharedJsonMemo() {return Caches().shared_json_memo;}
 std::string State::PhysicalNamespace(const std::string& ns) const {
     return root_ ? nlohmann::json::array({"activity",scope_,ns}).dump() : ns;
 }
 void State::Sql(const char* sql) const {const auto result=sqlite3_exec(db_,sql,nullptr,nullptr,nullptr);if(result==SQLITE_FULL)throw std::runtime_error("CAPACITY: SQLite state size or disk capacity reached");if(result!=SQLITE_OK)throw std::runtime_error(sqlite3_errmsg(db_));}
 void State::Begin(){RequireOwner();if(transaction_)throw std::logic_error("nested state transaction");Sql("BEGIN IMMEDIATE");transaction_=true;dirty_=false;}
-void State::Commit(){RequireOwner();Sql("COMMIT");transaction_=false;dirty_=false;}
-void State::Rollback() noexcept {if(root_)return;if(transaction_){sqlite3_exec(db_,"ROLLBACK",nullptr,nullptr,nullptr);transaction_=false;}dirty_=false;}
+void State::Commit(){
+    RequireOwner();
+    // COMMIT 失败时 SQLite 可能已自动回滚：本事务里新建的对象不一定还在，作废进程内备忘。
+    try{Sql("COMMIT");}catch(...){++cache_->object_epoch;throw;}
+    transaction_=false;dirty_=false;
+}
+void State::Rollback() noexcept {
+    if(root_)return;
+    // 回滚会撤销本事务里 Intern 新建的对象；备忘中可能引用它们，必须整体作废。
+    ++cache_->object_epoch;
+    if(transaction_){sqlite3_exec(db_,"ROLLBACK",nullptr,nullptr,nullptr);transaction_=false;}dirty_=false;
+}
 void State::Put(const std::string& ns,const std::string& key,const std::string& value,const std::string& ref,const std::string& track,const std::string& meta) {
-    Statement s(db_,"INSERT INTO state VALUES(?,?,?,?,?,?) ON CONFLICT(ns,key) DO UPDATE SET value=excluded.value,ref=excluded.ref,track=excluded.track,meta=excluded.meta");
+    // 显式改写 object 命名空间可能覆盖已有对象内容（Intern 走 PutRow，只插入新键）。
+    // root 用物理名调用时，活动作用域的 object 物理名以 ,"object"] 结尾。
+    static const std::string scoped_object=",\"object\"]";
+    if(ns=="object" || (ns.size()>scoped_object.size() &&
+        ns.compare(ns.size()-scoped_object.size(),scoped_object.size(),scoped_object)==0)) ++Caches().object_epoch;
+    PutRow(ns,key,value,ref,track,meta);
+}
+void State::PutRow(const std::string& ns,const std::string& key,const std::string& value,const std::string& ref,const std::string& track,const std::string& meta) {
+    Statement s(Caches(),db_,"INSERT INTO state VALUES(?,?,?,?,?,?) ON CONFLICT(ns,key) DO UPDATE SET value=excluded.value,ref=excluded.ref,track=excluded.track,meta=excluded.meta");
     s.Bind(1,PhysicalNamespace(ns));s.Bind(2,key);s.Bind(3,value);s.Bind(4,ref);s.Bind(5,track);s.Bind(6,meta);s.Step();MarkDirty();
 }
-void State::Erase(const std::string& ns,const std::string& key){Statement s(db_,"DELETE FROM state WHERE ns=? AND key=?");s.Bind(1,PhysicalNamespace(ns));s.Bind(2,key);s.Step();MarkDirty();}
+void State::Erase(const std::string& ns,const std::string& key){
+    // 任何删除都作废备忘（保守：垃圾回收删除 object 时，被删节点不能再从备忘里"复活"）。
+    ++Caches().object_epoch;
+    Statement s(Caches(),db_,"DELETE FROM state WHERE ns=? AND key=?");s.Bind(1,PhysicalNamespace(ns));s.Bind(2,key);s.Step();MarkDirty();
+}
 std::optional<std::string> State::Get(const std::string& ns,const std::string& key) const {
-    Statement s(db_,"SELECT value FROM state WHERE ns=? AND key=?");s.Bind(1,PhysicalNamespace(ns));s.Bind(2,key);if(s.Step()==SQLITE_ROW)return s.Text(0);return {};
+    Statement s(Caches(),db_,"SELECT value FROM state WHERE ns=? AND key=?");s.Bind(1,PhysicalNamespace(ns));s.Bind(2,key);if(s.Step()==SQLITE_ROW)return s.Text(0);return {};
 }
 std::string State::Intern(const std::string& value) {
     std::uint64_t hash=14695981039346656037ULL;
@@ -174,11 +239,11 @@ std::string State::Intern(const std::string& value) {
     for(std::size_t collision=0;;++collision){
         const auto key=base+":"+std::to_string(collision);auto old=Get("object",key);
         if(old){if(*old==value)return key;}
-        else {Put("object",key,value);return key;}
+        else {PutRow("object",key,value,"","","");return key;}
     }
 }
 std::optional<std::pair<std::string, std::string>> State::First(const std::string& ns) const {
-    Statement s(db_, "SELECT key,value FROM state WHERE ns=? ORDER BY key LIMIT 1");
+    Statement s(Caches(),db_, "SELECT key,value FROM state WHERE ns=? ORDER BY key LIMIT 1");
     s.Bind(1, PhysicalNamespace(ns));
     if (s.Step() == SQLITE_ROW) return std::make_pair(s.Text(0), s.Text(1));
     return {};
@@ -191,7 +256,7 @@ void State::Scan(const std::string& ns,const std::function<void(const std::strin
     else if(track)sql+=" INDEXED BY state_track";
     sql+=" WHERE ns=?";
     if(ref)sql+=" AND ref=?";if(track)sql+=" AND track=?";
-    Statement s(db_,sql.c_str());s.Bind(1,PhysicalNamespace(ns));int i=2;if(ref)s.Bind(i++,*ref);if(track)s.Bind(i++,*track);
+    Statement s(Caches(),db_,sql.c_str());s.Bind(1,PhysicalNamespace(ns));int i=2;if(ref)s.Bind(i++,*ref);if(track)s.Bind(i++,*track);
     while(s.Step()==SQLITE_ROW)fn(s.Text(0),s.Text(1));
 }
 void State::ScanAfter(const std::string& ns,const std::string& after_key,std::uint64_t limit,
@@ -201,7 +266,7 @@ void State::ScanAfter(const std::string& ns,const std::string& after_key,std::ui
     const auto bounded=std::min<std::uint64_t>(limit,static_cast<std::uint64_t>(INT64_MAX));
     const char* sql=ref ? "SELECT key,value FROM state INDEXED BY state_ref WHERE ns=? AND ref=? AND key>? ORDER BY key ASC LIMIT ?"
                        : "SELECT key,value FROM state WHERE ns=? AND key>? ORDER BY key ASC LIMIT ?";
-    Statement s(db_,sql);s.Bind(1,PhysicalNamespace(ns));int i=2;
+    Statement s(Caches(),db_,sql);s.Bind(1,PhysicalNamespace(ns));int i=2;
     if(ref)s.Bind(i++,*ref);s.Bind(i++,after_key);
     if(sqlite3_bind_int64(s.value,i,static_cast<sqlite3_int64>(bounded))!=SQLITE_OK)throw std::runtime_error(sqlite3_errmsg(db_));
     while(s.Step()==SQLITE_ROW)fn(s.Text(0),s.Text(1));
@@ -210,25 +275,25 @@ std::uint64_t State::Count(const std::string& ns,const std::optional<std::string
     std::string sql="SELECT count(*) FROM state";
     if(ref&&indexed)sql+=" INDEXED BY state_ref";
     sql+=" WHERE ns=?";if(ref)sql+=" AND ref=?";
-    Statement s(db_,sql.c_str());s.Bind(1,PhysicalNamespace(ns));if(ref)s.Bind(2,*ref);s.Step();
+    Statement s(Caches(),db_,sql.c_str());s.Bind(1,PhysicalNamespace(ns));if(ref)s.Bind(2,*ref);s.Step();
     return static_cast<std::uint64_t>(sqlite3_column_int64(s.value,0));
 }
 std::vector<std::string> State::References(const std::string& ns) const {
-    Statement s(db_,"SELECT DISTINCT ref FROM state INDEXED BY state_ref WHERE ns=? ORDER BY ref");
+    Statement s(Caches(),db_,"SELECT DISTINCT ref FROM state INDEXED BY state_ref WHERE ns=? ORDER BY ref");
     s.Bind(1,PhysicalNamespace(ns));std::vector<std::string> result;
     while(s.Step()==SQLITE_ROW)result.push_back(s.Text(0));return result;
 }
 std::vector<State::Row> State::AllRows() const {
     RequireOwner();
     std::vector<Row> rows;
-    Statement s(db_,"SELECT ns,key,value,ref,track,meta FROM state ORDER BY ns,key");
+    Statement s(Caches(),db_,"SELECT ns,key,value,ref,track,meta FROM state ORDER BY ns,key");
     while(s.Step()==SQLITE_ROW)rows.push_back({s.Text(0),s.Text(1),s.Text(2),s.Text(3),s.Text(4),s.Text(5)});
     return rows;
 }
 std::vector<std::string> State::Namespaces() const {
     RequireOwner();
     std::vector<std::string> namespaces;
-    Statement s(db_,"SELECT DISTINCT ns FROM state ORDER BY ns");
+    Statement s(Caches(),db_,"SELECT DISTINCT ns FROM state ORDER BY ns");
     while(s.Step()==SQLITE_ROW)namespaces.push_back(s.Text(0));
     return namespaces;
 }
@@ -240,7 +305,7 @@ State::StorageStats State::Stats() const {
     RequireOwner();
     StorageStats stats;
     auto pragma=[&](const char* sql) {
-        Statement s(db_,sql);s.Step();
+        Statement s(Caches(),db_,sql);s.Step();
         return static_cast<std::uint64_t>(sqlite3_column_int64(s.value,0));
     };
     stats.page_size=pragma("PRAGMA page_size");
@@ -258,7 +323,7 @@ State::StorageStats State::Stats() const {
     stats.main_bytes=file_bytes(path_);
     stats.wal_bytes=file_bytes(path_+"-wal");
     stats.shm_bytes=file_bytes(path_+"-shm");
-    Statement s(db_,"SELECT ns,count(*),sum(length(CAST(ns AS BLOB))+length(CAST(key AS BLOB))+length(CAST(value AS BLOB))+length(CAST(ref AS BLOB))+length(CAST(track AS BLOB))+length(CAST(meta AS BLOB))) FROM state GROUP BY ns ORDER BY ns");
+    Statement s(Caches(),db_,"SELECT ns,count(*),sum(length(CAST(ns AS BLOB))+length(CAST(key AS BLOB))+length(CAST(value AS BLOB))+length(CAST(ref AS BLOB))+length(CAST(track AS BLOB))+length(CAST(meta AS BLOB))) FROM state GROUP BY ns ORDER BY ns");
     while(s.Step()==SQLITE_ROW) {
         NamespaceStats entry;
         entry.rows=static_cast<std::uint64_t>(sqlite3_column_int64(s.value,1));

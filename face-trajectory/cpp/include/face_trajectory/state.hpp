@@ -9,6 +9,7 @@
 #include <memory>
 struct sqlite3;
 namespace face_trajectory {
+namespace detail { struct StateCache; }
 // Single owner process. Cold observations and immutable snapshots live on disk.
 class State {
 public:
@@ -66,9 +67,20 @@ public:
     // also purges preexisting freelist contents and is explicitly requested.
     StorageStats Maintenance(bool compact = false);
     std::unique_ptr<State> PlanningCopy() const;
+    // 对象命名空间的失效代号（只增不减，属于持有连接的 root）。
+    // 以下任一情况都会 +1：任何 Erase、Rollback、Commit 失败、对 object 命名空间的显式 Put。
+    // Intern 只插入不存在的键，不会改写已有对象，所以不 +1。
+    // 用途：进程内缓存（SharedJson 的序列备忘）记下代号，代号变了整份作废，
+    // 保证回滚、垃圾回收或删除之后不会再用到已不存在的节点。
+    std::uint64_t ObjectEpoch() const;
+    // 供 SharedJson 存放跨操作备忘的类型擦除槽位；同一 root 及其活动视图共用一份。
+    std::shared_ptr<void>& SharedJsonMemo();
 private:
     struct MemoryOnly {};
     explicit State(MemoryOnly);
+    detail::StateCache& Caches() const;
+    void PutRow(const std::string& ns, const std::string& key, const std::string& value,
+                const std::string& ref, const std::string& track, const std::string& meta);
     void Sql(const char* sql) const;
     void RequireOwner() const;
     void MarkDirty() {if (root_) root_->dirty_ = true; else dirty_ = true;}
@@ -79,5 +91,7 @@ private:
     bool transaction_ = false;
     bool dirty_ = false;
     void* lock_ = nullptr;
+    // 仅 root 持有：已编译 SQL 语句缓存 + 对象失效代号 + SharedJson 备忘。视图转用 root 的。
+    std::unique_ptr<detail::StateCache> cache_;
 };
 }
