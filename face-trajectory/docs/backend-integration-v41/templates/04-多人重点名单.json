@@ -1,0 +1,19 @@
+{
+  "activityId": "ACT-001",
+  "keyPersons": [
+    {
+      "personId": "P-001",
+      "personName": "测试人员甲",
+      "personIdNum": "<甲的完整身份证号>",
+      "personPhoto": "https://example.com/faces/p001.jpg",
+      "seat": null
+    },
+    {
+      "personId": "P-002",
+      "personName": "测试人员乙",
+      "personIdNum": "<乙的完整身份证号>",
+      "personPhoto": "https://example.com/faces/p002.jpg",
+      "seat": null
+    }
+  ]
+}

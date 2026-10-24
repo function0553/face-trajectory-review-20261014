@@ -1,0 +1,218 @@
+openapi: 3.0.3
+info:
+  title: Personnel Track Platform v4.1 Algorithm API
+  version: 0.15.0
+  description: >-
+    Algorithm-side implementation of the supplied v4.1 design and the user's explicit business requirements.
+    Activity IDs are mandatory in JSON Body, never query parameters. Platform supplies photo URLs, never embeddings.
+    The algorithm downloads photos and returns per-person recognition readiness. Legacy snake_case requests remain
+    available under their previous contract. Defaults for design suggestions are documented in docs/person-track-platform-v4.1.md.
+security:
+  - AlgorithmBearer: []
+paths:
+  /v1/activities/sync:
+    post:
+      summary: Save activity and process included cameras and people
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivitySync'
+      responses:
+        '200':
+          description: Activity saved; inspect each person's status rather than assuming everyone is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformReply'
+        default:
+          $ref: '#/components/responses/Failure'
+  /v1/activities/bindings:
+    post:
+      summary: Replace the activity camera collection; a nonempty existing collection cannot be implicitly cleared
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CameraBindings'
+      responses:
+        '200':
+          description: Camera identities and backend names saved; does not prove video is available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformReply'
+        default:
+          $ref: '#/components/responses/Failure'
+  /v1/monitoring/persons:
+    post:
+      summary: Download URL photographs and enroll the activity's priority personnel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonImport'
+      responses:
+        '200':
+          description: Synchronous per-person results; partial failures are explicit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformReply'
+        default:
+          $ref: '#/components/responses/Failure'
+  /v1/activities/monitoring:
+    post:
+      summary: Enable or disable an activity without stopping the daemon
+      description: Implementation default for proposal P7; initially disabled. Disabling does not cancel pending event delivery.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonitoringSwitch'
+      responses:
+        '200':
+          description: Switch saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformReply'
+        default:
+          $ref: '#/components/responses/Failure'
+components:
+  securitySchemes:
+    AlgorithmBearer:
+      type: http
+      scheme: bearer
+      description: Existing signed algorithm authorization or configured shared Bearer token; backend needs only address and token
+  responses:
+    Failure:
+      description: Invalid data 400; unauthorized 401/403; unknown activity 404; conflicting immutable identity 409; unavailable importer/clock 503
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code: {type: integer}
+              message: {type: string}
+  schemas:
+    Camera:
+      type: object
+      additionalProperties: false
+      required: [deviceId, deviceName]
+      properties:
+        deviceId: {type: string, minLength: 1, maxLength: 1024, description: Backend UUID returned verbatim; no extra source mapping}
+        deviceName: {type: string, minLength: 1, maxLength: 1024}
+    KeyPerson:
+      type: object
+      additionalProperties: false
+      required: [personId, personName, personIdNum, personPhoto]
+      properties:
+        personId: {type: string, minLength: 1, maxLength: 1024}
+        personName: {type: string, minLength: 1, maxLength: 1024}
+        personIdNum: {type: string, minLength: 1, maxLength: 128, description: Full backend ID number; never converted to a numeric type}
+        personPhoto: {type: string, format: uri, maxLength: 4096, description: Complete HTTP(S) enrollment photo URL}
+        seat: {type: string, nullable: true}
+    ActivitySync:
+      type: object
+      additionalProperties: false
+      required: [activityId, activityName, activityNum, activityState, activityStart, activityEnd]
+      properties:
+        activityId: {type: string, minLength: 1, maxLength: 1024}
+        activityName: {type: string, minLength: 1, maxLength: 1024}
+        activityNum: {type: string, minLength: 1, maxLength: 1024}
+        activityState: {type: string, enum: ['0', '1', '2']}
+        activityStart: {type: string, format: date-time}
+        activityEnd: {type: string, format: date-time}
+        cameras:
+          type: array
+          maxItems: 10000
+          items: {$ref: '#/components/schemas/Camera'}
+        keyPersons:
+          type: array
+          maxItems: 500
+          items: {$ref: '#/components/schemas/KeyPerson'}
+    CameraBindings:
+      type: object
+      additionalProperties: false
+      required: [activityId, cameras]
+      properties:
+        activityId: {type: string, minLength: 1, maxLength: 1024}
+        cameras:
+          type: array
+          maxItems: 10000
+          items: {$ref: '#/components/schemas/Camera'}
+    PersonImport:
+      type: object
+      additionalProperties: false
+      required: [activityId, keyPersons]
+      properties:
+        activityId: {type: string, minLength: 1, maxLength: 1024}
+        keyPersons:
+          type: array
+          maxItems: 500
+          items: {$ref: '#/components/schemas/KeyPerson'}
+    MonitoringSwitch:
+      type: object
+      additionalProperties: false
+      required: [activityId, enabled]
+      properties:
+        activityId: {type: string, minLength: 1, maxLength: 1024}
+        enabled: {type: boolean, default: false}
+    PlatformReply:
+      type: object
+      required: [code, message, activityId, data]
+      properties:
+        code: {type: integer}
+        message: {type: string}
+        activityId: {type: string}
+        duplicate: {type: boolean}
+        data:
+          type: object
+          properties:
+            enabled: {type: boolean}
+            activitySaved: {type: boolean}
+            total: {type: integer}
+            successCount: {type: integer}
+            failedCount: {type: integer}
+            keyPersons:
+              type: array
+              items:
+                type: object
+                required: [personId, status, recognitionReady, message]
+                properties:
+                  personId: {type: string}
+                  status: {type: string, enum: [SUCCESS, FAILED]}
+                  recognitionReady: {type: boolean}
+                  message: {type: string}
+                  expiresAtUnixMs: {type: integer, format: int64}
+    PersonTrackEvent:
+      type: object
+      additionalProperties: false
+      required: [event_id, event_type, revision, activity_id, device_id, observation_id, person_id, person_name, person_id_num, camera_id, camera_name, captured_at_unix_ms, clock_uncertainty_ms, capture_photo_url]
+      properties:
+        event_id: {type: string, minLength: 1}
+        event_type: {type: string, enum: [UPSERT, RETRACT]}
+        revision: {type: integer, format: int64, minimum: 1}
+        activity_id: {type: string, minLength: 1}
+        device_id: {type: string, minLength: 1}
+        observation_id: {type: string, minLength: 1}
+        person_id: {type: string, nullable: true}
+        person_name: {type: string, nullable: true, description: Explicit user-required extension to the supplied v4.1 event example}
+        person_id_num: {type: string, nullable: true, description: Full ID number; explicit user-required extension}
+        camera_id: {type: string, description: Same backend UUID as device_id}
+        camera_name: {type: string, description: Backend camera name frozen when the event is created}
+        captured_at_unix_ms: {type: integer, format: int64, minimum: 0}
+        clock_uncertainty_ms: {type: integer, minimum: 0, maximum: 60000}
+        capture_photo_url:
+          type: string
+          format: byte
+          maxLength: 6990508
+          description: Despite the historical field name, pure Base64 of this matched person's captured face crop; never an enrollment photo, full frame or URL. Each face in a multi-person frame has its own observation and crop.
+x-platform-event-receiver: /api-security/algorithm/person-track/events
+x-person-retention: 72 hours from successful registration; identical retries do not extend expiry; pending event snapshots survive until acknowledgement
+x-deduplication: Same activity/person across all cameras within 5000ms inclusive; first committed valid observation represents the group

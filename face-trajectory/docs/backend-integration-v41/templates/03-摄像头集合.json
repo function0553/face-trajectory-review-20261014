@@ -1,0 +1,13 @@
+{
+  "activityId": "ACT-001",
+  "cameras": [
+    {
+      "deviceId": "d17236ab-7a66-4c33-89a8-0ae22f071101",
+      "deviceName": "入口相机"
+    },
+    {
+      "deviceId": "d17236ab-7a66-4c33-89a8-0ae22f071102",
+      "deviceName": "通道相机"
+    }
+  ]
+}

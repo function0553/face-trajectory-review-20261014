@@ -19,6 +19,7 @@ class CameraTableTests(unittest.TestCase):
         self.assertEqual(len(set(keys)),2)
         self.assertFalse(result['runtime_ready'])
         self.assertNotIn('rtsp://',str(result))
+        self.assertTrue(all(b['camera_name'] is None for b in result['bindings']))
     def test_unverified_ip_is_pending_and_deleted_row_is_excluded(self):
         result=compile_camera_rows([row(ip=None),row('C2',**{'DB deleted标志':1}),row('C3',ip='未核实')],SCOPE,'S')
         self.assertEqual(result['config']['cameras'],[])

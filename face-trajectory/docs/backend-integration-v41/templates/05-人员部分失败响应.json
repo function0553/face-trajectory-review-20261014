@@ -1,0 +1,26 @@
+{
+  "code": 200,
+  "message": "本次处理完成",
+  "activityId": "ACT-001",
+  "data": {
+    "activitySaved": false,
+    "total": 2,
+    "successCount": 1,
+    "failedCount": 1,
+    "keyPersons": [
+      {
+        "personId": "P-001",
+        "status": "SUCCESS",
+        "recognitionReady": true,
+        "message": "入库完成",
+        "expiresAtUnixMs": 1793010600000
+      },
+      {
+        "personId": "P-002",
+        "status": "FAILED",
+        "recognitionReady": false,
+        "message": "<该人员的实际失败原因>"
+      }
+    ]
+  }
+}

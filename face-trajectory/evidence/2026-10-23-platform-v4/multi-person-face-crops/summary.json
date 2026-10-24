@@ -1,0 +1,64 @@
+{
+  "scope": "Local real URL/image decode/crop/alignment and C++ worker; synthetic detector and embeddings only",
+  "passed": 14,
+  "total": 14,
+  "checks": [
+    {
+      "name": "two_people_url_photos_individually_enrolled",
+      "passed": true
+    },
+    {
+      "name": "enrollment_preserves_backend_person_id_name_and_id_number",
+      "passed": true
+    },
+    {
+      "name": "same_frame_two_faces_have_distinct_observation_ids",
+      "passed": true
+    },
+    {
+      "name": "original_person_fields_PERSON-A",
+      "passed": true
+    },
+    {
+      "name": "capture_is_face_crop_not_full_frame_or_enrollment_PERSON-A",
+      "passed": true
+    },
+    {
+      "name": "capture_face_matches_that_person_PERSON-A",
+      "passed": true
+    },
+    {
+      "name": "original_time_and_camera_PERSON-A",
+      "passed": true
+    },
+    {
+      "name": "original_person_fields_PERSON-B",
+      "passed": true
+    },
+    {
+      "name": "capture_is_face_crop_not_full_frame_or_enrollment_PERSON-B",
+      "passed": true
+    },
+    {
+      "name": "capture_face_matches_that_person_PERSON-B",
+      "passed": true
+    },
+    {
+      "name": "original_time_and_camera_PERSON-B",
+      "passed": true
+    },
+    {
+      "name": "two_distinct_priority_people_are_both_reported",
+      "passed": true
+    },
+    {
+      "name": "two_people_do_not_share_the_same_capture_photo",
+      "passed": true
+    },
+    {
+      "name": "five_second_cross_camera_dedup_is_per_person",
+      "passed": true
+    }
+  ],
+  "failure": null
+}

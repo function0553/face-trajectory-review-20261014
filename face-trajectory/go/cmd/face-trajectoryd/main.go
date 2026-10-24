@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -47,6 +48,35 @@ func (p *retentionPaths) Set(value string) error {
 	return nil
 }
 
+// loadSharedSecret reads the shared backend secret from a file or, when no file
+// is configured, from FACE_TRAJECTORY_AUTH_SHARED_SECRET. The value is never
+// accepted as a command line flag: argv is visible to every local user through
+// ps and /proc/<pid>/cmdline.
+func loadSharedSecret(path string) (string, error) {
+	if path == "" {
+		return strings.TrimSpace(os.Getenv("FACE_TRAJECTORY_AUTH_SHARED_SECRET")), nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("auth-shared-secret-file must be a regular file")
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return "", fmt.Errorf("auth-shared-secret-file must not be readable by group or others; chmod 600")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	secret := strings.TrimSpace(string(raw))
+	if secret == "" {
+		return "", fmt.Errorf("auth-shared-secret-file is empty")
+	}
+	return secret, nil
+}
+
 func main() {
 	workerPath := flag.String("worker", "", "path to face_trajectory_worker executable")
 	address := flag.String("addr", "127.0.0.1:8081", "local listen address")
@@ -58,6 +88,7 @@ func main() {
 	queueResults := flag.Bool("push-results", false, "queue results even when receiver URL is not available")
 	authKeysPath := flag.String("auth-public-key-file", "", "backend Ed25519 public key JSON; empty fails closed")
 	authIssuer := flag.String("auth-issuer", "", "trusted backend identity issuer")
+	authSecretFile := flag.String("auth-shared-secret-file", "", "file holding the shared backend secret; falls back to FACE_TRAJECTORY_AUTH_SHARED_SECRET")
 	clockKeysPath := flag.String("clock-public-key-file", "", "verified UTC authority Ed25519 public key JSON")
 	clockIssuer := flag.String("clock-issuer", "", "trusted verified UTC authority issuer")
 	clockProofPath := flag.String("clock-proof-file", "", "challenge-bound signed UTC proof; authority refreshes atomically")
@@ -73,8 +104,23 @@ func main() {
 	if *retentionInterval < time.Second || *retentionInterval > 24*time.Hour {
 		log.Fatal("retention interval must be between one second and 24 hours")
 	}
-	if (*authKeysPath == "") != (*authIssuer == "") || (*clockKeysPath == "") != (*clockIssuer == "") || (*clockKeysPath == "") != (*clockProofPath == "") {
-		log.Fatal("authorization requires both key file and issuer; trusted clock requires key file, issuer and proof file")
+	sharedSecret, secretErr := loadSharedSecret(*authSecretFile)
+	if secretErr != nil {
+		log.Fatal(secretErr)
+	}
+	if sharedSecret != "" && (*authKeysPath != "" || *authIssuer != "") {
+		log.Fatal("shared secret authorization and signed backend identity are mutually exclusive")
+	}
+	if sharedSecret == "" {
+		if (*authKeysPath == "") != (*authIssuer == "") {
+			log.Fatal("authorization requires both key file and issuer, or a shared secret")
+		}
+		if *authKeysPath == "" {
+			log.Fatal("authorization requires a shared secret or a backend public key file; empty fails closed")
+		}
+	}
+	if (*clockKeysPath == "") != (*clockIssuer == "") || (*clockKeysPath == "") != (*clockProofPath == "") {
+		log.Fatal("trusted clock requires key file, issuer and proof file")
 	}
 	var authKeys, clockKeys trust.Keys
 	var err error
@@ -90,7 +136,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	verifier := &trust.Verifier{Keys: authKeys, Issuer: *authIssuer}
+	verifier := &trust.Verifier{Keys: authKeys, Issuer: *authIssuer, SharedSecret: sharedSecret}
 	clock, err := trust.NewClock(clockKeys, *clockIssuer, *clockProofPath)
 	if err != nil {
 		log.Fatal(err)
@@ -120,6 +166,25 @@ func main() {
 	go func() { defer close(pushDone); sender.Run(ctx) }()
 	retentionDone := make(chan struct{})
 	go func() { defer close(retentionDone); retentionManager.Loop(ctx) }()
+	// The business-authorized 72h personnel lifetime is independent of optional
+	// historical evidence retention. A trusted clock is still required.
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				call, cancel := context.WithTimeout(ctx, 20*time.Second)
+				_, err := fair.Request(call, json.RawMessage(`{"op":"platform_v4_expire"}`))
+				cancel()
+				if err != nil && ctx.Err() == nil {
+					log.Print("personnel expiry sweep unavailable; retrying on next interval")
+				}
+			}
+		}
+	}()
 	shutdownDone := make(chan struct{})
 	go func() {
 		<-ctx.Done()

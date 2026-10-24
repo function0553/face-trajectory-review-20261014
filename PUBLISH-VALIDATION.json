@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "operation": "Publish the current P1/P2 source and v4.1 backend handoff to the existing GitHub repository",
+  "source_files_verified_byte_identical": 250,
+  "exported_python_ast_files": 73,
+  "python_unittest": {
+    "total": 47,
+    "passed": 46,
+    "skipped": 1,
+    "errors": 0,
+    "skip_reason": "optional openpyxl unavailable"
+  },
+  "go_test": {
+    "passed_packages": 6,
+    "command": "go test ./..."
+  },
+  "v41_real_worker_synthetic_replay": {
+    "total": 35,
+    "passed": 35,
+    "production_state_used": false
+  },
+  "worker_boundary": "Replay and the optional real-worker Python test use the existing local 2026-10-23 worker artifact; no C++ rebuild is claimed for this publication",
+  "publication_scan": {
+    "private_key_blocks": 0,
+    "github_tokens": 0,
+    "non_example_credential_urls": 0
+  },
+  "server_modified": false,
+  "raw_production_data_exported": false,
+  "known_unfixed_issues": [
+    "Unicode photo URL normalization in read_photo",
+    "Photo download authentication contract",
+    "Enrollment quality thresholds are not calibrated"
+  ],
+  "excluded": [
+    "server diagnostic logs and batch records",
+    "personal photos and identity data",
+    "credentials and signing keys",
+    "runtime databases",
+    "models and weights",
+    "compiled binaries and environments"
+  ]
+}

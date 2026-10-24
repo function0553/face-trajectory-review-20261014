@@ -81,6 +81,8 @@ std::string ActivityStore::Digest(const std::string& text) {
     std::ostringstream s;s<<std::hex<<std::setfill('0');for(auto n:h)s<<std::setw(8)<<n;return s.str();
 }
 json ActivityStore::Content(json r) {
+    if(r.value("_platform_protocol",0)==4)for(const auto* k:{"config_version","binding_version","monitoring_version"})r.erase(k);
+    r.erase("_platform_protocol");
     for(const auto* k:{"op","_trusted_clock","_client_context","_source_event_key","_normalization","_content_digest"})r.erase(k);
     return r;
 }
@@ -186,6 +188,19 @@ json ActivityStore::Control(const json& r) {
 
 std::optional<json> ActivityStore::Before(json& r,State& scope) {
     const auto now=TrustedNow(r);const auto c=Context(Text(r,"activity_id"));
+    const bool platform=c.value("configuration",json::object()).value("platform_protocol",0)==4;
+    if(platform) {
+        r["_platform_protocol"]=4;
+        // V4.1 keeps CAS internal. P1's configured version snapshot need not
+        // change whenever the backend updates names or the monitored list.
+        for(const auto* k:{"config_version","binding_version","monitoring_version"})r[k]=c.at(k);
+        r["activity_num"]=c.at("activity_num");
+        if(Event(r)) {
+            if(r.at("op")!="monitoring_observe")throw std::invalid_argument("platform v4 accepts camera observations only");
+            r["observation"]["source_id"]=r.at("observation").at("camera_id");
+            r["route_rule_id"]="PLATFORM-V4";
+        }
+    }
     if(!Event(r)) {
         if(r.contains("activity_num")&&r.at("activity_num")!=c.at("activity_num"))throw std::invalid_argument("SOURCE_CONFLICT: activity_num disagrees with authoritative mapping");
         for(const auto* k:{"config_version","binding_version","monitoring_version"})
@@ -232,6 +247,13 @@ std::optional<json> ActivityStore::Before(json& r,State& scope) {
     const auto previous=std::stoll(root_.Get("retention_meta","next_deadline").value_or(std::to_string(std::numeric_limits<std::int64_t>::max())));
     if(deadline<previous)root_.Put("retention_meta","next_deadline",std::to_string(deadline));
     auto reasons=json::array();
+    if(platform) {
+        const auto& config=c.at("configuration");
+        const auto time=known?r.at("_normalization").at("captured_at_unix_ms").get<std::int64_t>():now;
+        if(config.at("activity_state")=="2" || now<config.at("start_unix_ms").get<std::int64_t>() || now>=config.at("end_unix_ms").get<std::int64_t>() ||
+           time<config.at("start_unix_ms").get<std::int64_t>() || time>=config.at("end_unix_ms").get<std::int64_t>())
+            reasons.push_back("ACTIVITY_OUTSIDE_TIME_WINDOW");
+    }
     for(const auto* k:{"config_version","binding_version","monitoring_version"})if(Version(r,k)!=c.at(k))reasons.push_back(std::string("STALE_")+k);
     if(r.contains("activity_num") && r.at("activity_num")!=c.at("activity_num"))reasons.push_back("ACTIVITY_MAPPING_CONFLICT");
     if(c.at("enabled")!=true)reasons.push_back("ACTIVITY_STOPPED");

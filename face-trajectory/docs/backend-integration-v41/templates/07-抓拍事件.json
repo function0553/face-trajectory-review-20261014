@@ -1,0 +1,16 @@
+{
+  "event_id": "pt:<稳定事件摘要>",
+  "event_type": "UPSERT",
+  "revision": 1,
+  "activity_id": "ACT-001",
+  "device_id": "d17236ab-7a66-4c33-89a8-0ae22f071101",
+  "observation_id": "<本次单脸抓拍观察ID>",
+  "person_id": "P-001",
+  "person_name": "测试人员甲",
+  "person_id_num": "<甲的完整身份证号>",
+  "camera_id": "d17236ab-7a66-4c33-89a8-0ae22f071101",
+  "camera_name": "入口相机",
+  "captured_at_unix_ms": 1792751400000,
+  "clock_uncertainty_ms": 1,
+  "capture_photo_url": "<甲在本次画面中的人脸裁剪JPEG纯Base64>"
+}

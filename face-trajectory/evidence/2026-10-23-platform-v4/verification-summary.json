@@ -1,0 +1,215 @@
+{
+  "contract": "user-supplied v4.1 plus explicit name/ID-number,72h,cross-camera 5s requirements",
+  "source_files": [
+    {
+      "path": "face-trajectory/cpp/src/platform_v4.cpp",
+      "size": 13711,
+      "sha256": "fb2df30ecf6b9401224ef7b8d21dcb844762d835e923118aa887eac7b93c7b0b"
+    },
+    {
+      "path": "face-trajectory/cpp/include/face_trajectory/platform_v4.hpp",
+      "size": 300,
+      "sha256": "2a0985cb411dd78cf39a6e899b6b662a71821ce201acde8892f36e01068699d0"
+    },
+    {
+      "path": "face-trajectory/cpp/src/activity.cpp",
+      "size": 23249,
+      "sha256": "cf660a6eb6a421b52f3f016c848103f75154517a2ba43e688beb8945bc53c095"
+    },
+    {
+      "path": "face-trajectory/cpp/src/person_track.cpp",
+      "size": 8098,
+      "sha256": "29c53ae32cd3bfd5caac7e1961b800aff6b5d3f590884f8348f0c21e0b8cbead"
+    },
+    {
+      "path": "face-trajectory/cpp/src/monitoring.cpp",
+      "size": 41054,
+      "sha256": "372eb69288496b0ab549366907bc0f2ebb4a73c5119ed57127e9be4d23151ad7"
+    },
+    {
+      "path": "face-trajectory/cpp/src/worker.cpp",
+      "size": 78519,
+      "sha256": "02a825a7ed8b27fed1eedfe93ecdd9f6ee709369456ed39a54605312d542fbb0"
+    },
+    {
+      "path": "face-trajectory/cpp/CMakeLists.txt",
+      "size": 1926,
+      "sha256": "bb65b1e92ba5a67b9360d025015b98fa2a215eaddf35edb93432e0cd5b33a392"
+    },
+    {
+      "path": "face-trajectory/go/internal/api/platform_v4.go",
+      "size": 12262,
+      "sha256": "ada5461eed2593b435af4b24763bf807f506984eb9d67959bf03679a3264ae20"
+    },
+    {
+      "path": "face-trajectory/go/internal/api/platform_v4_test.go",
+      "size": 10376,
+      "sha256": "59125d1d71fa15c56599cb19f5cda5f4409efb2d2e79df0349739fe8a7ec11d6"
+    },
+    {
+      "path": "face-trajectory/go/internal/api/server.go",
+      "size": 10868,
+      "sha256": "d8bd71afc413d0607ff14835bc30112e69f901017e53d4b1a548048bfa36bc48"
+    },
+    {
+      "path": "face-trajectory/go/cmd/face-trajectoryd/main.go",
+      "size": 8196,
+      "sha256": "caae8160d46b4211b765923533a55f3edb7e06a88939e35b78d66859c8e37e93"
+    },
+    {
+      "path": "face-trajectory/tools/platform_photo_import.py",
+      "size": 1445,
+      "sha256": "4510aedf7cc1c6b6c9471b8980bc1b3282d96d5d9bf986e72a2438d1def12d6f"
+    },
+    {
+      "path": "face-trajectory/tools/verify_platform_v41.py",
+      "size": 11239,
+      "sha256": "3effac86c8c8be4a3070e9a46770d34750c096e73505c68a4a02965c7c438025"
+    },
+    {
+      "path": "face-trajectory/openapi.yaml",
+      "size": 204702,
+      "sha256": "cdf77ac1406efd2a551704d8fe1d60ba766c22b557bc7d800640bd69e2286666"
+    },
+    {
+      "path": "face-trajectory/openapi-platform-v4.1.yaml",
+      "size": 9227,
+      "sha256": "78bd4b7216598f054c205ab2da8d448211cbf406e6ff0beb1dc19f58193e1fdc"
+    },
+    {
+      "path": "face-trajectory/docs/person-track-platform-v4.1.md",
+      "size": 9803,
+      "sha256": "091823e00761ebd8221e12cacbe0e9525897288b66f8cfcb298e8daefe66612e"
+    },
+    {
+      "path": "face-trajectory/HANDOFF.md",
+      "size": 127278,
+      "sha256": "fea9a4a79154adde082e8461694c6893bf754650548471076f1c81e2fb7de72f"
+    },
+    {
+      "path": "face-trajectory/docs/README.md",
+      "size": 6332,
+      "sha256": "4aada06daeee6ec8ec8916822a678477207708598c5afe2dcd33c9215734e583"
+    },
+    {
+      "path": "face-recognition-engine/src/face_engine/platform_photos.py",
+      "size": 5508,
+      "sha256": "93c8127e0e74bb6668ae88a88ce8cbd89282fb541d65ed6fa987541fd6e72ed7"
+    },
+    {
+      "path": "face-recognition-engine/src/face_engine/trajectory_bridge.py",
+      "size": 30247,
+      "sha256": "032db4d3ede8af924a2dcf897bfbd95764f5117bb0feab165bc95146d2787526"
+    },
+    {
+      "path": "face-recognition-engine/src/face_engine/monitoring_service.py",
+      "size": 47806,
+      "sha256": "ba352c3d32c471996133642dc6939c83650f924f3c3669e40b9487e155bfb703"
+    },
+    {
+      "path": "face-recognition-engine/tests/test_platform_photos.py",
+      "size": 5855,
+      "sha256": "a4b28c0eb28608fd31435f30657a87f0adeee25b02108c39a072f27afef6ce78"
+    },
+    {
+      "path": "face-trajectory/tools/verify_multi_person_faces.py",
+      "size": 8080,
+      "sha256": "230f7b0838e79d6eb2751bac5448aa97330f6bc343fb6b29d39f6be93d61d966"
+    },
+    {
+      "path": "face-recognition-engine/tests/test_photo_metadata.py",
+      "size": 4692,
+      "sha256": "1ff7e737bfea6fbd238e5afebde7c96f81dacc7b8273b7665d6f4084d12d09a1"
+    },
+    {
+      "path": "face-trajectory/tools/verify_capture_source_clock.py",
+      "size": 8918,
+      "sha256": "fd582fa0501cdb9bd524b271291874127dff581cac9ae3b0643f93bcb878d1fd"
+    },
+    {
+      "path": "face-recognition-engine/src/face_engine/platform_runtime.py",
+      "size": 18434,
+      "sha256": "c54cb017d46e113d1a6ca8d8fda0173c1f1c4d7b0a5ab4cd62f6b9fae93be2f7"
+    },
+    {
+      "path": "face-recognition-engine/tests/test_platform_runtime.py",
+      "size": 19601,
+      "sha256": "1affede01b6f36f1d85d487ca21e2c18d817278b543cdbaaeb5e3e3355c9b871"
+    },
+    {
+      "path": "face-recognition-engine/examples/monitoring-platform-v41.example.json",
+      "size": 1665,
+      "sha256": "42c1376bf646101939fc2571f7757b1a427851b0dc698ef791e4d44248178ff7"
+    },
+    {
+      "path": "face-recognition-engine/examples/monitoring-platform-cameras.example.json",
+      "size": 414,
+      "sha256": "789a963fea43a6f75e6fe49f30da49d45571720794a94ca03c3ac8ab4cbe5149"
+    },
+    {
+      "path": "face-trajectory/docs/platform-capture-routing-v41.md",
+      "size": 5495,
+      "sha256": "e227a10b78a9cfa671c7de77cf2a98de563be1d0b42397bc3179a8aa47c59c52"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "face-trajectory/evidence/2026-10-23-platform-v4/face-trajectoryd.exe",
+      "size": 11654144,
+      "sha256": "8db77c98ca08b225097cdca267b08069f54771926dd64aa6ef87cbb21d2219c9"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-23-platform-v4/face-trajectoryd-linux-amd64",
+      "size": 11216211,
+      "sha256": "9ff052835b76968bf6b84f499e72e189bd452211cc301faabb778e5d2f73673c"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-23-platform-v4/face_trajectory_worker.exe",
+      "size": 7950279,
+      "sha256": "92baa10080170192d96e7dc19b9732b011cccd9f479e42ef28ff4e3998720087"
+    },
+    {
+      "path": "face-trajectory/evidence/2026-10-23-server252-v41-deploy/face_trajectory_worker-linux-amd64",
+      "size": 4497704,
+      "sha256": "267191221357746455a2276e00f0523a7cd0593f1cdbbebbdc28df856b7eb4f1"
+    }
+  ],
+  "verification": {
+    "v41_real_worker_checks": 35,
+    "legacy_person_track_checks": 26,
+    "python_tests_passed": 46,
+    "python_tests_skipped": 1,
+    "go_packages_passed": [
+      "api",
+      "push",
+      "retention",
+      "trust",
+      "worker",
+      "face-trajectoryd"
+    ],
+    "go_vet": "passed api and daemon",
+    "cpp_ctest_passed": 2,
+    "real_model_blank_url_photo_rejected": true,
+    "openapi_yaml_and_local_refs": "passed",
+    "multi_person_same_frame_face_correspondence_checks": 14,
+    "capture_photo_type": "per-face JPEG crop from the same detection used for the observation embedding",
+    "earlier_full_frame_capture_default": "superseded by per-face crop correction",
+    "original_capture_source_clock_checks": 19,
+    "original_capture_source_clock_fix": "passed; see ../2026-10-23-source-clock-fix/verification-summary.json",
+    "platform_dynamic_routing_checks": 15,
+    "independent_dynamic_routing_review": "15 passed; no remaining blocking findings",
+    "dynamic_routing_evidence": "../2026-10-23-platform-capture-routing/verification-summary.json",
+    "server_python_tests_passed": 47,
+    "server_python_tests_skipped": 0,
+    "server_http_checks": 10,
+    "managed_restart_health_samples": 255,
+    "clock_renewal_regression": "two renewals passed; original Go clock security unchanged"
+  },
+  "deployed_to_252": true,
+  "real_backend_acceptance": false,
+  "real_camera_acceptance": false,
+  "linux_cpp_worker_built": true,
+  "production_gap": "P1 running IDLE with zero physical video sources; outbound push receiver/auth not configured; real field/backend acceptance pending",
+  "server_release": "/home/haha/face-trajectory/releases/v41-20261023-r1",
+  "deployment_evidence": "../2026-10-23-server252-v41-deploy/verification-summary.json"
+}

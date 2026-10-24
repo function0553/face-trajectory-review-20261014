@@ -104,6 +104,12 @@ json Retain(State& root,std::int64_t now,bool dry_run){
         auto snapshots=trajectories.Prune(cutoff,dry_run,std::vector<std::string>(expired.begin(),expired.end()));
         const auto earliest=snapshots.at("earliest_retained_capture_unix_ms").get<std::int64_t>();
         if(earliest<std::numeric_limits<std::int64_t>::max()-ActivityStore::RetentionMs)next=std::min(next,earliest+ActivityStore::RetentionMs);
+        std::set<std::string> live_person_track_representatives;
+        for(const auto& row:rows)if(Scope(row.ns).second=="person_track_candidate") {
+            const auto v=Parse(row.value);
+            if(!expired.count(row.key) && v.at("captured_at_unix_ms").get<std::int64_t>()>=cutoff)
+                live_person_track_representatives.insert(v.value("representative",std::string{}));
+        }
         for(const auto& row:rows){const auto ns=Scope(row.ns).second;auto v=Parse(row.value);
             if(ns=="owned_template"){
                 auto live=json::array();for(const auto& t:v){if(expired.count(t.at("observation_id").get<std::string>())){dead_templates.insert(t.at("template_id"));remove("template",t.at("template_id"));}else live.push_back(t);}
@@ -111,7 +117,9 @@ json Retain(State& root,std::int64_t now,bool dry_run){
             }
             if(ns=="monitoring_observation"&&expired.count(row.key))remove(ns,row.key);
             if(ns=="monitoring_observation_revision"&&expired.count(row.ref))remove(ns,row.key);
-            if(ns=="person_track_state"&&expired.count(row.key))remove(ns,row.key);
+            if(ns=="person_track_candidate" && (expired.count(row.key) || v.at("captured_at_unix_ms").get<std::int64_t>()<cutoff))remove(ns,row.key);
+            if(ns=="person_track_state" && (expired.count(row.key) || v.at("captured_at_unix_ms").get<std::int64_t>()<cutoff) &&
+               !live_person_track_representatives.count(row.key))remove(ns,row.key);
             if(ns=="monitoring_gate"||ns=="monitoring_gate_revision"){
                 const auto event=ns=="monitoring_gate"?row.key:row.ref;
                 const auto& norm=v.at("normalization");const bool known=norm.value("status","")=="NORMALIZED";

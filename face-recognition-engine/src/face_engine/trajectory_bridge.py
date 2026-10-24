@@ -165,6 +165,10 @@ def scoped_event_key(kind, value, event_field="event_id"):
 
 def verify_activity_receipt(original, reply, *, require_route=True):
     context = activity_context(original, require_route=require_route)
+    if reply.get('platform_protocol') == 4:
+        if reply.get('activity_id') != context['activity_id']:
+            raise ActivityContextError('P2 acknowledgement activity mismatch')
+        return
     if any(reply.get(field) != item for field, item in context.items()):
         raise ActivityContextError("P2 acknowledgement activity/version mismatch")
     monitor = reply.get("monitoring")
@@ -275,6 +279,7 @@ class TrajectoryExtractor:
                     feature_space=self.feature_space, detection_score=float(face["score"]),
                     face_size_px=quality["metrics"]["face_size_px"], quality=quality)
                 observation.update(context)
+                observation['camera_name'] = meta.get('camera_name')
                 if time_record is not None:
                     observation["time_record"] = json.loads(encoded(time_record))
                 face_meta = per_face_meta.get(str(index), {})
@@ -291,6 +296,9 @@ class TrajectoryExtractor:
                         observation[key] = face_meta[key]
                 if bool(observation.get("local_track_id")) != bool(observation.get("track_session_id")):
                     raise ValueError("local track ID and track session must be supplied together")
+                if meta.get('purpose') != 'GALLERY_ENROLLMENT':
+                    from face_engine.platform_photos import capture_base64
+                    observation['capture_photo_base64'] = capture_base64(image, face['bbox'])
                 output["observations"].append(observation)
                 aligned.append(crop)
                 targets.append(observation)

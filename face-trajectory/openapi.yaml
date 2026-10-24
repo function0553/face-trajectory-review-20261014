@@ -1,9 +1,10 @@
 openapi: 3.0.3
 info:
   title: Face Trajectory Algorithm API
-  version: 0.14.0
-  description: C++17 activity-isolated algorithm core with Go HTTP transport. Every activity-scoped operation requires explicit
-    activity_id and applicable CAS versions plus backend-signed action authorization. Activity creation, user selection and
+  version: 0.15.0
+  description: C++17 activity-isolated algorithm core with Go HTTP transport. The v4.1 camelCase platform contract is specified
+    in openapi-platform-v4.1.yaml and requires activityId in JSON Body with CAS managed internally. Legacy snake_case operations require explicit
+    activity_id and applicable CAS versions plus backend authorization. Activity creation, user selection and
     monitoring enablement are independent. Only qualified monitoring intake admits sightings; legacy raw bypass routes are
     rejected. Verified UTC comes from fresh challenge-bound external authority proofs, never host wall time alone. Configured
     C++ cleanup prunes the 168-hour rolling window including shared historical snapshots, replay and optional P1 SQLite adapters.
@@ -34,6 +35,14 @@ x-person-track-push:
   timeoutSeconds: 10
   identity: activity_id + source_id + observation_id; revision starts at 1 and increases on changed attribution or retraction
   registration: Requires a currently available valid registration template; URL-only registration cannot report recognition_ready
+x-platform-v41:
+  contract: ./openapi-platform-v4.1.yaml
+  documentation: ./docs/person-track-platform-v4.1.md
+  activityAssociation: Required camelCase activityId in JSON Body; activity query parameters are rejected
+  registration: Algorithm downloads URL photos and generates templates internally; platform does not supply embeddings
+  eventSchema: ./openapi-platform-v4.1.yaml#/components/schemas/PersonTrackEvent
+  personLifetimeMS: 259200000
+  pendingEvents: Immutable identity and Base64 snapshots retained independently until confirmed
 paths:
   /v1/monitoring/persons:
     post:
@@ -48,19 +57,24 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-              - $ref: '#/components/schemas/ActivityVersions'
-              - $ref: '#/components/schemas/MonitoringPersonRequest'
+              oneOf:
+              - $ref: './openapi-platform-v4.1.yaml#/components/schemas/PersonImport'
+              - allOf:
+                - $ref: '#/components/schemas/ActivityVersions'
+                - $ref: '#/components/schemas/MonitoringPersonRequest'
       responses:
         '200':
           description: Category and all templates committed, or identical historical revision acknowledged.
           content:
             application/json:
               schema:
-                allOf:
-                - $ref: '#/components/schemas/AuthorizedReply'
-                - $ref: '#/components/schemas/ActivityReplyContext'
-                - $ref: '#/components/schemas/MonitoringPersonReply'
+                oneOf:
+                - $ref: './openapi-platform-v4.1.yaml#/components/schemas/PlatformReply'
+                -
+                  allOf:
+                  - $ref: '#/components/schemas/AuthorizedReply'
+                  - $ref: '#/components/schemas/ActivityReplyContext'
+                  - $ref: '#/components/schemas/MonitoringPersonReply'
         '400':
           $ref: '#/components/responses/InvalidRequest'
         '409':
@@ -1163,17 +1177,22 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ActivitySyncRequest'
+              oneOf:
+              - $ref: './openapi-platform-v4.1.yaml#/components/schemas/ActivitySync'
+              - $ref: '#/components/schemas/ActivitySyncRequest'
       responses:
         '200':
           description: Committed result or documented retained/held receipt.
           content:
             application/json:
               schema:
-                allOf:
-                - $ref: '#/components/schemas/AuthorizedReply'
-                - $ref: '#/components/schemas/ActivityReplyContext'
-                - $ref: '#/components/schemas/ActivityReply'
+                oneOf:
+                - $ref: './openapi-platform-v4.1.yaml#/components/schemas/PlatformReply'
+                -
+                  allOf:
+                  - $ref: '#/components/schemas/AuthorizedReply'
+                  - $ref: '#/components/schemas/ActivityReplyContext'
+                  - $ref: '#/components/schemas/ActivityReply'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1200,17 +1219,22 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ActivityBindingsRequest'
+              oneOf:
+              - $ref: './openapi-platform-v4.1.yaml#/components/schemas/CameraBindings'
+              - $ref: '#/components/schemas/ActivityBindingsRequest'
       responses:
         '200':
           description: Committed result or documented retained/held receipt.
           content:
             application/json:
               schema:
-                allOf:
-                - $ref: '#/components/schemas/AuthorizedReply'
-                - $ref: '#/components/schemas/ActivityReplyContext'
-                - $ref: '#/components/schemas/ActivityReply'
+                oneOf:
+                - $ref: './openapi-platform-v4.1.yaml#/components/schemas/PlatformReply'
+                -
+                  allOf:
+                  - $ref: '#/components/schemas/AuthorizedReply'
+                  - $ref: '#/components/schemas/ActivityReplyContext'
+                  - $ref: '#/components/schemas/ActivityReply'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1237,17 +1261,22 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ActivityMonitoringRequest'
+              oneOf:
+              - $ref: './openapi-platform-v4.1.yaml#/components/schemas/MonitoringSwitch'
+              - $ref: '#/components/schemas/ActivityMonitoringRequest'
       responses:
         '200':
           description: Committed result or documented retained/held receipt.
           content:
             application/json:
               schema:
-                allOf:
-                - $ref: '#/components/schemas/AuthorizedReply'
-                - $ref: '#/components/schemas/ActivityReplyContext'
-                - $ref: '#/components/schemas/ActivityReply'
+                oneOf:
+                - $ref: './openapi-platform-v4.1.yaml#/components/schemas/PlatformReply'
+                -
+                  allOf:
+                  - $ref: '#/components/schemas/AuthorizedReply'
+                  - $ref: '#/components/schemas/ActivityReplyContext'
+                  - $ref: '#/components/schemas/ActivityReply'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1864,6 +1893,17 @@ components:
         object remain immutable across retries and evidence reconsideration. Existing normalized clock fields, if present,
         do not override the time_record adapter.
       properties:
+        capture_photo_base64:
+          type: string
+          format: byte
+          maxLength: 6990508
+          description: Internal P1 capture JPEG/PNG as pure Base64; required to emit a v4.1 recognized event. Not a platform enrollment field.
+        camera_name:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 1024
+          description: Device channel name snapshot obtained by P1. PERSON_TRACK_EVENTS never falls back to activity binding or spreadsheet names. Missing or unavailable is null; immutable across retries.
         capture_photo_url:
           $ref: '#/components/schemas/HttpPhotoUrl'
         observation_id:
@@ -3782,7 +3822,7 @@ components:
           maximum: 60000
         capture_photo_url:
           $ref: '#/components/schemas/HttpPhotoUrl'
-      description: Algorithm-to-platform wire body, not a platform endpoint implemented by this service. All capture metadata remains unchanged across corrections and retractions; retry bytes remain unchanged.
+      description: Algorithm-to-platform wire body. Same activity/person within 5000 ms of an active representative is suppressed across all cameras, including the boundary. Device name comes from P1, never binding/table names. Corrections may retract a redundant point or promote a suppressed capture. All emitted capture metadata and retry bytes remain unchanged.
     PersonTrackReceipt:
       type: object
       required: [code, message, event_id]
@@ -5118,7 +5158,7 @@ components:
           nullable: true
           minLength: 1
           maxLength: 1024
-          description: Authoritative display name required and nonnull in UE_CAMERA_EVENTS; optional or null in PERSON_TRACK_EVENTS.
+          description: Authoritative display name required and nonnull in UE_CAMERA_EVENTS. Not used for PERSON_TRACK_EVENTS, which reads device names from P1 observation snapshots.
         source_id:
           type: string
           minLength: 1

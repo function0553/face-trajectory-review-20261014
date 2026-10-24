@@ -1,0 +1,9 @@
+{
+  "code": 200,
+  "message": "处理完成",
+  "activityId": "ACT-001",
+  "duplicate": false,
+  "data": {
+    "enabled": false
+  }
+}

@@ -1,5 +1,6 @@
 """URL association only; synthetic image/model doubles, real alignment and queue."""
 import json
+import base64
 import sys
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ import cv2
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 from face_engine.trajectory_bridge import TrajectoryExtractor
 from face_engine.monitoring_service import enroll_manifest
+from face_engine.monitoring_service import decode_image
 from face_engine.monitoring_delivery import DeliveryStore
 
 class Detector:
@@ -34,11 +36,24 @@ class PhotoMetadata(unittest.TestCase):
         rows=self.extractor.extract([(self.image,metadata)])[0]
         self.assertEqual(len(rows),2)
         self.assertEqual([r.get('capture_photo_url') for r in rows],['https://photos.example.test/frame.jpg','https://photos.example.test/face-1.jpg'])
+    def test_device_name_is_carried_to_each_face_without_face_override(self):
+        rows=self.extractor.extract([(self.image,dict(self.meta,camera_name='设备实际通道名',faces={'0':{'camera_name':'wrong'}}))])[0]
+        self.assertEqual([r['camera_name'] for r in rows],['设备实际通道名']*2)
+        rows=self.extractor.extract([(self.image,self.meta)])[0]
+        self.assertTrue(all(r['camera_name'] is None for r in rows))
     def test_absent_url_stays_absent_and_face_null_overrides_frame(self):
         rows=self.extractor.extract([(self.image,self.meta)])[0]
         self.assertTrue(all('capture_photo_url' not in row for row in rows))
         rows=self.extractor.extract([(self.image,dict(self.meta,capture_photo_url='https://photos.example.test/frame.jpg',faces={'0':{'capture_photo_url':None}}))])[0]
         self.assertIsNone(rows[0].get('capture_photo_url'))
+    def test_same_frame_faces_keep_distinct_capture_crops(self):
+        rows=self.extractor.extract([(self.image,self.meta)])[0]
+        self.assertEqual([row['face_index'] for row in rows],[0,1])
+        self.assertEqual(len({row['observation_id'] for row in rows}),2)
+        self.assertNotEqual(rows[0]['capture_photo_base64'],rows[1]['capture_photo_base64'])
+        for row in rows:
+            crop=decode_image(base64.b64decode(row['capture_photo_base64'],validate=True))
+            self.assertEqual(crop.shape,(112,112,3))
     def test_enrollment_forwards_uploaded_person_display_fields(self):
         class EnrollmentExtractor:
             feature_space={'synthetic':True}

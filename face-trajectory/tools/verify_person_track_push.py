@@ -88,6 +88,9 @@ def main():
         check('same_millisecond_faces_are_distinct',second['person_track_event']['observation_id']=='face-1'
             and second['person_track_event']['captured_at_unix_ms']==wire['captured_at_unix_ms']
             and second['person_track_event']['capture_photo_url'] is None)
+        # Clear Q's separate passage before testing corrections of face-0;
+        # otherwise the new five-second rule intentionally suppresses that Q point.
+        correct(None,'face-1');ack(head())
         call(observe('normal',2));call(observe('anonymous',3))
         held=observe('held',face_size_px=1);call(held)
         missing=observe('unknown-time');missing['time_record']=None;call(missing)

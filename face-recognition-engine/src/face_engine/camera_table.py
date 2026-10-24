@@ -73,17 +73,21 @@ def compile_camera_rows(rows, context, source_id):
         record['host']=host
         prefix='FACE_CAMERA_'+hashlib.sha256(camera.encode()).hexdigest()[:20].upper()
         record['sub_url_env']=prefix+'_SUB_URL';record['main_url_env']=prefix+'_MAIN_URL'
+        record['name_url_env']=prefix+'_NAME_URL'
+        record['username_env']=prefix+'_USER';record['password_env']=prefix+'_PASSWORD'
         # Historical active is an online snapshot, not permission to exclude a
         # camera. Keep IDs distinct even when names or NVR addresses are shared.
         if context is not None:
             cameras.append(dict(camera_id=camera,source_id=source_id,activity_context=dict(context),role='interior',
                 sub_url_env=record['sub_url_env'],main_url_env=record['main_url_env'],
+                device_name=dict(protocol='hikvision_isapi',url_env=record['name_url_env'],
+                    username_env=record['username_env'],password_env=record['password_env'],refresh_seconds=5,timeout_seconds=2),
                 backend='ffmpeg',sample_fps=10,clock_profile_version=None))
             bindings.append(dict(source_id=source_id,device_id=camera,kind='CAMERA',
-                route_rule_id=context['route_rule_id'],camera_name=name))
+                route_rule_id=context['route_rule_id'],camera_name=None))
     return dict(catalog=catalog,config=dict(schema_version=1,cameras=cameras) if context is not None else None,
         bindings=bindings,pending=pending,deleted=deleted,duplicates=duplicates,runtime_ready=False,
-        remaining=['BACKEND_ACTIVITY_CONTEXT']*(context is None)+['STREAM_CONNECTIONS','QUALIFIED_CAPTURE_CLOCK','BACKEND_PERSON_ROSTER'])
+        remaining=['BACKEND_ACTIVITY_CONTEXT']*(context is None)+['STREAM_CONNECTIONS','DEVICE_NAME_CONNECTIONS','QUALIFIED_CAPTURE_CLOCK','BACKEND_PERSON_ROSTER'])
 
 
 def main():
@@ -107,7 +111,9 @@ def main():
     for camera in result['catalog']:
         if 'sub_url_env' in camera:
             template.extend([f"# camera_id={camera['camera_id']} host={camera['host']}",
-                f"$env:{camera['sub_url_env']} = ''",f"$env:{camera['main_url_env']} = ''"])
+                f"$env:{camera['sub_url_env']} = ''",f"$env:{camera['main_url_env']} = ''",
+                '# NAME_URL: HTTP(S) device address + /ISAPI/Streaming/channels/<actual-stream-id>',
+                f"$env:{camera['name_url_env']} = ''",f"$env:{camera['username_env']} = ''",f"$env:{camera['password_env']} = ''"])
     (args.output/'connections.template.ps1').write_text('\n'.join(template)+'\n',encoding='utf-8')
     report=dict(input=str(args.table.resolve()),input_sha256=hashlib.sha256(args.table.read_bytes()).hexdigest(),
         sheet=args.sheet,header_row=args.header_row,source_id=args.source_id,rows=len(result['catalog']),

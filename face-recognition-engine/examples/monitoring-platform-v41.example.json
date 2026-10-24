@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "model_config": "../configs/default.yaml",
+  "state_file": "../runtime/platform-v41/p1.sqlite",
+  "endpoint": "http://127.0.0.1:18301",
+  "p2_authorization_env": "FACE_TRAJECTORY_AUTHORIZATION",
+  "p2_timeout_seconds": 3,
+  "deployment_targets": {
+    "camera_count": 600,
+    "target_result_latency_seconds": 2,
+    "acceptable_result_latency_seconds": 3
+  },
+  "cameras_file": "monitoring-platform-cameras.example.json",
+  "http": {
+    "host": "127.0.0.1",
+    "port": 8092,
+    "token_env": "FACE_MONITORING_TOKEN"
+  },
+  "scheduling": {
+    "weights": [
+      6,
+      3,
+      1
+    ],
+    "fps": [
+      6,
+      2,
+      1
+    ],
+    "priority_ttl_seconds": 10,
+    "max_queued_cameras": 128,
+    "max_queue_mb": 512,
+    "max_frame_age_seconds": 2,
+    "empty_main_probe_seconds": 30
+  },
+  "storage": {
+    "max_pending": 10000,
+    "max_database_mb": 1024
+  },
+  "policy": {
+    "policy_id": "development-unvalidated-v1",
+    "match_threshold": 0.5,
+    "new_target_threshold": 0.35,
+    "min_margin": 0.05,
+    "template_update_threshold": 0.65,
+    "max_template_similarity": 0.98,
+    "min_detection_score": 0.6,
+    "min_face_size_px": 64,
+    "max_clock_uncertainty_ms": 60000,
+    "max_templates_per_target": 8,
+    "require_topology": false,
+    "topology_is_complete": false
+  },
+  "graph": {
+    "version": "unverified-no-topology",
+    "edges": []
+  },
+  "trajectory_options": {
+    "max_clock_uncertainty_ms": 60000
+  },
+  "platform_bindings": {
+    "state_file": "/home/haha/face-trajectory/state/face-trajectory.sqlite",
+    "poll_seconds": 2
+  }
+}

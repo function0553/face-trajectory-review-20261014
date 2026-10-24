@@ -1,0 +1,15 @@
+{
+  "issue": "Original capture source rejected after UUID routing",
+  "fix": "Reuse first dispatcher-generated normalization after validating original source; preserve original time_record",
+  "regressions": {
+    "regression": 19,
+    "v41-regression": 35,
+    "legacy-regression": 26,
+    "multi-person-regression": 14
+  },
+  "go_real_http": "passed with explicit original source_id",
+  "cpp_ctest_passed": 2,
+  "deployed_to_252": false,
+  "first_issue": "dynamic capture binding not fixed in this change",
+  "artifact_sha256": "92baa10080170192d96e7dc19b9732b011cccd9f479e42ef28ff4e3998720087"
+}

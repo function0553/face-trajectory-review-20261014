@@ -1,0 +1,5 @@
+{
+  "code": 200,
+  "message": "成功",
+  "event_id": "pt:<与收到的event_id完全一致>"
+}

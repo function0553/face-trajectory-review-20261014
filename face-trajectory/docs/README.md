@@ -1,6 +1,12 @@
 # P2 文档目录
 
+2026-10-23部署状态：[252 v4.1算法联调部署](../evidence/2026-10-23-server252-v41-deploy/README.md)。算法三项服务已运行并自启，后端未改；真实视频和后端推送仍待接入。
+
+2026-10-23当前改造入口：[人员轨迹平台v4.1算法接入](person-track-platform-v4.1.md)、[v4.1 OpenAPI](../openapi-platform-v4.1.yaml)。本轮基于用户修正后的v4.1实施，v4.0不作为实施合同，下方v1资料保留为旧接口参考。
+
 [当前交接](../HANDOFF.md) → [人员轨迹三方协议v1.0](person-track-platform-v1.md) → [监控与人脸接入](monitoring.md) → [OpenAPI 0.14.0](../openapi.yaml)。当前状态以主交接为准；带日期的报告保留当次证据及限制。
+
+[v4.1动态采集路由与252实机缺口](platform-capture-routing-v41.md)：本地15项通过，后端未改，尚未实机接通。
 
 ## 当前开发与接入
 

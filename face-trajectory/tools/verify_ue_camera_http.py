@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 P2=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(P2/'evidence/2026-10-10-activity-retention'))
-from verify_core import T0, scope
+from verify_core import T0, scope, iso
 
 
 def main():
@@ -85,7 +85,7 @@ def main():
                 time.sleep(.05)
         proof.write_text(signed(dict(issuer='SYNTHETIC',key_id='SYNTHETIC',challenge=health['clock']['challenge'],now_unix_ms=T0+100000,
                                     uncertainty_ms=0,valid_for_ms=120000,source_verified=True,source='SYNTHETIC_TEST',evidence_id='SYNTHETIC:UE-HTTP')))
-        expected={}
+        expected={};person_track_sample=None
         for item in json.loads(a.fixtures.read_text(encoding='utf-8')):
             original=item['request'];op=original['op']
             if a.person_track and op=='retention_run':break
@@ -95,19 +95,29 @@ def main():
                 continue
             if op not in paths or not item['response'].get('ok'):continue
             request={k:v for k,v in original.items() if k!='op' and not k.startswith('_')}
+            if a.person_track and op=='monitoring_observe' and person_track_sample is None:
+                person_track_sample=json.loads(json.dumps(request))
             result=call(paths[op],request)
             if op=='monitoring_observe' and result.get('camera_event'):
                 e=result['camera_event'];expected[e['observation_id']]=e
                 if e['observation_id']=='normal' and not a.person_track:break
         if a.person_track:
+            for index,when in enumerate((40000,41000)):
+                sample=json.loads(json.dumps(person_track_sample))
+                sample['observation'].update(observation_id='dedup-http-'+str(index),frame_id='dedup-http-'+str(index),camera_name='设备直读入口')
+                sample['time_record']['raw_time']=iso(T0+when)
+                assert call('/v1/monitoring/observe',sample)['status']=='ACCEPTED'
             deadline=time.monotonic()+12
             while time.monotonic()<deadline:
                 if call('/v1/push/status')['push']['pending']==0:break
                 time.sleep(.05)
-            assert len(received)==7,len(received)
+            assert len(received)==9,len(received)
             assert received[0]['raw']==received[1]['raw']==received[2]['raw'],'retry changed event body'
             events={x['event']['event_id']:x['event'] for x in received}
-            assert len(events)==5,len(events)
+            assert len(events)==7,len(events)
+            dedup=[x for x in events.values() if x['observation_id'].startswith('dedup-http-')]
+            assert len(dedup)==1 and dedup[0]['observation_id']=='dedup-http-0'
+            assert dedup[0]['camera_name']=='设备直读入口'
             rows=sorted((x for x in events.values() if x['observation_id']=='face-0'),key=lambda x:x['revision'])
             assert [x['revision'] for x in rows]==[1,2,3,4],rows
             assert [x['person_id'] for x in rows]==['P','Q',None,'P']

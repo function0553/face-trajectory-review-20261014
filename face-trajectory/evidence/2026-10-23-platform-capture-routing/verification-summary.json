@@ -1,0 +1,64 @@
+{
+  "scope": "Local algorithm changes and read-only server inspection; no backend changes",
+  "runtime_tests_passed": 15,
+  "independent_review_tests_passed": 15,
+  "all_p1_tests_total": 47,
+  "all_p1_tests_passed": 46,
+  "all_p1_tests_skipped": 1,
+  "skipped_reason": "optional openpyxl unavailable",
+  "original_source_clock_regression": 19,
+  "multi_person_face_regression": 14,
+  "backend_modified": false,
+  "server_modified": false,
+  "deployed_to_252": false,
+  "local_dynamic_routing_implemented": true,
+  "real_camera_acceptance": false,
+  "remaining": "Actual backend UUID -> video/capture source directory or existing read-only resolver has not been located; no running project P1 found",
+  "source_files": [
+    {
+      "path": "face-recognition-engine/src/face_engine/platform_runtime.py",
+      "size": 18434,
+      "sha256": "c54cb017d46e113d1a6ca8d8fda0173c1f1c4d7b0a5ab4cd62f6b9fae93be2f7"
+    },
+    {
+      "path": "face-recognition-engine/src/face_engine/monitoring_service.py",
+      "size": 47806,
+      "sha256": "ba352c3d32c471996133642dc6939c83650f924f3c3669e40b9487e155bfb703"
+    },
+    {
+      "path": "face-recognition-engine/tests/test_platform_runtime.py",
+      "size": 19601,
+      "sha256": "1affede01b6f36f1d85d487ca21e2c18d817278b543cdbaaeb5e3e3355c9b871"
+    },
+    {
+      "path": "face-recognition-engine/examples/monitoring-platform-v41.example.json",
+      "size": 1665,
+      "sha256": "42c1376bf646101939fc2571f7757b1a427851b0dc698ef791e4d44248178ff7"
+    },
+    {
+      "path": "face-recognition-engine/examples/monitoring-platform-cameras.example.json",
+      "size": 414,
+      "sha256": "789a963fea43a6f75e6fe49f30da49d45571720794a94ca03c3ac8ab4cbe5149"
+    },
+    {
+      "path": "face-trajectory/docs/platform-capture-routing-v41.md",
+      "size": 5295,
+      "sha256": "9be5e031cb1e63dca0ee7efb3505b892abf2770da7b038446906ad8474f060a7"
+    },
+    {
+      "path": "face-trajectory/docs/person-track-platform-v4.1.md",
+      "size": 9381,
+      "sha256": "9144adc76042cb9965320aeece8a6d6074468e34044ef3ad0ec65c2dad5cd4f7"
+    },
+    {
+      "path": "face-trajectory/docs/README.md",
+      "size": 6121,
+      "sha256": "7bbcdf9537f62d1046e577e906167a8c0815599d5931ff7efedb1d837c719e17"
+    },
+    {
+      "path": "face-trajectory/HANDOFF.md",
+      "size": 126550,
+      "sha256": "21f5cacde452a0d782d536297f14e17648245218ffce1033502f2d3b7e9ee2eb"
+    }
+  ]
+}

@@ -20,6 +20,14 @@
       "gst_python_env": "MONITOR_GSTREAMER_PYTHON",
       "sample_fps": 10,
       "clock_profile_version": null,
+      "device_name": {
+        "protocol": "hikvision_isapi",
+        "url_env": "MONITOR_CAMERA_NAME_URL",
+        "username_env": "MONITOR_CAMERA_USER",
+        "password_env": "MONITOR_CAMERA_PASSWORD",
+        "refresh_seconds": 5,
+        "timeout_seconds": 2
+      },
       "hikvision": {
         "enabled": false,
         "alert_url_env": "MONITOR_CAMERA_ALERT_URL",

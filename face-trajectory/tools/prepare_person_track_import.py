@@ -15,7 +15,7 @@ def main():
     for name in ('model-config','photo','activity-id','activity-num','venue-id','source-id','camera-id',
                  'person-id','person-name','profile-photo-url','output'):
         parser.add_argument('--'+name,required=True)
-    parser.add_argument('--camera-name',default=None)
+    parser.add_argument('--camera-name',default=None,help='Deprecated; PERSON_TRACK_EVENTS reads names from the camera device')
     args=parser.parse_args()
     # Stable platform IDs and filenames are inputs, never inferred from names.
     sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'face-recognition-engine'/'src'))
@@ -37,7 +37,7 @@ def main():
         '01-activity.json':dict(activity_id=args.activity_id,activity_num=args.activity_num,venue_id=args.venue_id,
             config_version=1,expected_config_version=0,configuration=dict(output_mode='PERSON_TRACK_EVENTS')),
         '02-bindings.json':dict(activity_id=args.activity_id,config_version=1,binding_version=1,expected_binding_version=0,
-            bindings=[dict(source_id=args.source_id,device_id=args.camera_id,kind='CAMERA',route_rule_id='PERSON-TRACK',camera_name=args.camera_name)]),
+            bindings=[dict(source_id=args.source_id,device_id=args.camera_id,kind='CAMERA',route_rule_id='PERSON-TRACK',camera_name=None)]),
         '03-monitoring.json':dict(activity_id=args.activity_id,config_version=1,binding_version=1,monitoring_version=1,
             expected_monitoring_version=0,enabled=True),
         '04-person.json':dict(scope,person_id=args.person_id,person_name=args.person_name,profile_photo_url=args.profile_photo_url,

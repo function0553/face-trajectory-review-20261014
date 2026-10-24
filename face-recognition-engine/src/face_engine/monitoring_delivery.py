@@ -125,7 +125,9 @@ class DeliveryStore:
         body = encoded(metadata)
         # A retransmitted vendor event has the same acquisition evidence but a
         # new receiver timestamp. Keep the first arrival without conflicting it.
-        immutable = {k: v for k, v in metadata.items() if k != 'received_at_unix_ms'}
+        # Device names are receiver-enriched snapshots, not vendor event identity.
+        # Retain the first stored snapshot when a vendor retries after a rename.
+        immutable = {k: v for k, v in metadata.items() if k not in ('received_at_unix_ms', 'camera_name')}
         digest = hashlib.sha256(encoded(immutable).encode() + image_bytes).hexdigest()
         with self.lock, self.db:
             retention_write_guard(self.db)

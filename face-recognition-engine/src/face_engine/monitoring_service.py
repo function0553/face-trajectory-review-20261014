@@ -25,6 +25,7 @@ from functools import wraps
 import numpy as np
 
 from face_engine.config import load_config
+from face_engine.camera_names import CameraNames, ISAPINameReader
 from face_engine.monitoring_delivery import DeliveryStore, delivery_key
 from face_engine.scheduling import AdmissionPlanner, CameraPriority, FairLatestQueue, FrameJob, CATEGORIES
 from face_engine.trajectory_bridge import (TrajectoryExtractor, encoded, activity_context,
@@ -98,6 +99,9 @@ def read_runtime_config(path):
         if value.get(key):
             candidate = Path(value[key])
             value[key] = str(candidate if candidate.is_absolute() else path.parent/candidate)
+    if value.get('platform_bindings'):
+        candidate = Path(value['platform_bindings']['state_file'])
+        value['platform_bindings']['state_file'] = str(candidate if candidate.is_absolute() else path.parent/candidate)
     if value['policy'].get('max_clock_uncertainty_ms', 60000) > 60000:
         raise ValueError("camera error allowance cannot exceed 60000 ms")
     value['policy'].setdefault('max_clock_uncertainty_ms', 60000)
@@ -125,6 +129,7 @@ class MonitoringRuntime:
         self.fps = dict(zip(CATEGORIES, frequencies))
         self.stop_event = threading.Event()
         self.cameras, self.hikvision, self.camera_contexts = {}, [], {}
+        self.camera_names = CameraNames()
         self.stats_lock = threading.Lock()
         self.counters = Counter()
         self.latencies = deque(maxlen=1000)
@@ -179,6 +184,7 @@ class MonitoringRuntime:
     @runtime_operation
     def submit_capture(self, image_bytes, metadata):
         decode_image(image_bytes)
+        metadata = dict(metadata, camera_name=self.camera_names.snapshot(metadata.get('source_id'), metadata.get('camera_id')))
         return self.store.capture(image_bytes, metadata, self.priority.category(metadata['camera_id'], activity_id=metadata.get('activity_id')))
 
     def _configured_metadata(self, frame):
@@ -192,6 +198,7 @@ class MonitoringRuntime:
             if field in meta and meta[field] != value:
                 raise ActivityContextError('acquisition activity route conflict')
         meta.update(route)
+        meta['camera_name'] = self.camera_names.snapshot(meta['source_id'], meta['camera_id'])
         return meta
 
     @runtime_operation
@@ -433,6 +440,7 @@ class MonitoringRuntime:
                 raise ValueError('duplicate camera_id')
             seen_camera_ids.add(camera_id)
             self.camera_contexts[camera_id] = dict(context, source_id=source_id)
+            self.camera_names.add(source_id, camera_id, ISAPINameReader.from_camera(item))
             def environment(field, required=False):
                 name = item.get(field)
                 result = os.environ.get(name, '') if name else ''
@@ -474,6 +482,7 @@ class MonitoringRuntime:
         self.consumer_lease = lease
         self.maintenance_state = 'RUNNING'
         try:
+            self.camera_names.start()
             for camera in self.cameras.values():
                 camera.start()
             for reader in self.hikvision:
@@ -535,6 +544,7 @@ class MonitoringRuntime:
         # Return from the shutdown helper before releasing the lease: even the
         # final loop variable may own a native reader's cached image. Existing
         # acquisition instances cannot restart; resume constructs fresh ones.
+        self.camera_names.stop()
         for camera in self.cameras.values():
             camera.stop()
         for reader in self.hikvision:
@@ -543,6 +553,7 @@ class MonitoringRuntime:
         self.cameras.clear()
         self.hikvision.clear()
         self.camera_contexts.clear()
+        self.camera_names = CameraNames()
 
     def _resume_after_maintenance(self):
         lease = self.store.consumer_lease()
@@ -559,6 +570,7 @@ class MonitoringRuntime:
             self.store.reopen()
             self.main_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='main-frame')
             self.configure_cameras()
+            self.camera_names.start()
             for camera in self.cameras.values():
                 camera.start()
             for reader in self.hikvision:
@@ -590,6 +602,11 @@ class MonitoringRuntime:
                 # Errors retain the lease or PAUSED state, and are observable.
             self.stop_event.wait(.05)
 
+    def _camera_scopes(self):
+        return {encoded([context['activity_id'], context['source_id'], camera]):
+            dict(activity_id=context['activity_id'], camera_id=camera, source_id=context['source_id'])
+            for camera, context in self.camera_contexts.items() if camera in self.cameras}
+
     def status(self):
         if maintenance_request(self.store.path).exists() or self.maintenance_paused:
             with self.maintenance_condition:
@@ -607,9 +624,7 @@ class MonitoringRuntime:
             return {'samples': len(values), 'p50_seconds': float(np.percentile(values, 50)),
                     'p95_seconds': float(np.percentile(values, 95)), 'max_seconds': max(values)} if values else {'samples': 0}
         now = time.monotonic()
-        camera_scopes = {encoded([context['activity_id'], context['source_id'], camera]):
-            dict(activity_id=context['activity_id'], camera_id=camera, source_id=context['source_id'])
-            for camera, context in self.camera_contexts.items() if camera in self.cameras}
+        camera_scopes = self._camera_scopes()
         never = sorted(set(camera_scopes)-set(live_last))
         ages = sorted(((camera, max(0, now-live_last[camera])) for camera in camera_scopes if camera in live_last), key=lambda item: item[1], reverse=True)
         coverage = dict(basis='interval between completed live-frame inspections; separate from frame age and result latency',
@@ -634,7 +649,7 @@ class MonitoringRuntime:
                             'basis': 'decode receipt for live frames; inference start for durable captures; not camera transport latency'},
             threads={thread.name: thread.is_alive() for thread in self.threads},
             clocks='camera evidence required; reception time does not qualify',
-            camera_count=len(self.cameras), capture_source_count=len(self.hikvision))
+            camera_count=len(self.cameras), capture_source_count=len(self.hikvision), device_names=self.camera_names.status())
 
     def stop(self):
         self.stop_event.set()
@@ -853,7 +868,11 @@ def main():
         if args.enroll:
             print(encoded(dict(queued=enroll_manifest(args.enroll, extractor, store))))
             return
-        runtime = MonitoringRuntime(config, extractor, store)
+        runtime_class = MonitoringRuntime
+        if config.get('platform_bindings'):
+            from face_engine.platform_runtime import PlatformMonitoringRuntime
+            runtime_class = PlatformMonitoringRuntime
+        runtime = runtime_class(config, extractor, store)
         runtime.configure_cameras()
         http = config.get('http', {})
         server = make_http_server(runtime, http.get('host', '127.0.0.1'), http.get('port', 8092),

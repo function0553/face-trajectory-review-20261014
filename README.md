@@ -1,5 +1,13 @@
 # 时空算法完整源码审核
 
+**2026-10-24 当前版本：** 已同步后端中心 v4.1 的 C++/Go 时空核心、P1 照片建库与动态采集源码、OpenAPI 及后端对接模板。
+
+- [当前源码、部署边界与已知照片导入问题](face-trajectory/docs/current-source-20261024.md)
+- [v4.1 后端对接说明](face-trajectory/docs/backend-integration-v41/人员轨迹算法_后端对接说明_v4.1_20261023.md)
+- [v4.1 OpenAPI](face-trajectory/openapi-platform-v4.1.yaml)
+
+以下带日期内容保留历史上下文；旧 v1 接口说明不代表当前 v4.1 对接合同。
+
 **2026-10-22 当前算法侧接口：** 已按人员轨迹三方协议v1.0实现固定名单登记、已确认单脸点位UPSERT/RETRACT推送、持久修订及失败重试，HTTP200/code=200/event_id匹配才确认交付。当前接口版本为0.14.0。
 
 - [可转发给后端的接口说明与完整JSON/HTTP样例](face-trajectory/docs/backend-integration-v1/时空算法-后端接口对接说明.md)

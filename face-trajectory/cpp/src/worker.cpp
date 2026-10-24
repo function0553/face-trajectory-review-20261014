@@ -10,6 +10,7 @@
 #include "face_trajectory/point_trajectory.hpp"
 #include "face_trajectory/monitoring.hpp"
 #include "face_trajectory/person_track.hpp"
+#include "face_trajectory/platform_v4.hpp"
 #include "face_trajectory/activity.hpp"
 #include "face_trajectory/retention.hpp"
 #include "face_trajectory/p1_retention.hpp"
@@ -537,6 +538,14 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
         const bool camera_events=face_trajectory::ActivityStore::CameraEventsMode(activity_context);
         auto observation=request.at("observation");
         const auto capture_photo=face_trajectory::MonitoringStore::PhotoUrl(observation.value("capture_photo_url",json(nullptr)));
+        const auto device_name=observation.value("camera_name",json(nullptr));
+        if(!device_name.is_null()) {
+            if(!device_name.is_string())throw std::invalid_argument("camera_name must be device text or null");
+            const auto name=device_name.get<std::string>();
+            if(name.empty() || name.size()>1024 || name.find_first_not_of(" \t\r\n")==std::string::npos ||
+               std::any_of(name.begin(),name.end(),[](unsigned char c){return c<32 || c==127;}))
+                throw std::invalid_argument("invalid device camera_name");
+        }
         if(request.contains("target_id") || observation.contains("target_id") || observation.contains("person_id"))
             throw std::invalid_argument("monitoring observation cannot assert target identity");
         const auto id=observation.at("observation_id").get<std::string>();
@@ -557,7 +566,11 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
             throw std::invalid_argument("UE_CAMERA_EVENTS requires an explicitly unverified, non-required topology policy");
         const auto graph=camera_events ? ReadGraph({{"version","UE_CAMERA_EVENTS:NO_TOPOLOGY:v1"},{"edges",json::array()}})
                                       : ReadGraph(request.at("graph"));
-        auto normalized=MonitoringTime(clocks,request,camera,source);
+        // The dispatcher already validated the original acquisition source and
+        // normalized its clock before activity routing mapped source_id to a
+        // platform UUID. Reuse that server-controlled result without comparing
+        // the rewritten routing ID against the original time_record again.
+        auto normalized=request.at("_normalization");
         auto reasons=normalized.at("reason_codes");
         if(normalized.at("status")=="NORMALIZED" && ReadInt64(normalized.at("clock_uncertainty_ms"))>
            std::min(policy.max_clock_uncertainty_ms,options.max_clock_uncertainty_ms))
@@ -594,7 +607,8 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
                 append?std::optional<std::uint64_t>(append->previous_target_revision):std::nullopt,associations);
             if(camera_events) {
                 json camera_name=nullptr;
-                for(const auto& b:activity_context.at("bindings"))
+                if(face_trajectory::ActivityStore::PersonTrackMode(activity_context))camera_name=device_name;
+                else for(const auto& b:activity_context.at("bindings"))
                     if(b.at("kind")=="CAMERA" && b.at("source_id")==source && b.at("device_id")==camera &&
                        b.at("route_rule_id")==request.at("route_rule_id"))camera_name=b.value("camera_name",json(nullptr));
                 if(camera_name.is_null() && !face_trajectory::ActivityStore::PersonTrackMode(activity_context))throw std::invalid_argument("UE_CAMERA_EVENTS requires an authoritative camera_name binding");
@@ -897,7 +911,7 @@ json Execute(Gallery& gallery, TrajectoryStore& trajectories,
 }
 
 bool ReadBoundedLine(std::string& line, bool& too_large) {
-    constexpr std::size_t kMaxLine = 4 * 1024 * 1024;
+    constexpr std::size_t kMaxLine = 8 * 1024 * 1024;
     line.clear();
     too_large = false;
     bool saw_input = false;
@@ -1065,6 +1079,10 @@ int Run(const std::vector<std::string>& args) {
             request=json::parse(line);
             if(state)state->Begin();
             const auto op = request.value("op", "");
+            if(state && op!="platform_v4_expire" && request.contains("_trusted_clock") && !(op=="retention_run" && request.value("dry_run",false))) {
+                const auto now=activities->TrustedNow(request);
+                if(face_trajectory::ExpirePlatformPersons(*state,now))invalidate();
+            }
             bool maintenance=false;
             if(state&&retention_enabled&&op!="health"&&op!="retention_run"&&op!="retention_status") {
                 const auto now=activities->TrustedNow(request);
@@ -1090,6 +1108,10 @@ int Run(const std::vector<std::string>& args) {
                     response["p1"]=face_trajectory::PruneP1(p1_retention_paths,now,dry,clocks,expired_reference);response["complete"]=response.at("p1").at("status")=="COMPLETE";response["ok"]=response.at("complete");
                     if(!dry){invalidate();maintenance=true;}
                 }
+            } else if(op.rfind("platform_v4_",0)==0) {
+                if(!state)throw std::invalid_argument("platform v4 requires durable state");
+                response=face_trajectory::PlatformV4(*state,request);
+                if(op!="platform_v4_context")activity_runtimes.clear();
             } else if(op.rfind("activity_",0)==0) {
                 if(!activities)throw std::invalid_argument("activities require durable state-file");
                 response=activities->Control(request);
@@ -1124,6 +1146,7 @@ int Run(const std::vector<std::string>& args) {
                 face_trajectory::ActivityStore::ExternalIds(response);
                 if(!early)for(const auto* k:{"activity_id","activity_num","venue_id","config_version","binding_version","monitoring_version"})response[k]=context.at(k);
                 if(request.contains("route_rule_id"))response["route_rule_id"]=request.at("route_rule_id");
+                if(context.value("configuration",json::object()).value("platform_protocol",0)==4)response["platform_protocol"]=4;
                 if(request.contains("_source_event_key") && response.value("status","")!="EXPIRED") {
                     const auto rec=json::parse(runtime->scope.Get("activity_intake",request.at("_source_event_key")).value());
                     const auto start=rec.value("capture_trusted",false)?rec.at("captured_at_unix_ms").get<std::int64_t>():rec.at("first_quarantined_unix_ms").get<std::int64_t>();
@@ -1134,8 +1157,8 @@ int Run(const std::vector<std::string>& args) {
                 if(!early && !response.value("duplicate",false))activities->Notify(request,response,runtime->scope);
                 if(enqueue && !early && !response.value("duplicate",false)) {
                     if(face_trajectory::ActivityStore::PersonTrackMode(context)) {
-                        if(auto event=face_trajectory::PersonTrackEvent(runtime->scope,request,context,runtime->monitoring,runtime->associations)) {
-                            auto envelope=response;envelope["person_track_event"]=*event;
+                        for(const auto& event:face_trajectory::PersonTrackEvents(runtime->scope,request,context,runtime->monitoring,runtime->associations)) {
+                            auto envelope=response;envelope["person_track_event"]=event;
                             EnqueuePush(*state,op,envelope,request);
                         }
                     } else EnqueuePush(*state,op,response,request);

@@ -263,16 +263,20 @@ json MonitoringStore::CameraTimeline(const json& request,const AssociationStore&
             }
             // A HOLD receipt never acquires a camera_event when identity is
             // later corrected. The immutable observation still owns its photo.
-            if(photo.is_null()) {
+            if(photo.is_null() || (ActivityStore::PersonTrackMode(context) && name.is_null())) {
                 const auto full=ObservationRecord(state_,*saved,true);
                 const auto observation=full.value("payload",json::object()).value("observation",json::object());
                 if(observation.value("camera_id",std::string{})==s.camera_id) {
+                    if(ActivityStore::PersonTrackMode(context) && name.is_null()) {
+                        name=observation.value("camera_name",json(nullptr));
+                        name_source=name.is_null()?"UNAVAILABLE":"CAPTURE_EVENT";
+                    }
                     try{photo=PhotoUrl(observation.value("capture_photo_url",json(nullptr)));}
                     catch(const std::invalid_argument&){} // Legacy unvalidated metadata is unavailable.
                 }
             }
         }
-        if(name.is_null())for(const auto& b:context.value("bindings",json::array())) {
+        if(name.is_null() && !ActivityStore::PersonTrackMode(context))for(const auto& b:context.value("bindings",json::array())) {
             if(b.at("kind")=="CAMERA" && b.at("source_id")==key.first && b.at("device_id")==s.camera_id && b.contains("camera_name")) {
                 name=b.at("camera_name");name_source="CURRENT_ACTIVITY_BINDING";break;
             }
@@ -313,6 +317,12 @@ json MonitoringStore::PutPerson(const json& request, Gallery& gallery, bool requ
         content["person_name"]=name;
     }
     if(request.contains("profile_photo_url"))content["profile_photo_url"]=PhotoUrl(request.at("profile_photo_url"));
+    if(request.contains("person_id_num")) {
+        const auto& number=request.at("person_id_num");
+        if(!number.is_string() || number.get_ref<const std::string&>().empty() || number.get_ref<const std::string&>().size()>128)
+            throw std::invalid_argument("person_id_num must be a nonempty string limited to 128 bytes");
+        content["person_id_num"]=number;
+    }
     if (request.contains("templates")) content["templates"] = request.at("templates");
     bool ready=false;
     state_->Scan("template",[&](const std::string& id,const std::string& text){
@@ -357,7 +367,7 @@ json MonitoringStore::PutPerson(const json& request, Gallery& gallery, bool requ
     state_->Put("monitoring_person_revision",Key(target,revision),content.dump(),target);
     content.erase("templates");
     const auto previous=Person(target);
-    for(const auto* field:{"person_name","profile_photo_url"})
+    for(const auto* field:{"person_name","person_id_num","profile_photo_url"})
         if(!content.contains(field) && previous.contains(field))content[field]=previous.at(field);
     state_->Put("monitoring_person",target,content.dump());
     return {{"ok",true},{"person",content},{"submitted_revision",revision},{"duplicate",false},{"gallery_version",gallery.Version()},{"recognition_ready",ready}};

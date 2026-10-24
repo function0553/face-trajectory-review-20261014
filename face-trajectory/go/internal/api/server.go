@@ -17,7 +17,7 @@ type Exchanger interface {
 	Request(context.Context, json.RawMessage) (json.RawMessage, error)
 }
 
-const maxBody = 4*1024*1024 - 1024
+const maxBody = 8*1024*1024 - 4096
 
 type Server struct {
 	exchanger     Exchanger
@@ -25,6 +25,8 @@ type Server struct {
 	clock         *trust.Clock
 	subscriptions *subscriptions
 	retention     *retention.Manager
+	preparer      PhotoPreparer
+	photoGate     chan struct{}
 }
 
 // New preserves source compatibility and fails closed. The daemon supplies
@@ -32,7 +34,11 @@ type Server struct {
 func New(exchanger Exchanger) http.Handler { return NewAuthorized(exchanger, nil, nil) }
 
 func NewAuthorized(exchanger Exchanger, verifier *trust.Verifier, clock *trust.Clock, managers ...*retention.Manager) http.Handler {
-	s := &Server{exchanger: exchanger, verifier: verifier, clock: clock, subscriptions: newSubscriptions()}
+	return newAuthorized(exchanger, verifier, clock, configuredPreparer(), managers...)
+}
+
+func newAuthorized(exchanger Exchanger, verifier *trust.Verifier, clock *trust.Clock, preparer PhotoPreparer, managers ...*retention.Manager) http.Handler {
+	s := &Server{exchanger: exchanger, verifier: verifier, clock: clock, subscriptions: newSubscriptions(), preparer: preparer, photoGate: make(chan struct{}, 1)}
 	if len(managers) > 0 {
 		s.retention = managers[0]
 	}
@@ -155,7 +161,9 @@ func (s *Server) post(op, action string, global bool) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
-		s.dispatch(w, r, body, op, action, global)
+		if !s.platformV4(w, r, body, op, action) {
+			s.dispatch(w, r, body, op, action, global)
+		}
 	}
 }
 
@@ -175,9 +183,17 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, body map[strin
 		writeError(w, http.StatusBadRequest, "explicit activity_id is required", &claims)
 		return
 	}
-	if (!global && !claims.Allows(id, action)) || (global && !claims.AllowsGlobal(action)) {
+	// Unrestricted identities (shared-secret mode) are not scoped per activity;
+	// activity isolation for them is a network boundary responsibility.
+	if !claims.Unrestricted && ((!global && !claims.Allows(id, action)) || (global && !claims.AllowsGlobal(action))) {
 		writeError(w, http.StatusForbidden, "backend identity does not authorize this activity action", &claims)
 		return
+	}
+	if op == "monitoring_observe" {
+		if err := validateCapture(body); err != nil {
+			writeError(w, 400, err.Error(), &claims)
+			return
+		}
 	}
 	body["op"] = rawString(op)
 	body["_client_context"], _ = json.Marshal(claims.ClientContext)
@@ -201,7 +217,8 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply["clock"], _ = json.Marshal(s.clock.Challenge())
-	reply["authorization_configured"], _ = json.Marshal(s.verifier != nil && s.verifier.Issuer != "" && len(s.verifier.Keys) > 0)
+	reply["authorization_configured"], _ = json.Marshal(s.verifier != nil && ((s.verifier.Issuer != "" && len(s.verifier.Keys) > 0) || s.verifier.SharedSecret != ""))
+	reply["authorization_mode"], _ = json.Marshal(s.verifier.AuthorizationMode())
 	writeReply(w, status, reply)
 }
 

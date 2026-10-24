@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "cameras": [
+    {
+      "camera_id": "REPLACE-WITH-BACKEND-UUID",
+      "source_id": "REPLACE-WITH-ORIGINAL-ACQUISITION-SOURCE",
+      "backend": "gstreamer",
+      "sub_url_env": "FACE_PLATFORM_CAMERA_SUB_URL",
+      "main_url_env": "FACE_PLATFORM_CAMERA_MAIN_URL",
+      "sample_fps": 10,
+      "clock_profile_version": "REPLACE-WITH-VERIFIED-CLOCK-PROFILE"
+    }
+  ]
+}
