@@ -10,6 +10,8 @@ import math
 import cv2
 import numpy as np
 
+from face_engine.alignment.face_align import alignment_scale
+
 
 @dataclass(frozen=True)
 class QualityPolicy:
@@ -58,6 +60,10 @@ def evaluate_face_quality(image, face, policy=None, *, metadata=None):
     is rejected. Downsampling never earns extra effective face pixels. Crop origins
     and full-sensor dimensions must not be substituted for this resize provenance.
     Without provenance, measurements describe the supplied decoded image only.
+    Sharpness below the threshold is re-measured once the way the recognizer sees
+    the face: reduced to the five-point alignment scale when that scale reduces it
+    (never enlarged), with a dim or low-contrast crop normalized to a reference
+    contrast. The higher of the two values is reported.
     """
     policy = QualityPolicy.from_config(policy)
     if not isinstance(image, np.ndarray) or image.dtype != np.uint8 or image.ndim != 3 or image.shape[2] != 3 or min(image.shape[:2]) < 1:
@@ -184,10 +190,43 @@ def evaluate_face_quality(image, face, policy=None, *, metadata=None):
             crop = cv2.resize(crop, (max(1, round(crop.shape[1] * sx)), max(1, round(crop.shape[0] * sy))), interpolation=cv2.INTER_AREA)
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        if sharpness < policy.min_laplacian_variance:
+            # The recognizer only receives the face after five-point alignment to
+            # 112x112, so a failing face is re-measured the way the model sees it:
+            # reduced to that scale (never enlarged), with exposure normalized so a
+            # dim or low-contrast face is not mistaken for a defocused one. Faces
+            # that already pass at their original pixels keep that measurement.
+            sharpness = max(sharpness, _recognizer_view_sharpness(gray, native))
         metrics["laplacian_variance"] = sharpness
         if sharpness < policy.min_laplacian_variance:
             reasons.append("BLURRED")
     return result()
+
+
+# Laplacian variance grows with the square of image contrast, so the same focus
+# measures lower in dim light. Crops whose gray-level standard deviation is below
+# _REFERENCE_CONTRAST are measured as if stretched to it (about the 15th
+# percentile of LFW faces at recognizer scale); normally exposed faces are not
+# boosted. Crops flatter than _MIN_CONTRAST show too little structure to
+# normalize and keep their unnormalized value.
+_REFERENCE_CONTRAST = 35.0
+_MIN_CONTRAST = 8.0
+
+
+def _recognizer_view_sharpness(gray, native_points):
+    """Laplacian variance at the alignment scale (reduction only), exposure-normalized."""
+    try:
+        scale = alignment_scale(native_points)
+    except ValueError:
+        scale = math.nan
+    if math.isfinite(scale) and scale < 1:
+        size = (max(1, round(gray.shape[1] * scale)), max(1, round(gray.shape[0] * scale)))
+        gray = cv2.resize(gray, size, interpolation=cv2.INTER_AREA)
+    value = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    contrast = float(gray.std())
+    if _MIN_CONTRAST <= contrast < _REFERENCE_CONTRAST:
+        value *= (_REFERENCE_CONTRAST / contrast) ** 2
+    return value
 
 
 def alignment_rejection(quality):

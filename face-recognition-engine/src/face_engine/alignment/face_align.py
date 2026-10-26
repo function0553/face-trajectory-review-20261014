@@ -84,6 +84,16 @@ def _estimate_similarity_transform(points: np.ndarray, target: np.ndarray) -> np
     return transform
 
 
+def alignment_scale(landmarks: np.ndarray | list) -> float:
+    """align_face 对这组五点使用的缩放倍数（112 模板像素 / 原图像素）。
+
+    小于 1 表示识别模型拿到的是缩小后的人脸。质量判定用它在识别模型实际
+    看到的尺度上复测清晰度；不改变对齐本身。关键点退化时抛 ValueError。
+    """
+    transform = _estimate_similarity_transform(np.asarray(landmarks, dtype=np.float32), _TEMPLATE)
+    return float(np.hypot(transform[0, 0], transform[1, 0]))
+
+
 def align_face(image: np.ndarray, landmarks: np.ndarray | list, output_size: int = 112) -> np.ndarray:
     """把原图中的一张脸裁剪并摆正成 112×112，供 ArcFace 提特征。
 

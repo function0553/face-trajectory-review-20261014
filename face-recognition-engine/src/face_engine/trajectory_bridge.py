@@ -252,7 +252,15 @@ class TrajectoryExtractor:
             per_face_meta = meta.get("faces", {})
             if not isinstance(per_face_meta, dict):
                 raise ValueError("faces metadata must be a dictionary keyed by detection index")
-            faces = sorted(self.detector.detect_faces(image), key=lambda face: tuple(face["bbox"]))
+            faces = self.detector.detect_faces(image)
+            if not faces and meta.get("stream_kind") not in ("sub", "main"):
+                # Still photos and camera face captures may be tight high-resolution
+                # close-ups that the standard input misses. Continuous video frames
+                # are skipped so empty frames never pay for a second pass.
+                close_up = getattr(self.detector, "detect_close_up_faces", None)
+                if close_up is not None:
+                    faces = close_up(image)
+            faces = sorted(faces, key=lambda face: tuple(face["bbox"]))
             output = dict(observations=[], rejected_faces=[], needs_high_resolution=False,
                           detected_faces=len(faces))
             outputs.append(output)

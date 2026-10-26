@@ -120,9 +120,14 @@ _INVALID_GEOMETRY = ('INVALID_DETECTION', 'INVALID_FACE_BOX', 'INVALID_LANDMARKS
 def quality_failure_message(rejected_faces):
     """Explain a single-face quality rejection with its reason codes and measured values."""
     quality = rejected_faces[0].get('quality') if isinstance(rejected_faces, list) and rejected_faces and isinstance(rejected_faces[0], dict) else None
+    text = _quality_reason_text(quality)
+    return '登记照片人脸质量不合格：' + text if text else '登记照片人脸质量不合格'
+
+
+def _quality_reason_text(quality):
     reasons = quality.get('reasons') if isinstance(quality, dict) else None
     if not isinstance(reasons, list) or not reasons:
-        return '登记照片人脸质量不合格'
+        return ''
     metrics = quality.get('metrics') if isinstance(quality.get('metrics'), dict) else {}
     thresholds = quality.get('thresholds') if isinstance(quality.get('thresholds'), dict) else {}
     parts = []
@@ -135,7 +140,65 @@ def quality_failure_message(rejected_faces):
         if values and all(type(v) in (int, float) and math.isfinite(v) for v in values):
             description += '（' + detail.format(*values) + '）'
         parts.append((reason + ' ' + description).strip())
-    return '登记照片人脸质量不合格：' + '；'.join(parts) if parts else '登记照片人脸质量不合格'
+    return '；'.join(parts)
+
+
+# Cropped captures and ordinary photos often include part of a neighbour's face or
+# a background face. Such a photo still names one person when exactly one face
+# passes quality, it is the largest, and every other detection is at most this
+# fraction of its linear size; otherwise the photo stays ambiguous and is refused.
+# When no face passes and the largest one dominates, the refusal names its reasons.
+DOMINANT_FACE_MAX_OTHER_RATIO = 0.8
+
+
+def _face_area(quality, bbox):
+    metrics = quality.get('metrics') if isinstance(quality, dict) else None
+    if isinstance(metrics, dict):
+        width, height = metrics.get('face_width_px'), metrics.get('face_height_px')
+        if all(type(v) in (int, float) and math.isfinite(v) and v > 0 for v in (width, height)):
+            return float(width) * float(height)
+    if isinstance(bbox, (list, tuple)) and len(bbox) == 4 and all(type(v) in (int, float) and math.isfinite(v) for v in bbox):
+        return max(0., bbox[2] - bbox[0]) * max(0., bbox[3] - bbox[1])
+    return None
+
+
+def _dominant_face(detail):
+    """Return (face, accepted) for the largest detection if every other one is clearly smaller."""
+    observations, rejected = detail.get('observations'), detail.get('rejected_faces')
+    if not isinstance(observations, list) or not isinstance(rejected, list):
+        return None
+    faces = [(face, True) for face in observations] + [(face, False) for face in rejected]
+    if len(faces) < 2 or detail.get('detected_faces') != len(faces):
+        return None
+    areas = []
+    for face, accepted in faces:
+        area = _face_area(face.get('quality'), None if accepted else face.get('bbox')) if isinstance(face, dict) else None
+        if area is None:
+            return None
+        areas.append(area)
+    largest = max(range(len(faces)), key=areas.__getitem__)
+    limit = areas[largest] * DOMINANT_FACE_MAX_OTHER_RATIO ** 2
+    if any(area > limit for index, area in enumerate(areas) if index != largest):
+        return None
+    return faces[largest]
+
+
+def dominant_observation(detail):
+    """Return the single quality-accepted face that clearly dominates the photo, else None."""
+    found = _dominant_face(detail)
+    if found is None or not found[1] or len(detail['observations']) != 1:
+        return None
+    return found[0]
+
+
+def multiple_faces_message(detail):
+    """Name the dominant face's quality problems when no face passed; otherwise ask for one person."""
+    found = _dominant_face(detail)
+    message = '登记照片必须恰好包含一张人脸：检测到%d张人脸' % detail['detected_faces']
+    if found is None or found[1] or detail['observations']:
+        return message + '，请使用单人照片'
+    text = _quality_reason_text(found[0].get('quality'))
+    return message + '，其中最大的人脸质量不合格' + ('：' + text if text else '')
 
 
 def prepare_people(people, extractor, decoder, photo_reader=read_photo):
@@ -170,14 +233,16 @@ def prepare_people(people, extractor, decoder, photo_reader=read_photo):
                 raise ValueError(UNREADABLE + '：人脸检测或特征提取失败') from None
             except Exception:
                 raise ValueError(UNPROCESSABLE + '：人脸检测或特征提取失败') from None
-            if detail['detected_faces'] != 1:
-                count = detail['detected_faces']
-                raise ValueError('登记照片必须恰好包含一张人脸：' + (
-                    '未检测到人脸，请使用正面免冠照片，人脸周围保留背景，不要裁到只剩人脸' if count == 0
-                    else '检测到%d张人脸，请使用单人照片' % count))
-            if len(detail['observations']) != 1:
-                raise ValueError(quality_failure_message(detail.get('rejected_faces')))
-            observation = detail['observations'][0]
+            count = detail['detected_faces']
+            observation = dominant_observation(detail) if count != 1 else None
+            if count == 0:
+                raise ValueError('登记照片必须恰好包含一张人脸：未检测到人脸，请使用正面免冠照片，人脸周围保留背景，不要裁到只剩人脸')
+            if count != 1 and observation is None:
+                raise ValueError(multiple_faces_message(detail))
+            if count == 1:
+                if len(detail['observations']) != 1:
+                    raise ValueError(quality_failure_message(detail.get('rejected_faces')))
+                observation = detail['observations'][0]
             template_id = 'platform-photo:' + hashlib.sha256(
                 json.dumps([person['personId'], digest], ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
             prepared = dict(person, photo_sha256=digest, templates=[dict(

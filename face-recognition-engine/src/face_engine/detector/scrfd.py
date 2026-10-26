@@ -244,3 +244,14 @@ class SizeAwareSCRFDDetector(FaceDetector):
         if image.ndim >= 2 and max(image.shape[:2]) <= self.small_image_max_side:
             return self.small.detect_faces(image)
         return self.standard.detect_faces(image)
+
+    def detect_close_up_faces(self, image: np.ndarray) -> list[FaceDetection]:
+        """大图特写的第二次检测：标准输入没检出人脸时，由调用方按需调用。
+
+        高清照片只裁出人脸、脸几乎占满画面时，缩到 640 输入后人脸超出标准输入
+        能检出的尺寸范围，结果为 0 张。同一套权重的小输入会把这张脸缩到可检出的
+        大小。小图本来就走小输入，这里直接返回空列表。坐标仍是原图坐标。
+        """
+        if image.ndim >= 2 and max(image.shape[:2]) > self.small_image_max_side:
+            return self.small.detect_faces(image)
+        return []
