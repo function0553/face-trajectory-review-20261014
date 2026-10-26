@@ -254,10 +254,19 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         ok, body = cv2.imencode('.png', frame.image_bgr)
         if not ok:
             raise ValueError('capture encoding failed')
+        refused = None
         for routed in frames:
             meta = routed.metadata
-            self.store.capture(body.tobytes(), meta,
-                self.priority.category(meta['camera_id'], activity_id=meta['activity_id']))
+            try:
+                self.store.capture(body.tobytes(), meta,
+                    self.priority.category(meta['camera_id'], activity_id=meta['activity_id']))
+            except RuntimeError as error:
+                # One activity out of capacity must not cost the camera's other activities.
+                if not str(error).startswith('CAPACITY:'):
+                    raise
+                refused = refused or error
+        if refused:
+            raise refused
 
     def _route_current(self, metadata):
         return any(all(metadata.get(key) == value for key, value in context.items())

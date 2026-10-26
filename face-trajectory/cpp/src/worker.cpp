@@ -1136,6 +1136,8 @@ int Run(const std::vector<std::string>& args) {
                 else if(op=="monitoring_gate_event")request["_normalization"]=MonitoringTime(clocks,request);
                 const auto early=activities->Before(request,runtime->scope);
                 const auto context=activities->Context(id);
+                // Priority-person tracking never reports automatic identities; see AssociationStore.
+                runtime->associations.SetAnonymousTargets(!face_trajectory::ActivityStore::PersonTrackMode(context));
                 if(face_trajectory::ActivityStore::CameraEventsMode(context) &&
                    (op=="association_rebuild" || op=="trajectory_get" || op=="point_trace" || op=="trajectory_predict" ||
                     op=="trajectory_geometry" || op=="timeline_query" || op=="point_prediction_compare" ||

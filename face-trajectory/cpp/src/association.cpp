@@ -405,12 +405,23 @@ AssociationResult AssociationStore::Observe(FaceObservation observation, const A
         // 先取前 kFirstPage 名（与全量排序的前缀完全相同）。绝大多数抓拍在前 8～10 名内就能判定；
         // 只有这一页看完仍未判定、且可能还有更多人时，才退回全量检索并从头重判，结论与原实现一致。
         constexpr std::size_t kFirstPage = 64;
-        hits = gallery_.Search(current.feature_space, current.embedding, kFirstPage);
-        if (!classify() && hits.size() == kFirstPage) {
+        // Filtering keeps the sorted order, so a filtered page is still a prefix of
+        // the filtered full ranking; "page was full" is judged before filtering.
+        const auto search = [&](std::size_t limit) {
+            hits = gallery_.Search(current.feature_space, current.embedding, limit);
+            const auto found = hits.size();
+            if (!anonymous_targets_)
+                hits.erase(std::remove_if(hits.begin(), hits.end(), [](const PersonHit& hit) {
+                    return hit.person_entity_id.rfind("auto:", 0) == 0;
+                }), hits.end());
+            return found;
+        };
+        const auto first_page = search(kFirstPage);
+        if (!classify() && first_page == kFirstPage) {
             result.candidates.clear();
             eligible.clear();
             result.remaining_similarity_upper_bound.reset();
-            hits = gallery_.Search(current.feature_space, current.embedding, std::numeric_limits<std::size_t>::max());
+            search(std::numeric_limits<std::size_t>::max());
             classify();
         }
         // Keep the visual Top8 and the decision's feasible winner/runner-up.
@@ -452,6 +463,14 @@ AssociationResult AssociationStore::Observe(FaceObservation observation, const A
             if (!track_targets.empty()) {
                 result.decision = "CONFLICT";
                 result.reason = "local track face no longer supports its accepted identity";
+            } else if (!anonymous_targets_) {
+                // No review bubble for dissimilar faces (as with CREATED); keep only the
+                // best similarity seen, which bounds every unlisted candidate.
+                result.decision = "UNASSIGNED";
+                result.reason = "no registered identity is similar; anonymous targets are disabled for priority-person tracking";
+                result.candidates.clear();
+                result.remaining_similarity_upper_bound.reset();
+                if (!hits.empty()) result.remaining_similarity_upper_bound = hits.front().similarity;
             } else {
                 result.decision = "CREATED";
                 result.reason = "no similar identity in the compatible feature space";

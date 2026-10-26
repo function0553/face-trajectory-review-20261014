@@ -14,7 +14,7 @@ from unittest.mock import patch
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from face_engine.acquisition import Frame
-from face_engine.monitoring_delivery import DeliveryStore
+from face_engine.monitoring_delivery import DeliveryStore, delivery_key
 from face_engine.platform_runtime import PlatformMonitoringRuntime, binding_snapshot
 from face_engine.trajectory_bridge import ActivityContextError
 
@@ -117,6 +117,23 @@ class PlatformRuntime(unittest.TestCase):
         self.runtime._hikvision_frame(self.frame())
         rows=self.store.db.execute('SELECT metadata FROM captures').fetchall()
         self.assertEqual({json.loads(row[0])['activity_id'] for row in rows},{'A','B'})
+    def test_activity_waiting_for_p2_capacity_does_not_block_shared_camera(self):
+        self.activity('A');self.activity('B');self.runtime.refresh_bindings()
+        self.store.max_pending=2  # blocked activities may then hold one pending delivery
+        body=dict(activity_id='A',activity_num='NUM-A',config_version=1,binding_version=1,monitoring_version=1,
+            route_rule_id='PLATFORM-V4',source_id='ORIGINAL-SOURCE',event_id='E',gate_id='G',direction='EXIT')
+        self.store.enqueue(delivery_key('/v1/monitoring/gate-event',body),'/v1/monitoring/gate-event',body)
+        self.store.blocked['A']=time.time()+60  # as after P2 answered 503 CAPACITY for A
+        with self.assertRaisesRegex(RuntimeError,'^CAPACITY:'):
+            self.runtime._hikvision_frame(self.frame())
+        self.assertEqual(self.store.db.execute('SELECT activity_id FROM captures').fetchall(),[('B',)])
+        self.runtime.cameras['BACKEND-UUID'].frame=self.frame('LIVE')
+        self.runtime._poll_cycle()
+        processed=[]
+        with patch.object(self.runtime,'process_frame',lambda image,metadata,**kwargs:processed.append(metadata['activity_id'])):
+            self.runtime._infer_cycle(False);self.runtime._infer_cycle(False)
+        self.assertEqual(processed,['B'])
+        self.assertEqual(self.runtime.counters['inference_or_capacity_errors'],1)
     def test_missing_video_does_not_claim_a_running_camera(self):
         self.activity('A',camera='UNKNOWN-UUID');self.runtime.refresh_bindings()
         self.assertFalse(self.runtime.cameras)

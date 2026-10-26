@@ -98,6 +98,8 @@ json Retain(State& root,std::int64_t now,bool dry_run){
             // migration window. Qualified legacy receipt uses capture expiry.
             if(deadline<now){expired.insert(event);remove(ns,row.key);}else next=std::min<std::int64_t>(next,deadline);
         }
+        std::set<std::string> receipts;
+        for(const auto& row:rows)if(Scope(row.ns).second=="monitoring_observation")receipts.insert(row.key);
         const bool changed=!expired.empty();
         Gallery gallery(state);AssociationStore associations(gallery,state);MonitoringStore monitoring(state);TrajectoryStore trajectories(state);
         if(changed&&!dry_run)monitoring.CheckpointRuntime(cutoff,associations);
@@ -117,6 +119,9 @@ json Retain(State& root,std::int64_t now,bool dry_run){
             }
             if(ns=="monitoring_observation"&&expired.count(row.key))remove(ns,row.key);
             if(ns=="monitoring_observation_revision"&&expired.count(row.ref))remove(ns,row.key);
+            // Review-bubble index rows die with their receipt; orphans (e.g. rows indexed
+            // after this run's snapshot) are collected by the next run.
+            if(ns=="monitoring_held_candidate"&&(expired.count(row.track)||!receipts.count(row.track)))remove(ns,row.key);
             if(ns=="person_track_candidate" && (expired.count(row.key) || v.at("captured_at_unix_ms").get<std::int64_t>()<cutoff))remove(ns,row.key);
             if(ns=="person_track_state" && (expired.count(row.key) || v.at("captured_at_unix_ms").get<std::int64_t>()<cutoff) &&
                !live_person_track_representatives.count(row.key))remove(ns,row.key);

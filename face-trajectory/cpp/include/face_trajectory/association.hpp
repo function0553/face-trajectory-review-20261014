@@ -76,6 +76,12 @@ public:
     std::uint64_t TargetRevision(const std::string& target_id) const;
     std::optional<AssociationResult> Result(const std::string& observation_id) const;
     std::optional<AssociationAppend> LastAppend() const { return last_append_; }
+    // PERSON_TRACK_EVENTS reports registered priority persons only. There an
+    // automatic "auto:" identity has no consumer, and a poor first capture of a
+    // registered person would become a clone that absorbs that person's later
+    // good captures. When disabled, unmatched faces stay UNASSIGNED and
+    // existing automatic identities are excluded from matching.
+    void SetAnonymousTargets(bool enabled) { anonymous_targets_ = enabled; }
 
 private:
     struct Record {
@@ -120,6 +126,7 @@ private:
     std::map<std::string, std::uint64_t> target_revisions_;
     std::optional<AssociationAppend> last_append_;
     State* state_ = nullptr;
+    bool anonymous_targets_ = true;
 };
 
 }  // namespace face_trajectory

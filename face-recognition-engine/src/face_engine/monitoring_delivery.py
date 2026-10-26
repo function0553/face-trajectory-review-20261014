@@ -15,6 +15,15 @@ from face_engine.trajectory_bridge import (encoded, activity_context, scoped_eve
 from face_engine.scheduling import CATEGORIES
 
 
+def _p2_capacity(text):
+    """True for P2's own 503 CAPACITY answer, e.g. its per-activity push quota is full."""
+    try:
+        reply = json.loads(text)
+    except ValueError:
+        return False
+    return isinstance(reply, dict) and isinstance(reply.get('error'), str) and reply['error'].startswith('CAPACITY:')
+
+
 def delivery_key(route, payload):
     if route.endswith('/observe'):
         observation = payload.get('observation') or {}
@@ -42,6 +51,12 @@ class DeliveryStore:
             self.cycle = [category for i in range(max(weights)) for category, weight in zip(CATEGORIES, weights) if i < weight]
             self.cursors = {'captures': 0, 'deliveries': 0}
             self.activity_cursors = {}
+            # activity -> earliest next probe. P2 refuses an activity's new results with 503
+            # CAPACITY while its backend push queue is full; by contract that queue waits on
+            # its oldest event until the receiver accepts it or it expires. Probing with one delivery at a
+            # time keeps those refusals (each a full P2 recognition and rollback) from
+            # crowding out other activities; see _blocked_share for their queue share.
+            self.blocked = {}
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA synchronous=FULL")
             page_size = self.db.execute("PRAGMA page_size").fetchone()[0]
@@ -98,7 +113,27 @@ class DeliveryStore:
         with consumer_lease(self.path, wait=wait):
             yield
 
-    def _capacity(self, fanout=False):
+    def _blocked_held(self):
+        """Pending deliveries of every activity P2 currently refuses for capacity."""
+        names = list(self.blocked)
+        if not names:
+            return 0
+        return self.db.execute(f"SELECT count(*) FROM deliveries WHERE status='PENDING' AND activity_id IN ({','.join('?' * len(names))})", names).fetchone()[0]
+
+    def _blocked_share(self):
+        # Together blocked activities may use at most half of the pending budget, so one
+        # receiver refusing an activity's events cannot stop every other activity and camera.
+        return max(1, self.max_pending // 2)
+
+    def _blocked_full(self):
+        return bool(self.blocked) and self._blocked_held() >= self._blocked_share()
+
+    def accepts(self, activity):
+        """False while this activity waits on P2 capacity and the blocked share is used up."""
+        with self.lock:
+            return activity not in self.blocked or not self._blocked_full()
+
+    def _capacity(self, fanout=False, activities=()):
         captures = self.db.execute("SELECT count(*) FROM captures WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0]
         deliveries = self.db.execute("SELECT count(*) FROM deliveries WHERE status='PENDING'").fetchone()[0]
         # Separate ingress/egress budgets leave room to turn one image into many
@@ -106,6 +141,8 @@ class DeliveryStore:
         allowance = self.max_faces_per_capture if fanout else 0
         if captures > self.max_pending or deliveries > self.max_pending + allowance:
             raise RuntimeError("CAPACITY: durable pending queue is full")
+        if self.blocked.keys() & set(activities) and self._blocked_held() > self._blocked_share() + allowance:
+            raise RuntimeError("CAPACITY: activity is waiting for P2 push capacity")
 
     def capture(self, image_bytes, metadata, category='NORMAL'):
         if not isinstance(metadata, dict):
@@ -138,6 +175,8 @@ class DeliveryStore:
                 if old[0] != digest:
                     raise EventConflict("conflicting capture event")
                 return key
+            if status == 'PENDING' and context['activity_id'] in self.blocked and self._blocked_full():
+                raise RuntimeError('CAPACITY: activity is waiting for P2 push capacity')
             self.db.execute("INSERT INTO captures(id,hash,image,metadata,result,created,category,activity_id,source_id,event_id,context,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (key, digest, image_bytes, body, report, time.time(), category, context.get('activity_id'), metadata['source_id'], metadata['frame_id'], encoded(context), status))
             if self.db.execute("SELECT count(*) FROM captures WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0] > self.max_pending:
@@ -146,7 +185,12 @@ class DeliveryStore:
 
     def next_capture(self):
         with self.lock:
-            row = self._next('captures', 'id,image,metadata', "status='PENDING' AND image IS NOT NULL", ())
+            # Captures of a blocked activity over its share wait unprocessed; their
+            # observations could not be queued, so do not spend inference on them.
+            full = list(self.blocked) if self._blocked_full() else []
+            condition = "status='PENDING' AND image IS NOT NULL" + (
+                f" AND activity_id NOT IN ({','.join('?' * len(full))})" if full else '')
+            row = self._next('captures', 'id,image,metadata', condition, tuple(full))
             return (row[0], row[1], json.loads(row[2])) if row else None
 
     def _next(self, table, columns, condition, params):
@@ -193,7 +237,7 @@ class DeliveryStore:
     def enqueue(self, key, route, payload, category='NORMAL'):
         with self.lock, self.db:
             self._enqueue(key, route, payload, category)
-            self._capacity()
+            self._capacity(activities=[payload.get('activity_id')] if isinstance(payload, dict) else ())
 
     def finish_capture(self, key, report, deliveries):
         if len(deliveries) > self.max_faces_per_capture:
@@ -206,7 +250,7 @@ class DeliveryStore:
             for delivery in deliveries:
                 self._enqueue(*delivery)
             self.db.execute("UPDATE captures SET image=NULL,result=?,status='PROCESSED' WHERE id=? AND status='PENDING'", (encoded(report), key))
-            self._capacity(fanout=True)
+            self._capacity(fanout=True, activities=[delivery[2].get('activity_id') for delivery in deliveries])
 
     def status(self, key=None):
         with self.lock:
@@ -253,10 +297,14 @@ class DeliveryStore:
     def send_one(self, endpoint, *, timeout=3, authorization=None, on_receipt=None):
         # A single sender owns this method. Network I/O does not hold the DB lock.
         with self.lock:
-            row = self._next('deliveries', 'id,route,payload,attempts', "status='PENDING' AND next_attempt<=?", (time.time(),))
+            now = time.time()
+            paused = [activity for activity, probe in self.blocked.items() if probe > now]
+            condition = "status='PENDING' AND next_attempt<=?" + (
+                f" AND activity_id NOT IN ({','.join('?' * len(paused))})" if paused else '')
+            row = self._next('deliveries', 'id,route,payload,attempts,activity_id', condition, (now, *paused))
         if row is None:
             return False
-        key, route, body, attempts = row
+        key, route, body, attempts, activity = row
         with self.lock:
             if retention_tombstone(self.db, 'deliveries', key):
                 return False
@@ -287,12 +335,18 @@ class DeliveryStore:
                 # A full/dead peer or unavailable credentials can recover later.
                 if error.code in (400, 404, 409, 410, 413, 422):
                     status = "QUARANTINED"
-                detail = f"P2 HTTP {error.code}: {error.read(2048).decode('utf-8', errors='replace')}"
+                text = error.read(2048).decode('utf-8', errors='replace')
+                capacity = error.code == 503 and _p2_capacity(text)
+                detail = f"P2 HTTP {error.code}: {text}"
             else:
-                detail = type(error).__name__
+                capacity, detail = False, type(error).__name__
+            retry = time.time()+min(30, 0.5*2**min(attempts, 6))
             with self.lock, self.db:
                 self.db.execute("UPDATE deliveries SET status=?,attempts=attempts+1,next_attempt=?,error=? WHERE id=?",
-                                (status, time.time()+min(30, 0.5*2**min(attempts, 6)), detail, key))
+                                (status, retry, detail, key))
+                if capacity:
+                    # Pause the whole activity until this retry; then one due delivery probes.
+                    self.blocked[activity] = retry
                 if isinstance(error, ActivityContextError):
                     self.db.execute('UPDATE deliveries SET receipt=? WHERE id=?', (encoded(reply), key))
             return True
@@ -301,6 +355,7 @@ class DeliveryStore:
             if retention_tombstone(self.db, 'deliveries', key) or self.db.execute('SELECT 1 FROM deliveries WHERE id=?', (key,)).fetchone() is None:
                 return True
             self.db.execute("UPDATE deliveries SET status='ACKNOWLEDGED',receipt=?,error=NULL WHERE id=?", (encoded(reply), key))
+            self.blocked.pop(activity, None)
         if on_receipt:
             on_receipt(json.loads(body), reply)
         return True
@@ -325,3 +380,4 @@ class DeliveryStore:
             self.db.execute(f'PRAGMA max_page_count={self.page_limit}')
             self.cursors = {'captures': 0, 'deliveries': 0}
             self.activity_cursors.clear()
+            self.blocked.clear()

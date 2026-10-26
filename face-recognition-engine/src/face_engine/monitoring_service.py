@@ -359,6 +359,11 @@ class MonitoringRuntime:
         if job is None and capture is None:
             self.stop_event.wait(.01)
             return capture_turn
+        if job is not None and not self.store.accepts(job.metadata.get('activity_id')):
+            # Its observations could not be queued (see DeliveryStore.accepts): drop the
+            # live frame before inference instead of stalling every other activity.
+            self.count('inference_or_capacity_errors')
+            return capture_turn
         try:
             if capture:
                 key, body, metadata = capture

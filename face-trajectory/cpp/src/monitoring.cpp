@@ -41,7 +41,31 @@ json ObservationRecord(State* state,const std::string& text,bool payload=true) {
     }
     return record;
 }
+// Reverse index target -> receipts that may be shown as HOLD review bubbles.
+// Rows are written for every stored revision whose candidate list names the
+// target, so the index is a superset; HeldCandidates re-applies the complete
+// filter to the current receipt. Without it each projection parsed every
+// receipt and payload of the activity (O(all observations) per observe).
+constexpr const char* kHeldIndex="monitoring_held_candidate";
+constexpr const char* kHeldIndexReady="held_candidate_index_v1";
+bool HoldReceipt(const json& response) {
+    if(!response.is_object() || response.value("status","")=="ACCEPTED" ||
+       !response.contains("association") || !response.at("association").is_object()) return false;
+    const auto& association=response.at("association");
+    return !(association.contains("sighting") && !association.at("sighting").is_null());
+}
+void IndexHeldCandidates(State* state,const std::string& id,const json& response) {
+    if(!HoldReceipt(response)) return;
+    const auto& candidates=response.at("association").value("candidates",json::array());
+    if(!candidates.is_array()) return;
+    for(const auto& candidate:candidates)
+        if(candidate.is_object() && candidate.contains("target_id") && candidate.at("target_id").is_string()) {
+            const auto& target=candidate.at("target_id").get_ref<const std::string&>();
+            if(!target.empty()) state->Put(kHeldIndex,json::array({target,id}).dump(),json(id).dump(),target,id);
+        }
+}
 void StoreObservationRecord(State* state,const std::string& id,json record) {
+    IndexHeldCandidates(state,id,record.at("response"));
     if(record.contains("payload")) { record["payload_ref"]=state->Intern(record.at("payload").dump()); record.erase("payload"); }
     const json ref={{"revision",record.at("revision")},{"record_ref",state->Intern(record.dump())},
         {"time_admitted",record.at("response").value("time_admitted",false)}};
@@ -63,8 +87,7 @@ std::pair<std::int64_t,std::int64_t> Bounds(std::int64_t at, std::int64_t error)
 json HeldCandidates(State* state, const std::string& target, const AssociationStore& associations,
                     std::optional<std::int64_t> before) {
     auto result = json::array();
-    state->Scan("monitoring_observation", [&](const auto& id, const auto& text) {
-        const auto record = ObservationRecord(state, text, true);
+    auto consider = [&](const std::string& id, const json& record) {
         const auto& response = record.at("response");
         if (response.value("status", "") == "ACCEPTED" ||
             !response.contains("association") || response.at("association").is_null()) return;
@@ -124,7 +147,24 @@ json HeldCandidates(State* state, const std::string& target, const AssociationSt
             {"status", "HOLD"},
             {"included_in_confirmed_trajectory", false}
         });
-    });
+    };
+    if (state->Get("monitoring_meta", kHeldIndexReady)) {
+        std::set<std::string> ids;
+        state->Scan(kHeldIndex, [&](const std::string&, const std::string& id) { ids.insert(json::parse(id).get<std::string>()); }, target);
+        for (const auto& id : ids)
+            if (const auto text = state->Get("monitoring_observation", id)) consider(id, ObservationRecord(state, *text, true));
+    } else {
+        // One-time upgrade of receipts written before the index existed:
+        // read everything first (no writes during Scan), then index them.
+        std::vector<std::pair<std::string, std::string>> rows;
+        state->Scan("monitoring_observation", [&](const auto& id, const auto& text) { rows.emplace_back(id, text); });
+        for (const auto& [id, text] : rows) {
+            const auto record = ObservationRecord(state, text, true);
+            consider(id, record);
+            IndexHeldCandidates(state, id, record.at("response"));
+        }
+        state->Put("monitoring_meta", kHeldIndexReady, "1");
+    }
     std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
         const auto at = a.at("captured_at_unix_ms").is_number_integer()
             ? a.at("captured_at_unix_ms").template get<std::int64_t>() : std::numeric_limits<std::int64_t>::max();
