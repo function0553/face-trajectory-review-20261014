@@ -44,11 +44,13 @@ def association_policy_for_stream(config, stream_kind=None):
     for threshold in thresholds.values():
         if type(threshold) not in (int, float) or not np.isfinite(threshold) or not 0 < threshold <= 1:
             raise ValueError('stream match thresholds must be finite values in (0,1]')
-        if threshold < policy['new_target_threshold']:
-            raise ValueError('stream match threshold is below new target threshold')
     kind = 'sub' if stream_kind == 'sub' else 'main'
     threshold = thresholds.get(kind, policy['match_threshold'])
     policy['match_threshold'] = threshold
+    # P2 requires the new-target boundary to be strictly below matching.
+    # Move it only as far as required; registered-person matching stays exact.
+    policy['new_target_threshold'] = min(policy['new_target_threshold'],
+        float(np.nextafter(float(threshold), 0.0)))
     policy['policy_id'] += ':stream:' + kind + ':match:' + json.dumps(threshold)
     return policy
 
