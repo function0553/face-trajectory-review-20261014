@@ -1,0 +1,6 @@
+{
+  "stream_match_thresholds": {
+    "main": 0.35,
+    "sub": 0.15
+  }
+}
