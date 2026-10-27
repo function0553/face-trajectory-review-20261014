@@ -38,7 +38,7 @@
     "max_database_mb": 1024
   },
   "policy": {
-    "policy_id": "field-minface20-v41-20261027",
+    "policy_id": "field-minface20-eye10-v41-20261027",
     "match_threshold": 0.5,
     "new_target_threshold": 0.35,
     "min_margin": 0.05,
