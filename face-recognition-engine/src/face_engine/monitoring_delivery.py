@@ -99,6 +99,8 @@ class DeliveryStore:
             self.cycle = [category for i in range(max(weights)) for category, weight in zip(CATEGORIES, weights) if i < weight]
             self.cursors = {'captures': 0, 'deliveries': 0}
             self.activity_cursors = {}
+            self.capture_source_cursors = {}
+            self.capture_fresh_turns = {}
             # activity -> earliest next probe. P2 refuses an activity's new results with 503
             # CAPACITY while its backend push queue is full; by contract that queue waits on
             # its oldest event until the receiver accepts it or it expires. Probing with one delivery at a
@@ -155,6 +157,7 @@ class DeliveryStore:
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture ON captures(created) WHERE image IS NOT NULL")
             self.db.execute("CREATE INDEX IF NOT EXISTS capture_status ON captures(status)")
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture_scope ON captures(category,activity_id,created,id) WHERE status='PENDING' AND image IS NOT NULL")
+            self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture_source ON captures(category,activity_id,source_id,created,id) WHERE status='PENDING' AND image IS NOT NULL")
             self.db.execute("CREATE TABLE IF NOT EXISTS inbox_counts(kind TEXT PRIMARY KEY,n INTEGER NOT NULL CHECK(n>=0))")
             # Reconcile once under the exclusive consumer lease. SQL triggers
             # also see C++ retention deletes and roll back with the owning write.
@@ -208,6 +211,22 @@ class DeliveryStore:
             raise RuntimeError("CAPACITY: activity is waiting for P2 push capacity")
 
     def capture(self, image_bytes, metadata, category='NORMAL'):
+        with self.lock, self.db:
+            return self._capture_locked(image_bytes,metadata,category)
+
+    def capture_batch(self, records):
+        # One durable transaction per acquisition batch. A crash before commit
+        # retains the complete producer file; retries remain idempotent.
+        keys=[]
+        with self.lock, self.db:
+            for header,body in records:
+                try:key=self._capture_locked(body,header['metadata'],header['category'])
+                except RetentionExpired:key=header['key']
+                if key!=header['key']:raise EventConflict('batch event identity differs')
+                keys.append(key)
+        return keys
+
+    def _capture_locked(self, image_bytes, metadata, category):
         if not isinstance(metadata, dict):
             raise ValueError('capture metadata must be an object')
         if category not in CATEGORIES:
@@ -229,21 +248,20 @@ class DeliveryStore:
         # Retain the first stored snapshot when a vendor retries after a rename.
         immutable = {k: v for k, v in metadata.items() if k not in ('received_at_unix_ms', 'camera_name')}
         digest = hashlib.sha256(encoded(immutable).encode() + image_bytes).hexdigest()
-        with self.lock, self.db:
-            retention_write_guard(self.db)
-            if retention_tombstone(self.db, 'captures', key, digest):
-                raise RetentionExpired('EXPIRED: capture cannot be recreated')
-            old = self.db.execute("SELECT hash FROM captures WHERE id=?", (key,)).fetchone()
-            if old:
-                if old[0] != digest:
-                    raise EventConflict("conflicting capture event")
-                return key
-            if status == 'PENDING' and context['activity_id'] in self.blocked and self._blocked_full():
-                raise RuntimeError('CAPACITY: activity is waiting for P2 push capacity')
-            self.db.execute("INSERT INTO captures(id,hash,image,metadata,result,created,category,activity_id,source_id,event_id,context,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                (key, digest, image_bytes, body, report, time.time(), category, context.get('activity_id'), metadata['source_id'], metadata['frame_id'], encoded(context), status))
-            if self._pending_count('captures') > self.max_pending:
-                raise RuntimeError('CAPACITY: capture inbox full')
+        retention_write_guard(self.db)
+        if retention_tombstone(self.db, 'captures', key, digest):
+            raise RetentionExpired('EXPIRED: capture cannot be recreated')
+        old = self.db.execute("SELECT hash FROM captures WHERE id=?", (key,)).fetchone()
+        if old:
+            if old[0] != digest:
+                raise EventConflict("conflicting capture event")
+            return key
+        if status == 'PENDING' and context['activity_id'] in self.blocked and self._blocked_full():
+            raise RuntimeError('CAPACITY: activity is waiting for P2 push capacity')
+        self.db.execute("INSERT INTO captures(id,hash,image,metadata,result,created,category,activity_id,source_id,event_id,context,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (key, digest, image_bytes, body, report, time.time(), category, context.get('activity_id'), metadata['source_id'], metadata['frame_id'], encoded(context), status))
+        if self._pending_count('captures') > self.max_pending:
+            raise RuntimeError('CAPACITY: capture inbox full')
         return key
 
     def next_capture(self, exclude_keys=()):
@@ -271,6 +289,19 @@ class DeliveryStore:
                 previous = self.activity_cursors.get((table, category), '')
                 activity = next((item for item in activities if item > previous), activities[0])
                 self.activity_cursors[table, category] = activity
+                if table=='captures':
+                    scope=(category,activity)
+                    sources=[row[0] for row in self.db.execute(
+                        f'SELECT DISTINCT source_id FROM captures INDEXED BY pending_capture_source WHERE {condition} AND category=? AND activity_id=? ORDER BY source_id',
+                        (*params,category,activity))]
+                    previous_source=self.capture_source_cursors.get(scope,'')
+                    source_id=next((value for value in sources if value>previous_source),sources[0])
+                    self.capture_source_cursors[scope]=source_id
+                    key=scope+(source_id,);fresh=self.capture_fresh_turns.get(key,False)
+                    self.capture_fresh_turns[key]=not fresh
+                    direction='DESC' if fresh else 'ASC'
+                    return self.db.execute(f'SELECT {columns} FROM captures INDEXED BY pending_capture_source WHERE {condition} AND category=? AND activity_id=? AND source_id=? ORDER BY created {direction},id {direction} LIMIT 1',
+                        (*params,category,activity,source_id)).fetchone()
                 return self.db.execute(f'SELECT {columns} FROM {source} WHERE {condition} AND category=? AND activity_id=? ORDER BY created,id LIMIT 1', (*params, category, activity)).fetchone()
         return None
 

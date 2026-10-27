@@ -230,6 +230,30 @@ class PlatformRuntime(unittest.TestCase):
                 self.assertFalse(self.runtime.cameras)
                 self.assertEqual(reader.stopped, 1)
 
+    def test_process_acquisition_receives_exact_committed_routes_without_loading_models(self):
+        from types import SimpleNamespace
+        from face_engine.capture_process import ProcessCamera
+        self.catalog.write_text(json.dumps(dict(schema_version=1,cameras=[])))
+        class Manager:
+            rows={}
+            def configure(self,rows):self.rows=rows
+            def remove(self,camera):self.rows.pop(camera,None)
+            def close(self):self.rows={}
+            def metrics(self,camera):return dict(frames=0)
+        manager=Manager();self.runtime.capture_processes=manager
+        entry=dict(camera_id='BACKEND-UUID',source_id='BACKEND-UUID',backend='ccic_uuid',
+            continuous=True,sub_url='rtsp://127.0.0.1:1/sub',main_url='rtsp://127.0.0.1:1/main',
+            preferred_stream='sub',sample_fps=2,ffmpeg_path='ffmpeg')
+        self.runtime.uuid_sources=SimpleNamespace(resolve=lambda requested:{c:entry for c in requested if c=='BACKEND-UUID'},
+            known={'BACKEND-UUID'},status=dict(status='READY'))
+        self.activity('A');self.runtime.refresh_bindings()
+        self.assertIsInstance(self.runtime.cameras['BACKEND-UUID'],ProcessCamera)
+        row=manager.rows['BACKEND-UUID']
+        self.assertEqual(row['connection']['camera_id'],'BACKEND-UUID')
+        self.assertEqual(row['routes'][0]['context']['activity_id'],'A')
+        self.assertEqual(row['routes'][0]['context']['source_id'],'BACKEND-UUID')
+        self.activity('A',enabled=False);self.runtime.refresh_bindings();self.assertFalse(manager.rows)
+
     def test_health_reader_metrics_survives_concurrent_rotation(self):
         from types import SimpleNamespace
         self.runtime.extractor = SimpleNamespace(detector=SimpleNamespace(backend='TEST'),

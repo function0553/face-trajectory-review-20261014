@@ -47,8 +47,20 @@ Health includes per-camera frames, last-frame age, persisted candidates, inbox
 refusals and acquisition errors, plus oldest pending capture age. An offline UUID,
 failed decoder, full inbox or unresolved clock is not successful coverage.
 Capacity and delay require verification on the real camera population.
-The continuous reader uses a shorter CPython thread handoff interval for large
-I/O populations. Camera directory outages retain previously verified UUID
+Large installations can set `uuid_sources.acquisition_processes` (2..64) to
+run acquisition-only process groups. Groups are assigned by UUID hash, independent
+of a person's identity or walking route. Face inference stays in P1; groups write
+atomic candidate files to separate spool directories for its existing importer.
+They expose per-camera status files, never biometric vectors or a new public API.
+The owning P1 controls routing and terminates each Linux process group, including
+its decoders, before releasing its maintenance lease. Process restarts preserve
+completed candidate files. The Python thread scheduler remains at its default.
+Each group commits concurrent JPEG candidates as bounded batches and acknowledges
+them only after the image file and its directory have synchronized. P1 imports a
+batch in one SQLite transaction; retries preserve scoped event/hash deduplication.
+Reconstructible control/status snapshots do not force disk flushes. This prevents
+per-camera filesystem synchronization from serializing the control plane.
+Camera directory outages retain previously verified UUID
 connections only while their committed activity bindings remain valid; unknown
 UUIDs are never guessed. A successful directory refresh remains authoritative.
 Deployment must provision open-file and memory limits for the measured number

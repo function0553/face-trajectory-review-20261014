@@ -79,6 +79,13 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             from face_engine.camera_clock import CameraClock
             self.capture_clock = CameraClock(dict(config['camera_clock'],state_file=self.binding_state), config['camera_clock'].get('endpoint', config['endpoint']),
                 os.environ.get(config.get('p2_authorization_env', 'FACE_TRAJECTORY_AUTHORIZATION'), ''))
+        self.capture_processes = None
+        process_count = config.get('uuid_sources',{}).get('acquisition_processes',1)
+        if process_count != 1:
+            if not config.get('uuid_sources',{}).get('continuous') or self.capture_ingress is None:
+                raise ValueError('acquisition processes require continuous durable capture')
+            from face_engine.capture_process import CaptureProcesses
+            self.capture_processes=CaptureProcesses(str(store.path)+'.acquisition',self.capture_ingress,count=process_count)
 
     def configure_cameras(self):
         # The maintenance owner configures readers while ingress is paused.
@@ -227,10 +234,16 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 if camera not in self.cameras:
                     if dynamic:
                         if args.get('continuous'):
-                            from face_engine.continuous_capture import ContinuousCamera
                             args = {k:v for k,v in args.items() if k!='continuous'}
-                            reader = ContinuousCamera(sub, main or None, **args,
-                                on_capture=self._continuous_capture, camera_clock=self.capture_clock)
+                            if self.capture_processes:
+                                from face_engine.capture_process import ProcessCamera
+                                reader=ProcessCamera(camera,self.capture_processes,sub_url=sub,main_url=main or None,
+                                    ffmpeg=args['ffmpeg'],source_id=args['source_id'],clock=self.capture_clock,
+                                    connection=args.get('connection'))
+                            else:
+                                from face_engine.continuous_capture import ContinuousCamera
+                                reader = ContinuousCamera(sub, main or None, **args,
+                                    on_capture=self._continuous_capture, camera_clock=self.capture_clock)
                         else:
                             from face_engine.uuid_sources import FailoverCamera
                             reader = FailoverCamera(sub, main or None, **args)
@@ -254,6 +267,17 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                     if start_readers:
                         reader.start()
             self.hikvision = list(self.hik_signatures.values())
+            if self.capture_processes:
+                process_rows={}
+                for camera,(_,sub,main,args,dynamic) in signatures.items():
+                    if not (dynamic and args.get('continuous')):continue
+                    connection={k:v for k,v in args.items() if k!='continuous'}
+                    connection.update(sub_url=sub,main_url=main or None)
+                    profile=self.capture_clock.for_capture(camera,args.get('connection')) if self.capture_clock else None
+                    process_rows[camera]=dict(connection=connection,clock_profile=profile,routes=[dict(
+                        context=context,since_monotonic=self.route_since[encoded([camera,context])],
+                        category=self.priority.category(camera,activity_id=context['activity_id'])) for context in live[camera]])
+                self.capture_processes.configure(process_rows)
             self.binding_status = dict(status='MISSING_VIDEO_SOURCE' if missing else ('BOUND' if routes else 'IDLE'),
                 bound_camera_count=len(routes), active_input_count=len(live),
                 activity_route_count=sum(map(len, live.values())), missing_camera_ids=sorted(missing))
@@ -448,6 +472,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
     def _drop_acquisition(self):
         # Stop can join a callback. Never hold platform_lock across reader.stop().
         with self.binding_refresh_lock:
+            if self.capture_processes:self.capture_processes.close()
             with self.platform_lock:
                 self.platform_routes.clear()
                 self.route_since.clear()

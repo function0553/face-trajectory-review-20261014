@@ -195,17 +195,22 @@ class MonitoringRuntime:
     def _ingress_loop(self):
         from face_engine.trajectory_bridge import RetentionExpired
         while not self.stop_event.is_set():
+            self.capture_ingress.discover_external()
             path=self.capture_ingress.claim()
             if path is None:
                 self.capture_ingress.ready.wait(.1)
                 continue
             try:
                 with self.operation():
-                    header,body=self.capture_ingress.read(path)
-                    key=self.store.capture(body,header['metadata'],header['category'])
-                    if key!=header['key']:raise EventConflict('ingress import event identity differs')
+                    if path.suffix=='.batch':
+                        count=len(self.store.capture_batch(self.capture_ingress.read_batch(path)))
+                    else:
+                        header,body=self.capture_ingress.read(path)
+                        key=self.store.capture(body,header['metadata'],header['category'])
+                        if key!=header['key']:raise EventConflict('ingress import event identity differs')
+                        count=1
                     self.capture_ingress.acknowledge(path)
-                self.count('ingress_imported')
+                self.count('ingress_imported',count)
             except RetentionExpired:
                 # Only the authoritative retention tombstone permits deletion.
                 self.capture_ingress.acknowledge(path)
