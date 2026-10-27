@@ -141,6 +141,12 @@ class MonitoringRuntime:
         self.poll_cursor = 0
         self.main_pending = set()
         self.main_lock = threading.Lock()
+        self.capture_claim_lock = threading.Lock()
+        self.capture_inflight = set()
+        self.capture_retry_at = {}
+        self.inference_workers = scheduling.get('inference_workers', 1)
+        if type(self.inference_workers) is not int or not 1 <= self.inference_workers <= 16:
+            raise ValueError('inference_workers must be 1..16')
         self.main_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='main-frame')
         self.threads = []
         self.consumer_lease = None
@@ -275,6 +281,17 @@ class MonitoringRuntime:
         context = activity_context(metadata)
         scheduling_category = scheduling_category or self.priority.category(metadata['camera_id'], activity_id=context['activity_id'])
         result = self.extractor.extract_detailed([(image, metadata)])[0]
+        capture_clock = getattr(self, 'capture_clock', None)
+        if result['observations'] and capture_clock and not metadata.get('time_record'):
+            try:
+                record = capture_clock.record(image, metadata)
+            except Exception as error:
+                self.count('camera_capture_time_pending')
+                raise RuntimeError('Camera capture time is not yet qualified') from error
+            for observation in result['observations']:
+                observation['time_record'] = record
+                observation['time_source'] = 'DEVICE_CAPTURE'
+                observation['clock_domain'] = 'CAMERA:'+metadata['camera_id']
         deliveries = self._deliveries(result['observations'])
         with self.stats_lock:
             for observation in result['observations']:
@@ -351,10 +368,19 @@ class MonitoringRuntime:
 
     @runtime_operation
     def _infer_cycle(self, capture_turn):
-        capture = self.store.next_capture() if capture_turn else None
+        def next_capture():
+            with self.capture_claim_lock:
+                now = time.monotonic()
+                self.capture_retry_at = {k:v for k,v in self.capture_retry_at.items() if v>now}
+                excluded = tuple(self.capture_inflight | set(self.capture_retry_at))
+                item = self.store.next_capture(excluded) if excluded else self.store.next_capture()
+                if item:
+                    self.capture_inflight.add(item[0])
+                return item
+        capture = next_capture() if capture_turn else None
         job = None if capture else self.queue.pop()
         if job is None and capture is None:
-            capture = self.store.next_capture()
+            capture = next_capture()
         capture_turn = not capture_turn
         if job is None and capture is None:
             self.stop_event.wait(.01)
@@ -381,8 +407,16 @@ class MonitoringRuntime:
             return capture_turn
         except Exception:
             self.count('inference_or_capacity_errors')
+            if capture:
+                with self.capture_claim_lock:
+                    if len(self.capture_retry_at)<256:
+                        self.capture_retry_at[capture[0]] = time.monotonic()+5
             # Durable captures remain pending on transient inference/storage failure.
             self.stop_event.wait(.25)
+        finally:
+            if capture:
+                with self.capture_claim_lock:
+                    self.capture_inflight.discard(capture[0])
         return capture_turn
 
     def _infer_loop(self):
@@ -492,7 +526,9 @@ class MonitoringRuntime:
                 camera.start()
             for reader in self.hikvision:
                 reader.start()
-            for name, fn in [('infer', self._infer_loop), ('deliver', self._send_loop), ('sample', self._poll_loop)]:
+            operations = [('infer' if i==0 else 'infer-'+str(i), self._infer_loop) for i in range(self.inference_workers)]
+            operations += [('deliver', self._send_loop), ('sample', self._poll_loop)]
+            for name, fn in operations:
                 thread = threading.Thread(target=fn, name='monitoring-'+name, daemon=True)
                 self.threads.append(thread)
                 thread.start()
@@ -550,10 +586,19 @@ class MonitoringRuntime:
         # final loop variable may own a native reader's cached image. Existing
         # acquisition instances cannot restart; resume constructs fresh ones.
         self.camera_names.stop()
-        for camera in self.cameras.values():
-            camera.stop()
-        for reader in self.hikvision:
-            reader.stop()
+        readers = list(self.cameras.values())+list(self.hikvision)
+        if len(readers)>8:
+            with ThreadPoolExecutor(max_workers=64,thread_name_prefix='input-stop') as pool:
+                futures=[pool.submit(reader.stop) for reader in readers]
+                errors=[]
+                for future in futures:
+                    try:future.result()
+                    except Exception as error:errors.append(error)
+            if errors:
+                raise errors[0]
+        else:
+            for reader in readers:
+                reader.stop()
         self.main_pool.shutdown(wait=True, cancel_futures=True)
         self.cameras.clear()
         self.hikvision.clear()

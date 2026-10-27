@@ -14,6 +14,7 @@ from pathlib import Path
 import sqlite3
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from face_engine.monitoring_service import MonitoringRuntime, runtime_operation
 from face_engine.scheduling import FrameJob
@@ -68,6 +69,15 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         self.cleanup_pending = False
         self.binding_status = dict(status='NOT_REFRESHED', missing_camera_ids=[])
         self.next_binding_poll = 0
+        self.uuid_sources = None
+        if config.get('uuid_sources'):
+            from face_engine.uuid_sources import UUIDSources
+            self.uuid_sources = UUIDSources(config['uuid_sources'])
+        self.capture_clock = None
+        if config.get('camera_clock'):
+            from face_engine.camera_clock import CameraClock
+            self.capture_clock = CameraClock(config['camera_clock'], config['camera_clock'].get('endpoint', config['endpoint']),
+                os.environ.get(config.get('p2_authorization_env', 'FACE_TRAJECTORY_AUTHORIZATION'), ''))
 
     def configure_cameras(self):
         # The maintenance owner configures readers while ingress is paused.
@@ -102,10 +112,18 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 if 'activity_context' in item:
                     raise ValueError('dynamic catalog must not contain static activity routes')
                 entries[camera] = item
+            deferred = set()
+            if self.uuid_sources is not None:
+                requested = set(routes) - set(entries)
+                resolved = self.uuid_sources.resolve(requested)
+                entries.update(resolved)
+                deferred = requested & self.uuid_sources.known - set(resolved)
             live, signatures, subscriptions = {}, {}, {}
             missing = []
             for camera in routes:
                 if camera not in entries:
+                    if camera in deferred:
+                        continue
                     missing.append(camera)
                     continue
                 item = entries[camera]
@@ -115,7 +133,9 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 def env(field):
                     name = item.get(field)
                     return os.environ.get(name, '') if name else ''
-                sub, main = env('sub_url_env'), env('main_url_env')
+                dynamic = item.get('backend') == 'ccic_uuid'
+                sub, main = ((item.get('sub_url', ''), item.get('main_url', '')) if dynamic
+                             else (env('sub_url_env'), env('main_url_env')))
                 if item.get('sub_url_env') and not sub:
                     raise ValueError('camera video environment unavailable')
                 hik = item.get('hikvision', {})
@@ -125,10 +145,25 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 live[camera] = [dict(route, source_id=source) for route in routes[camera]]
                 if sub:
                     args = dict(source_id=source, camera_id=camera,
-                        sample_fps=item.get('sample_fps', 10), ffmpeg=env('ffmpeg_path_env') or 'ffmpeg',
+                        sample_fps=item.get('sample_fps', 10), ffmpeg=item.get('ffmpeg_path') or env('ffmpeg_path_env') or 'ffmpeg',
                         clock_profile_version=item.get('clock_profile_version'),
                         backend=item.get('backend', 'ffmpeg'), gst_python=env('gst_python_env') or None)
-                    signatures[camera] = (encoded([sub, main, args]), sub, main, args)
+                    if dynamic:
+                        args = {key: args[key] for key in ['source_id', 'camera_id', 'sample_fps', 'ffmpeg']}
+                        if item.get('continuous'):
+                            args['connection'] = item.get('capture_connection')
+                            args['continuous'] = True
+                            args['preferred_stream'] = item.get('preferred_stream', 'main')
+                    signatures[camera] = (encoded([sub, main, args, dynamic]), sub, main, args, dynamic)
+                if dynamic and item.get('continuous'):
+                    connection = item.get('capture_connection')
+                    if connection:
+                        import ipaddress
+                        if ipaddress.ip_address(connection['ip']).is_private:
+                            values = ('http://'+connection['ip']+'/ISAPI/Event/notification/alertStream',
+                                      connection['username'], connection['password'])
+                            subscriptions.setdefault(values, {})[str(connection['index'])] = dict(
+                                source_id=source, camera_id=camera, clock_profile_version=None)
                 if hik.get('enabled'):
                     values = tuple(os.environ.get(hik.get(key+'_env', ''), '')
                                    for key in ('alert_url', 'username', 'password'))
@@ -174,9 +209,19 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                     self.cameras[camera].stop()
                     self.cameras.pop(camera)
                     self.reader_signatures.pop(camera, None)
-            for camera, (signature, sub, main, args) in signatures.items():
+            for camera, (signature, sub, main, args, dynamic) in signatures.items():
                 if camera not in self.cameras:
-                    reader = CameraAcquisition(sub, main or None, **args)
+                    if dynamic:
+                        if args.get('continuous'):
+                            from face_engine.continuous_capture import ContinuousCamera
+                            args = {k:v for k,v in args.items() if k!='continuous'}
+                            reader = ContinuousCamera(sub, main or None, **args,
+                                on_capture=self._continuous_capture, camera_clock=self.capture_clock)
+                        else:
+                            from face_engine.uuid_sources import FailoverCamera
+                            reader = FailoverCamera(sub, main or None, **args)
+                    else:
+                        reader = CameraAcquisition(sub, main or None, **args)
                     self.cameras[camera] = reader
                     self.reader_signatures[camera] = signature
                     if start_readers:
@@ -198,6 +243,8 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             self.binding_status = dict(status='MISSING_VIDEO_SOURCE' if missing else ('BOUND' if routes else 'IDLE'),
                 bound_camera_count=len(routes), active_input_count=len(live),
                 activity_route_count=sum(map(len, live.values())), missing_camera_ids=sorted(missing))
+            if self.uuid_sources is not None:
+                self.binding_status['uuid_sources'] = copy.deepcopy(self.uuid_sources.status)
             self.count('platform_binding_refreshes')
             # Changing activities must not accumulate unbounded scheduler keys.
             keys = {encoded([route['activity_id'], route['source_id'], camera, kind])
@@ -218,10 +265,14 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         self.next_binding_poll = time.monotonic()+self.binding_interval
 
     def _stop_inputs(self):
-        for inputs, signatures in ((self.cameras, self.reader_signatures), (self.hik_signatures, None)):
-            for key, reader in list(inputs.items()):
+        rows=[(inputs,signatures,key,reader) for inputs,signatures in
+              ((self.cameras,self.reader_signatures),(self.hik_signatures,None))
+              for key,reader in list(inputs.items())]
+        with ThreadPoolExecutor(max_workers=min(64,max(1,len(rows))),thread_name_prefix='binding-stop') as pool:
+            pending=[(inputs,signatures,key,pool.submit(reader.stop)) for inputs,signatures,key,reader in rows]
+            for inputs,signatures,key,future in pending:
                 try:
-                    reader.stop()
+                    future.result()
                 except Exception:
                     self.count('platform_reader_stop_errors')
                 else:
@@ -246,6 +297,19 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             return result
 
     @runtime_operation
+    def _continuous_capture(self, body, metadata, received_monotonic):
+        from face_engine.acquisition import Frame
+        frame = Frame(None, metadata, received_monotonic)
+        routed_frames = self._routed_frames(frame)
+        if not routed_frames:
+            raise ActivityContextError('continuous frame has no current activity route')
+        for routed in routed_frames:
+            meta = routed.metadata
+            self.store.capture(body, meta,
+                self.priority.category(meta['camera_id'], activity_id=meta['activity_id']))
+        self.count('continuous_candidates_persisted')
+
+    @runtime_operation
     def _hikvision_frame(self, frame):
         import cv2
         frames = self._routed_frames(frame)
@@ -257,9 +321,22 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         refused = None
         for routed in frames:
             meta = routed.metadata
+            if self.capture_clock:
+                connection = self.uuid_sources._connections.get(meta['camera_id']) if self.uuid_sources else None
+                profile = self.capture_clock.for_capture(meta['camera_id'], connection)
+                if profile:
+                    meta['camera_clock_profile'] = profile
+                    if isinstance(meta.get('time_record'), dict):
+                        meta['time_record']['profile_version'] = profile['profile_version']
             try:
+                # This is queue urgency, independent of the person's business
+                # category. Native face pictures can confirm a video route
+                # promptly while weighted scheduling still services video.
+                auxiliary = self.config.get('uuid_sources', {}).get('continuous') is True
+                if auxiliary:
+                    meta['capture_origin'] = 'AUXILIARY_NATIVE_FACE_CAPTURE'
                 self.store.capture(body.tobytes(), meta,
-                    self.priority.category(meta['camera_id'], activity_id=meta['activity_id']))
+                    'PRIORITY' if auxiliary else self.priority.category(meta['camera_id'], activity_id=meta['activity_id']))
             except RuntimeError as error:
                 # One activity out of capacity must not cost the camera's other activities.
                 if not str(error).startswith('CAPACITY:'):
@@ -296,8 +373,15 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 with self.operation():
                     frame = camera.request_main(reason='insufficient_face_quality')
                     if frame is not None:
-                        for routed in self._routed_frames(frame):
-                            self.submit_frame(routed)
+                        if getattr(camera, 'callback', None) is not None:
+                            import cv2
+                            ok, body = cv2.imencode('.jpg', frame.image_bgr, [cv2.IMWRITE_JPEG_QUALITY,95])
+                            if not ok:
+                                raise ValueError('main frame encoding failed')
+                            self._continuous_capture(body.tobytes(),frame.metadata,frame.received_monotonic)
+                        else:
+                            for routed in self._routed_frames(frame):
+                                self.submit_frame(routed)
             except Exception:
                 self.count('main_request_errors')
         try:
@@ -351,8 +435,15 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 dict(activity_id=context['activity_id'], camera_id=camera, source_id=context['source_id'])
                 for camera, contexts in self.platform_routes.items() for context in contexts if camera in self.cameras}
 
+    def stop(self):
+        super().stop()
+        if self.capture_clock:
+            self.capture_clock.close()
+
     def status(self):
         result = super().status()
         with self.platform_lock:
             result['platform_bindings'] = copy.deepcopy(self.binding_status)
+            result['video_inputs'] = {camera: reader.metrics() for camera, reader in list(self.cameras.items())
+                                      if hasattr(reader, 'metrics')}
         return result

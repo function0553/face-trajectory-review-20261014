@@ -8,11 +8,59 @@ import time
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
+from collections import deque
 
 from face_engine.trajectory_bridge import (encoded, activity_context, scoped_event_key,
     verify_activity_receipt, ActivityContextError, EventConflict, RetentionExpired,
     retention_tombstone, retention_write_guard, consumer_lease)
 from face_engine.scheduling import CATEGORIES
+
+
+class FairRLock:
+    """FIFO handoff prevents camera writers starving inference and health."""
+    def __init__(self):
+        self.guard = threading.Lock()
+        self.waiting = deque()
+        self.owner = None
+        self.depth = 0
+
+    def __enter__(self):
+        identity = threading.get_ident()
+        with self.guard:
+            if self.owner == identity:
+                self.depth += 1
+                return self
+            if self.owner is None:
+                self.owner, self.depth = identity, 1
+                return self
+            ticket = (identity, threading.Event())
+            self.waiting.append(ticket)
+        try:
+            ticket[1].wait()
+        except BaseException:
+            with self.guard:
+                if ticket in self.waiting:
+                    self.waiting.remove(ticket)
+                elif self.owner == identity:
+                    self._handoff()
+            raise
+        return self
+
+    def _handoff(self):
+        if self.waiting:
+            self.owner, event = self.waiting.popleft()
+            self.depth = 1
+            event.set()
+        else:
+            self.owner, self.depth = None, 0
+
+    def __exit__(self, *args):
+        with self.guard:
+            if self.owner != threading.get_ident():
+                raise RuntimeError('store mutex is not owned by this thread')
+            self.depth -= 1
+            if not self.depth:
+                self._handoff()
 
 
 def _p2_capacity(text):
@@ -41,7 +89,7 @@ class DeliveryStore:
         self.path = Path(path).resolve()
         with consumer_lease(self.path, wait=True):
             self.db = sqlite3.connect(path, timeout=5, check_same_thread=False)
-            self.lock = threading.RLock()
+            self.lock = FairRLock()
             self.max_pending = max_pending
             self.max_faces_per_capture = max_faces_per_capture
             if type(max_faces_per_capture) is not int or max_faces_per_capture < 1:
@@ -105,6 +153,8 @@ class DeliveryStore:
                         (context['activity_id'], source, event, encoded(context), key))
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_delivery ON deliveries(status,next_attempt,created)")
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture ON captures(created) WHERE image IS NOT NULL")
+            self.db.execute("CREATE INDEX IF NOT EXISTS capture_status ON captures(status)")
+            self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture_scope ON captures(category,activity_id,created,id) WHERE status='PENDING' AND image IS NOT NULL")
             self.db.commit()
 
     @contextmanager
@@ -134,7 +184,7 @@ class DeliveryStore:
             return activity not in self.blocked or not self._blocked_full()
 
     def _capacity(self, fanout=False, activities=()):
-        captures = self.db.execute("SELECT count(*) FROM captures WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0]
+        captures = self.db.execute("SELECT count(*) FROM captures INDEXED BY pending_capture_scope WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0]
         deliveries = self.db.execute("SELECT count(*) FROM deliveries WHERE status='PENDING'").fetchone()[0]
         # Separate ingress/egress budgets leave room to turn one image into many
         # observations even when the capture inbox is completely full.
@@ -179,30 +229,36 @@ class DeliveryStore:
                 raise RuntimeError('CAPACITY: activity is waiting for P2 push capacity')
             self.db.execute("INSERT INTO captures(id,hash,image,metadata,result,created,category,activity_id,source_id,event_id,context,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (key, digest, image_bytes, body, report, time.time(), category, context.get('activity_id'), metadata['source_id'], metadata['frame_id'], encoded(context), status))
-            if self.db.execute("SELECT count(*) FROM captures WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0] > self.max_pending:
+            if self.db.execute("SELECT count(*) FROM captures INDEXED BY pending_capture_scope WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0] > self.max_pending:
                 raise RuntimeError('CAPACITY: capture inbox full')
         return key
 
-    def next_capture(self):
+    def next_capture(self, exclude_keys=()):
         with self.lock:
             # Captures of a blocked activity over its share wait unprocessed; their
             # observations could not be queued, so do not spend inference on them.
             full = list(self.blocked) if self._blocked_full() else []
             condition = "status='PENDING' AND image IS NOT NULL" + (
                 f" AND activity_id NOT IN ({','.join('?' * len(full))})" if full else '')
-            row = self._next('captures', 'id,image,metadata', condition, tuple(full))
+            excluded = tuple(exclude_keys)
+            if len(excluded)>512:
+                raise ValueError('too many in-flight capture exclusions')
+            if excluded:
+                condition += f" AND id NOT IN ({','.join('?' * len(excluded))})"
+            row = self._next('captures', 'id,image,metadata', condition, tuple(full)+excluded)
             return (row[0], row[1], json.loads(row[2])) if row else None
 
     def _next(self, table, columns, condition, params):
+        source = table + (' INDEXED BY pending_capture_scope' if table=='captures' else '')
         for _ in self.cycle:
             category = self.cycle[self.cursors[table]]
             self.cursors[table] = (self.cursors[table]+1) % len(self.cycle)
-            activities = [r[0] for r in self.db.execute(f'SELECT DISTINCT activity_id FROM {table} WHERE {condition} AND category=? ORDER BY activity_id', (*params, category))]
+            activities = [r[0] for r in self.db.execute(f'SELECT DISTINCT activity_id FROM {source} WHERE {condition} AND category=? ORDER BY activity_id', (*params, category))]
             if activities:
                 previous = self.activity_cursors.get((table, category), '')
                 activity = next((item for item in activities if item > previous), activities[0])
                 self.activity_cursors[table, category] = activity
-                return self.db.execute(f'SELECT {columns} FROM {table} WHERE {condition} AND category=? AND activity_id=? ORDER BY created,id LIMIT 1', (*params, category, activity)).fetchone()
+                return self.db.execute(f'SELECT {columns} FROM {source} WHERE {condition} AND category=? AND activity_id=? ORDER BY created,id LIMIT 1', (*params, category, activity)).fetchone()
         return None
 
     def _enqueue(self, key, route, payload, category='NORMAL'):
@@ -259,8 +315,10 @@ class DeliveryStore:
                 return dict(status=row[0], receipt=json.loads(row[1]) if row[1] else None, error=row[2]) if row else None
             counts = dict(self.db.execute("SELECT status,count(*) FROM deliveries GROUP BY status"))
             age = self.db.execute("SELECT min(created) FROM deliveries WHERE status='PENDING'").fetchone()[0]
-            return {"deliveries": counts, "captures_pending": self.db.execute("SELECT count(*) FROM captures WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0],
+            capture_age = self.db.execute("SELECT min(created) FROM captures INDEXED BY pending_capture_scope WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0]
+            return {"deliveries": counts, "captures_pending": self.db.execute("SELECT count(*) FROM captures INDEXED BY pending_capture_scope WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0],
                     "captures_quarantined": self.db.execute("SELECT count(*) FROM captures WHERE status='QUARANTINED'").fetchone()[0],
+                    "oldest_capture_age_seconds": max(0, time.time()-capture_age) if capture_age else 0,
                     "oldest_delivery_age_seconds": max(0, time.time()-age) if age else 0}
 
     def capture_status(self, key):

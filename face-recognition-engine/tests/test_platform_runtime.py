@@ -117,6 +117,22 @@ class PlatformRuntime(unittest.TestCase):
         self.runtime._hikvision_frame(self.frame())
         rows=self.store.db.execute('SELECT metadata FROM captures').fetchall()
         self.assertEqual({json.loads(row[0])['activity_id'] for row in rows},{'A','B'})
+    def test_auxiliary_capture_keeps_native_time_and_gets_queue_urgency(self):
+        class Clock:
+            def for_capture(self,*args):return dict(profile_version='MEASURED-CAMERA-CLOCK')
+            def close(self):pass
+        self.activity('A');self.runtime.refresh_bindings()
+        self.runtime.config['uuid_sources']=dict(continuous=True)
+        self.runtime.capture_clock=Clock()
+        frame=self.frame()
+        self.runtime._hikvision_frame(frame)
+        raw,category=self.store.db.execute('SELECT metadata,category FROM captures').fetchone()
+        stored=json.loads(raw)
+        self.assertEqual(stored['time_record']['capture_unix_ms'],frame.metadata['time_record']['capture_unix_ms'])
+        self.assertEqual(stored['time_record']['profile_version'],'MEASURED-CAMERA-CLOCK')
+        self.assertEqual(stored['capture_origin'],'AUXILIARY_NATIVE_FACE_CAPTURE')
+        self.assertEqual(stored['camera_id'],'BACKEND-UUID')
+        self.assertEqual(category,'PRIORITY')
     def test_activity_waiting_for_p2_capacity_does_not_block_shared_camera(self):
         self.activity('A');self.activity('B');self.runtime.refresh_bindings()
         self.store.max_pending=2  # blocked activities may then hold one pending delivery
@@ -139,6 +155,63 @@ class PlatformRuntime(unittest.TestCase):
         self.assertFalse(self.runtime.cameras)
         self.assertEqual(self.runtime.binding_status['status'],'MISSING_VIDEO_SOURCE')
         self.assertEqual(self.runtime.binding_status['missing_camera_ids'],['UNKNOWN-UUID'])
+
+    def test_uuid_resolver_creates_reader_and_uses_backend_name(self):
+        from face_engine.uuid_sources import UUIDSources
+        self.catalog.write_text(json.dumps(dict(schema_version=1, cameras=[])))
+        resolver = UUIDSources(dict(registry_url='http://127.0.0.1:7600/api/devices',
+            rtsp_base_url='rtsp://127.0.0.1:554', live_app='hiklive', ffmpeg_path='/private/ffmpeg'))
+        resolver.known = {'BACKEND-UUID'}
+        resolver.available = True
+        resolver.next_refresh = time.monotonic()+60
+        self.runtime.uuid_sources = resolver
+        self.activity('A', name='真实后端名称')
+        with patch('face_engine.uuid_sources.FailoverCamera', Reader):
+            self.runtime.refresh_bindings()
+            self.assertEqual(len(Reader.made), 1)
+            self.assertEqual(Reader.made[0].kwargs['source_id'], 'BACKEND-UUID')
+            frame = self.frame()
+            frame.metadata['source_id'] = 'BACKEND-UUID'
+            routed = self.runtime._routed_frames(frame)
+            self.assertEqual(routed[0].metadata['camera_name'], '真实后端名称')
+            self.assertEqual(self.runtime.binding_status['uuid_sources']['selected'], 1)
+            self.activity('A', end=int(time.time()*1000)-1)
+            self.runtime.refresh_bindings()
+            self.assertFalse(self.runtime.cameras)
+            self.assertEqual(Reader.made[0].stopped, 1)
+            self.assertEqual(self.runtime.binding_status['status'], 'IDLE')
+
+    def test_uuid_registry_failure_closes_existing_reader(self):
+        from face_engine.uuid_sources import UUIDSourceUnavailable
+        class Resolver:
+            known = set()
+            def resolve(self, requested):
+                raise UUIDSourceUnavailable('UUID registry unavailable')
+        self.activity('A')
+        self.runtime.refresh_bindings()
+        self.runtime.uuid_sources = Resolver()
+        self.runtime.refresh_bindings()
+        self.assertFalse(self.runtime.cameras)
+        self.assertEqual(Reader.made[0].stopped, 1)
+        self.assertEqual(self.runtime.binding_status['status'], 'BINDING_SOURCE_UNAVAILABLE')
+
+    def test_health_reader_metrics_survives_concurrent_rotation(self):
+        from types import SimpleNamespace
+        self.runtime.extractor = SimpleNamespace(detector=SimpleNamespace(backend='TEST'),
+                                                recognizer=SimpleNamespace(backend='TEST'))
+        self.activity('A')
+        self.runtime.refresh_bindings()
+        reader = self.runtime.cameras['BACKEND-UUID']
+        def metrics():
+            # Decoder metrics can release the GIL while the polling owner
+            # revokes/replaces its physical-reader dictionary.
+            self.runtime.cameras.clear()
+            return dict(frames=1)
+        reader.metrics = metrics
+        try:
+            self.assertEqual(self.runtime.status()['video_inputs']['BACKEND-UUID']['frames'], 1)
+        finally:
+            reader.stop()
     def test_failed_snapshot_revokes_previous_readers(self):
         self.activity('A');self.runtime.refresh_bindings()
         self.state.unlink();self.runtime.refresh_bindings()
