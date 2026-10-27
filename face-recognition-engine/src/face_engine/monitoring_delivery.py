@@ -109,6 +109,11 @@ class DeliveryStore:
             self.blocked = {}
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA synchronous=FULL")
+            # Image-bearing imports otherwise evict the tiny default page
+            # cache and repeatedly checkpoint while every infer worker waits.
+            self.db.execute('PRAGMA cache_size=-262144')
+            self.db.execute('PRAGMA wal_autocheckpoint=16384')
+            self.db.execute('PRAGMA journal_size_limit=67108864')
             page_size = self.db.execute("PRAGMA page_size").fetchone()[0]
             limit = max_database_mb * 1024 * 1024 // page_size
             self.page_limit = limit
@@ -215,15 +220,17 @@ class DeliveryStore:
             return self._capture_locked(image_bytes,metadata,category)
 
     def capture_batch(self, records):
-        # One durable transaction per acquisition batch. A crash before commit
-        # retains the complete producer file; retries remain idempotent.
+        # Publish small durable chunks so a large multi-camera batch cannot
+        # monopolize the infer/delivery mutex. The producer file is acknowledged
+        # only after all chunks commit; a retry verifies prior committed hashes.
         keys=[]
-        with self.lock, self.db:
-            for header,body in records:
-                try:key=self._capture_locked(body,header['metadata'],header['category'])
-                except RetentionExpired:key=header['key']
-                if key!=header['key']:raise EventConflict('batch event identity differs')
-                keys.append(key)
+        for offset in range(0,len(records),4):
+            with self.lock, self.db:
+                for header,body in records[offset:offset+4]:
+                    try:key=self._capture_locked(body,header['metadata'],header['category'])
+                    except RetentionExpired:key=header['key']
+                    if key!=header['key']:raise EventConflict('batch event identity differs')
+                    keys.append(key)
         return keys
 
     def _capture_locked(self, image_bytes, metadata, category):
@@ -354,6 +361,13 @@ class DeliveryStore:
         with self.lock, self.db:
             self._enqueue(key, route, payload, category)
             self._capacity(activities=[payload.get('activity_id')] if isinstance(payload, dict) else ())
+
+    def quarantine_capture(self, key, report):
+        """Isolate invalid input without erasing its original image evidence."""
+        with self.lock,self.db:
+            retention_write_guard(self.db)
+            self.db.execute("UPDATE captures SET result=?,status='QUARANTINED' WHERE id=? AND status='PENDING'",
+                            (encoded(report),key))
 
     def finish_capture(self, key, report, deliveries):
         if len(deliveries) > self.max_faces_per_capture:

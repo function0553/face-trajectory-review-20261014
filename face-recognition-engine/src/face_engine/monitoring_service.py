@@ -468,7 +468,7 @@ class MonitoringRuntime:
         except (ValueError, KeyError) as error:
             self.count('input_errors')
             if capture:
-                self.store.finish_capture(capture[0], {'status': 'REJECTED', 'reason': type(error).__name__}, [])
+                self.store.quarantine_capture(capture[0], {'status': 'QUARANTINED', 'reason': type(error).__name__})
         except MaintenancePaused:
             # A request arriving during an admitted capture leaves it pending
             # for retry. Release its image-bearing exception stack before the

@@ -175,6 +175,8 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                             args['connection'] = item.get('capture_connection')
                             args['continuous'] = True
                             args['preferred_stream'] = item.get('preferred_stream', 'main')
+                            args['decode_keyframes_only'] = item.get('decode_keyframes_only',False)
+                            args['main_archive_directory'] = item.get('main_archive_directory')
                     signatures[camera] = (encoded([sub, main, args, dynamic]), sub, main, args, dynamic)
                 if dynamic and item.get('continuous') and not self.capture_processes:
                     connection = item.get('capture_connection')
@@ -392,20 +394,29 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         # A transient registry failure or a disconnected reader does not revoke
         # an already durable frame. Only committed activity state can do that.
         try:
-            routes=binding_snapshot(self.binding_state,int(time.time()*1000))
-            catalog=json.loads(Path(self.config['cameras_file']).read_text(encoding='utf-8-sig'))
+            uri=Path(self.binding_state).resolve().as_uri()+'?mode=ro'
+            with closing(sqlite3.connect(uri,uri=True,timeout=1)) as db:
+                row=db.execute("SELECT value FROM state WHERE ns='activity' AND key=?",(metadata.get('activity_id'),)).fetchone()
+            activity=json.loads(row[0]) if row else None
         except (OSError,ValueError,sqlite3.Error) as error:
             raise RuntimeError('committed binding unavailable; keep capture for retry') from error
+        if not activity or activity.get('enabled') is not True:return False
+        configuration=activity.get('configuration',{})
+        if configuration.get('platform_protocol')!=4 or configuration.get('activity_state')=='2':return False
+        # V4 P2 owns revision and capture-window checks. A queued frame keeps
+        # its original context across end-time/name updates; it must not be
+        # destroyed merely because recognition happens later than acquisition.
+        if any(metadata.get(k)!=activity.get(k) for k in ('activity_id','activity_num')):return False
         camera=metadata.get('camera_id')
-        source=next((item.get('source_id',camera) for item in catalog['cameras'] if item.get('camera_id')==camera),camera)
-        return metadata.get('source_id')==source and any(
-            all(metadata.get(key)==value for key,value in context.items() if key!='camera_name')
-            for context in routes.get(camera,[]))
+        return metadata.get('source_id')==camera and any(
+            b.get('kind')=='CAMERA' and b.get('device_id')==camera and b.get('source_id')==camera
+            and b.get('route_rule_id')==metadata.get('route_rule_id')
+            for b in activity.get('bindings',[]))
 
     @runtime_operation
     def process_frame(self, image, metadata, **kwargs):
         if not self._committed_route_current(metadata):
-            raise ActivityContextError('platform camera route was revoked; frame rejected')
+            raise RuntimeError('platform camera route is paused or revoked; retain original capture')
         return super().process_frame(image, metadata, **kwargs)
 
     def _request_main(self, metadata):

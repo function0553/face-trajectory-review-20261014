@@ -3,6 +3,11 @@ from bisect import bisect_left
 import ipaddress
 import json
 import math
+import os
+from pathlib import Path
+import hashlib
+import shutil
+import uuid as uuid_module
 import re
 import subprocess
 import threading
@@ -46,6 +51,15 @@ class UUIDSources:
         self.continuous_main_capacity = settings.get('continuous_main_capacity', 16)
         if type(self.continuous_main_capacity) is not int or not 0 <= self.continuous_main_capacity <= 1024:
             raise ValueError('continuous_main_capacity must be 0..1024')
+        self.preferred_stream = settings.get('preferred_stream', 'main')
+        if self.preferred_stream not in ('main', 'sub'):
+            raise ValueError('preferred_stream must be main or sub')
+        self.keyframes_only = settings.get('continuous_decode_keyframes_only', False)
+        if type(self.keyframes_only) is not bool:
+            raise ValueError('continuous_decode_keyframes_only must be boolean')
+        self.main_archive = settings.get('main_archive_directory')
+        if self.main_archive is not None and (not isinstance(self.main_archive, str) or not Path(self.main_archive).is_absolute()):
+            raise ValueError('main_archive_directory must be absolute')
         if type(self.continuous) is not bool:
             raise ValueError('UUID continuous must be boolean')
         self.rotate = settings.get('rotation_seconds', 60)
@@ -186,7 +200,7 @@ class UUIDSources:
                            no_video_channels=len(set(requested) & self.no_video),
                            transport=self.transport, unavailable_direct_sources=len(unavailable),
                            continuous=self.continuous,
-                           preferred_stream='sub' if self.continuous and len(population)>self.continuous_main_capacity else 'main',
+                           preferred_stream=self.preferred_stream,
                            rotation_seconds=self.rotate)
         # Deployed CCIC CommonUtil parses -0 as main and -3 as sub. UUIDs are
         # exact registry keys; the app and relay authority are operator config.
@@ -197,22 +211,29 @@ class UUIDSources:
                            main_url=self._direct[uuid][1] if uuid in use_direct else self.rtsp_base + '/' + self.app + '/' + uuid + '-0',
                            capture_connection=self._connections.get(uuid), continuous=self.continuous,
                            preferred_stream=self.status['preferred_stream'],
-                           ffmpeg_path=self.ffmpeg, sample_fps=2 if self.continuous else 1)
+                           ffmpeg_path=self.ffmpeg, sample_fps=2 if self.continuous else 1,
+                           **(dict(decode_keyframes_only=self.keyframes_only, main_archive_directory=self.main_archive) if self.continuous else {}))
                 for uuid in selected}
 
 
 class FailoverCamera:
     """Prefer main video, with bounded fallback to sub and reconnection."""
     def __init__(self, sub_url, main_url, source_id, camera_id, *, ffmpeg='ffmpeg',
-                 sample_fps=1, failover_seconds=22, preferred_stream='main'):
+                 sample_fps=1, failover_seconds=22, preferred_stream='main',
+                 decode_keyframes_only=False, main_archive_directory=None):
         self.reader_type = PrivateRTSPReader
         self.urls = {'sub': sub_url, 'main': main_url}
         self.source_id, self.camera_id = source_id, camera_id
         self.ffmpeg, self.sample_fps = ffmpeg, sample_fps
         self.failover_seconds = failover_seconds
+        self.decode_keyframes_only = decode_keyframes_only
+        self.main_archive_directory = main_archive_directory
         if preferred_stream not in ('main', 'sub'):
             raise ValueError('preferred_stream must be main or sub')
         self.kind = 'sub' if preferred_stream=='sub' and sub_url else ('main' if main_url else 'sub')
+        self.preferred_stream=preferred_stream
+        self.next_main_probe=time.monotonic()+60
+        self.probe_reader=None
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.reader = None
@@ -223,9 +244,12 @@ class FailoverCamera:
         self.last_frame_at = time.monotonic()
         self.stop_error = None
 
-    def _new(self):
-        return self.reader_type(self.urls[self.kind], self.source_id, self.camera_id, self.kind,
+    def _new(self, kind=None):
+        kind=kind or self.kind
+        return self.reader_type(self.urls[kind], self.source_id, self.camera_id, kind,
                                 ffmpeg=self.ffmpeg, sample_fps=self.sample_fps,
+                                decode_keyframes_only=self.decode_keyframes_only and kind=='main',
+                                main_archive_directory=self.main_archive_directory if kind=='main' else None,
                                 first_frame_timeout_s=20, stall_timeout_s=20)
 
     def start(self):
@@ -240,6 +264,27 @@ class FailoverCamera:
 
     def _monitor(self):
         while not self.stop_event.wait(.25):
+            # Probe recovered main video while the existing sub reader keeps
+            # running; a failed probe must not open a blind polling interval.
+            if self.preferred_stream=='main' and self.kind=='sub' and self.urls.get('main') and time.monotonic()>=self.next_main_probe:
+                self.next_main_probe=time.monotonic()+60
+                probe=self._new('main')
+                with self.lock:self.probe_reader=probe
+                promoted=False
+                try:
+                    probe.start()
+                    if probe.wait_latest(20) is not None and not self.stop_event.is_set():
+                        with self.lock:
+                            old=self.reader;self.reader=probe;self.kind='main'
+                            self.last_frame_at=time.monotonic();self.last_frame_id=None;self.switches+=1
+                            if old:self.retired_frames+=old.metrics()['frames']
+                        promoted=True
+                        if old:old.stop()
+                except (OSError,ValueError,TimeoutError):
+                    self.stop_error='PREFERRED_MAIN_PROBE_FAILED'
+                finally:
+                    if not promoted:probe.stop()
+                    with self.lock:self.probe_reader=None
             with self.lock:
                 if self.reader is None:
                     continue
@@ -306,6 +351,8 @@ class FailoverCamera:
 
     def stop(self):
         self.stop_event.set()
+        with self.lock:probe=self.probe_reader
+        if probe is not None:probe.stop()
         if self.thread is not None:
             self.thread.join(timeout=12)
             if self.thread.is_alive():
@@ -323,7 +370,26 @@ _RTSP_CONNECT_SLOTS = threading.BoundedSemaphore(16)
 class PrivateRTSPReader(LatestFrameReader):
     """Pass the RTSP URL over stdin, keeping credentials out of process argv."""
     def __init__(self, *args, **kwargs):
+        self.decode_keyframes_only=kwargs.pop('decode_keyframes_only',False)
+        archive=kwargs.pop('main_archive_directory',None)
+        if type(self.decode_keyframes_only) is not bool:raise ValueError('decode_keyframes_only must be boolean')
         super().__init__(*args, **kwargs)
+        self.archive_directory=None
+        self.archive_next_check=0
+        if archive:
+            root=Path(archive)
+            if not root.is_absolute():raise ValueError('main archive root must be absolute')
+            self.archive_directory=root/hashlib.sha256(self.camera_id.encode()).hexdigest()
+            self.archive_directory.mkdir(parents=True,exist_ok=True,mode=0o700)
+            manifest=dict(schema='main-video-archive-v1',camera_id=self.camera_id,source_id=self.source_id,
+                          stream_kind='main',container_timing_basis='RECEIVE_CLOCK_NOT_CAPTURE',
+                          identity_time_basis='CAMERA_OSD_SAME_IMAGE')
+            path=self.archive_directory/'camera.json'
+            try:
+                with path.open('x',encoding='utf-8') as stream:json.dump(manifest,stream)
+                path.chmod(0o600)
+            except FileExistsError:
+                if json.loads(path.read_text())!=manifest:raise ValueError('main archive camera identity conflict')
         self._jpeg_buffer=bytearray()
         self._connect_lock = threading.Lock()
         self._connect_held = False
@@ -337,6 +403,11 @@ class PrivateRTSPReader(LatestFrameReader):
     def _read_output(self, stream):
         try:
             while True:
+                if self.archive_directory and time.monotonic()>=self.archive_next_check:
+                    self.archive_next_check=time.monotonic()+30
+                    used=sum(p.stat().st_size for p in self.archive_directory.glob('*.mkv') if p.is_file())
+                    if used>=8*1024**3 or shutil.disk_usage(self.archive_directory).free<10*1024**3:
+                        raise ValueError('MAIN_VIDEO_ARCHIVE_CAPACITY')
                 end=self._jpeg_buffer.find(b'\xff\xd9')
                 if end>=0:
                     body=bytes(self._jpeg_buffer[:end+2]);del self._jpeg_buffer[:end+2]
@@ -361,7 +432,12 @@ class PrivateRTSPReader(LatestFrameReader):
                     import cv2,numpy as np
                     image=cv2.imdecode(np.frombuffer(body,np.uint8),cv2.IMREAD_COLOR)
                     if image is None or image.shape[:2]!=dimensions:raise ValueError('invalid decoded JPEG image')
-                    return image,{'_encoded_image':body}
+                    evidence={'_encoded_image':body}
+                    if self.archive_directory:
+                        evidence['main_video_archive_directory']=str(self.archive_directory)
+                        evidence['archive_timing_basis']='RECEIVE_CLOCK_NOT_CAPTURE'
+                    evidence['decode_keyframes_only']=self.decode_keyframes_only
+                    return image,evidence
                 if len(self._jpeg_buffer)>12*1024*1024:raise ValueError('decoder JPEG byte limit exceeded')
                 block=getattr(stream,'read1',stream.read)(65536)
                 if not block:
@@ -379,12 +455,26 @@ class PrivateRTSPReader(LatestFrameReader):
         command = super()._command()
         index = command.index('-i')
         tail=command[index+2:]
+        if self.decode_keyframes_only and '-vf' in tail:
+            vf=tail.index('-vf');del tail[vf:vf+2]
+            # Repeated source PTS must not terminate the JPEG encoder. Image
+            # ordinals are transport timing only; identity uses same-image OSD.
+            tail[0:0]=['-vf','setpts=N/TB','-fps_mode','passthrough']
         codec=tail.index('-c:v')
         tail[codec+1]='mjpeg';tail[codec+2:codec+2]=['-q:v','2']
+        archive=[]
+        if self.archive_directory:
+            self.archive_next_check=0
+            session=uuid_module.uuid4().hex
+            archive=['-map','0:v:0','-an','-sn','-dn','-c:v','copy','-f','segment',
+                     '-segment_time','30','-reset_timestamps','1','-segment_format','matroska',
+                     str(self.archive_directory/(session+'-%06d.mkv'))]
         return [self.ffmpeg, '-hide_banner', '-loglevel', 'error', '-nostdin',
                 '-threads', '1', '-filter_threads', '1', '-filter_complex_threads', '1',
+                *(['-skip_frame','nokey'] if self.decode_keyframes_only else []),
+                *(['-use_wallclock_as_timestamps','1'] if self.archive_directory else []),
                 '-protocol_whitelist', 'pipe,rtsp,rtsps,tcp,tls,udp,rtp',
-                '-f', 'concat', '-safe', '0', '-i', 'pipe:0'] + tail
+                '-f', 'concat', '-safe', '0', '-i', 'pipe:0'] + archive + tail
 
     def _spawn(self, command):
         self._jpeg_buffer=bytearray()

@@ -252,7 +252,11 @@ class CameraClock:
     def record(self, image, metadata):
         profile = metadata.get('camera_clock_profile')
         raw, ocr = self.ocr.read(image, metadata['camera_id'])
-        if not isinstance(profile,dict) and getattr(self,'state_file',None):
+        profile_covers_image=False
+        if isinstance(profile,dict):
+            at=int(raw.replace(tzinfo=timezone(timedelta(minutes=profile['utc_offset_minutes']))).timestamp()*1000)
+            profile_covers_image=profile['valid_from_utc_ms']-60000<=at<profile['valid_until_utc_ms']+60000
+        if not profile_covers_image and getattr(self,'state_file',None):
             # Recover only a persisted measured calibration for this exact
             # camera and the OSD on this exact frame. A newer receiver clock
             # must never retimestamp a delayed observation.

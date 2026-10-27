@@ -42,13 +42,16 @@ class MotionAdmission:
 
 class ContinuousCamera:
     def __init__(self, sub_url, main_url, source_id, camera_id, *, connection=None,
-                 on_capture, camera_clock=None, ffmpeg='ffmpeg', sample_fps=2, preferred_stream='main'):
+                 on_capture, camera_clock=None, ffmpeg='ffmpeg', sample_fps=2, preferred_stream='main',
+                 decode_keyframes_only=False, main_archive_directory=None):
         self.source_id, self.camera_id = source_id, camera_id
         self.connection = connection
         self.sub_url, self.main_url = sub_url, main_url
         self.callback, self.clock = on_capture, camera_clock
         self.ffmpeg, self.fps = ffmpeg, sample_fps
         self.preferred_stream = preferred_stream
+        self.decode_keyframes_only = decode_keyframes_only
+        self.main_archive_directory = main_archive_directory
         self.stop_event = threading.Event()
         self.thread = None
         self.video = None
@@ -104,7 +107,9 @@ class ContinuousCamera:
                     if self.video is None:
                         self.video = FailoverCamera(self.sub_url, self.main_url, self.source_id,
                             self.camera_id, ffmpeg=self.ffmpeg, sample_fps=self.fps,
-                            preferred_stream=self.preferred_stream).start()
+                            preferred_stream=self.preferred_stream,
+                            decode_keyframes_only=self.decode_keyframes_only,
+                            main_archive_directory=self.main_archive_directory).start()
                     frame = self.video.latest(after_frame_id=last_id, max_age_s=3)
                     if frame is None:
                         self.stop_event.wait(.1)
@@ -116,7 +121,9 @@ class ContinuousCamera:
                         ok, encoded = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 95])
                         if not ok:raise ValueError('video candidate encode failed')
                         body=encoded.tobytes()
-                    self._set(source_transport='UUID_RTSP_VIDEO', stream_kind=metadata['stream_kind'])
+                    self._set(source_transport='UUID_RTSP_VIDEO', stream_kind=metadata['stream_kind'],
+                              main_video_archive_enabled=bool(metadata.get('main_video_archive_directory')),
+                              decode_keyframes_only=metadata.get('decode_keyframes_only',False))
                     sequence += 1
                     if profile:
                         metadata['camera_clock_profile'] = profile
