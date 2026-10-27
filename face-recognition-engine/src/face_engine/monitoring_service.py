@@ -33,6 +33,26 @@ from face_engine.trajectory_bridge import (TrajectoryExtractor, encoded, activit
     MaintenancePaused, ConsumerLeaseBusy, RetentionExpired, maintenance_request)
 
 
+def association_policy_for_stream(config, stream_kind=None):
+    """Select a private runtime policy without changing the observe contract."""
+    policy = dict(config['policy'])
+    thresholds = config.get('stream_match_thresholds')
+    if thresholds is None:
+        return policy
+    if not isinstance(thresholds, dict) or set(thresholds)-{'main', 'sub'}:
+        raise ValueError('stream_match_thresholds supports main and sub only')
+    for threshold in thresholds.values():
+        if type(threshold) not in (int, float) or not np.isfinite(threshold) or not 0 < threshold <= 1:
+            raise ValueError('stream match thresholds must be finite values in (0,1]')
+        if threshold < policy['new_target_threshold']:
+            raise ValueError('stream match threshold is below new target threshold')
+    kind = 'sub' if stream_kind == 'sub' else 'main'
+    threshold = thresholds.get(kind, policy['match_threshold'])
+    policy['match_threshold'] = threshold
+    policy['policy_id'] += ':stream:' + kind + ':match:' + json.dumps(threshold)
+    return policy
+
+
 def runtime_operation(fn):
     """Fence a complete input/inference/send operation before maintenance."""
     @wraps(fn)
@@ -109,6 +129,8 @@ def read_runtime_config(path):
     value.setdefault('endpoint', 'http://127.0.0.1:8081')
     if urllib.parse.urlsplit(value['endpoint']).scheme not in ('http', 'https'):
         raise ValueError("HTTP(S) P2 endpoint required")
+    association_policy_for_stream(value, 'main')
+    association_policy_for_stream(value, 'sub')
     return value
 
 
@@ -304,14 +326,15 @@ class MonitoringRuntime:
             if not self.stop_event.is_set():
                 raise
 
-    def _deliveries(self, observations):
+    def _deliveries(self, observations, stream_kind=None):
         result = []
+        policy = association_policy_for_stream(self.config, stream_kind)
         for observation in observations:
             context = activity_context(observation)
             # P2 normalizes raw camera time and ignores legacy qualification claims.
             payload = dict(observation=observation,
                            time_record=observation.get('time_record'),
-                           policy=self.config['policy'], graph=self.config['graph'],
+                           policy=policy, graph=self.config['graph'],
                            options=self.config['trajectory_options'])
             payload.update(context)
             route = '/v1/monitoring/observe'
@@ -336,7 +359,7 @@ class MonitoringRuntime:
                 observation['time_record'] = record
                 observation['time_source'] = 'DEVICE_CAPTURE'
                 observation['clock_domain'] = 'CAMERA:'+metadata['camera_id']
-        deliveries = self._deliveries(result['observations'])
+        deliveries = self._deliveries(result['observations'], metadata.get('stream_kind'))
         with self.stats_lock:
             for observation in result['observations']:
                 if len(self.pending_latency) < self.store.max_pending + self.store.max_faces_per_capture:

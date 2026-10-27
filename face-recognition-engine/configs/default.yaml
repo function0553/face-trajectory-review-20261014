@@ -16,7 +16,7 @@ face_index:
 matching:
   min_top1_top2_margin: 0.05 # development placeholder; same for all personnel classes
   low_threshold: 0.35  # development placeholder; calibrate on real data
-  high_threshold: 0.50 # development placeholder; calibrate on real data
+  high_threshold: 0.48 # development placeholder; calibrate on real data
 quality:
   min_face_size_px: 20
   min_inter_eye_distance_px: 10

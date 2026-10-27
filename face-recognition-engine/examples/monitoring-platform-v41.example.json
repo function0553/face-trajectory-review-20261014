@@ -37,9 +37,10 @@
     "max_pending": 10000,
     "max_database_mb": 1024
   },
+  "stream_match_thresholds": {"main": 0.48, "sub": 0.35},
   "policy": {
-    "policy_id": "field-minface20-eye10-v41-20261027",
-    "match_threshold": 0.5,
+    "policy_id": "field-face20-eye10-streams-v41-20261027",
+    "match_threshold": 0.48,
     "new_target_threshold": 0.35,
     "min_margin": 0.05,
     "template_update_threshold": 0.65,
