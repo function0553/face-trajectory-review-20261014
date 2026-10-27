@@ -13,6 +13,8 @@ import struct
 import threading
 import time
 import uuid
+import sys
+import ctypes
 
 from face_engine.trajectory_bridge import encoded, scoped_event_key, EventConflict
 
@@ -42,6 +44,19 @@ class CaptureIngress:
         self.ready = threading.Event()
         self.external_roots = []
         self.next_discovery = 0
+        self.notification_fd=None
+        self.notification_roots={}
+        self.notification_paths={}
+        self.notification_rescan=True
+        if sys.platform=='linux':
+            try:
+                libc=ctypes.CDLL(None,use_errno=True)
+                libc.inotify_init1.argtypes=[ctypes.c_int];libc.inotify_init1.restype=ctypes.c_int
+                libc.inotify_add_watch.argtypes=[ctypes.c_int,ctypes.c_char_p,ctypes.c_uint32]
+                libc.inotify_add_watch.restype=ctypes.c_int
+                fd=libc.inotify_init1(os.O_NONBLOCK|os.O_CLOEXEC)
+                if fd>=0:self.notification_fd=fd;self.notification_libc=libc
+            except (OSError,AttributeError):pass
         # Capture files have an exclusive atomic publication step. Interrupted
         # temporary writes are not acknowledged and never enter the import queue.
         files = sorted(self.root.glob('*/*.cap'), key=lambda p:p.stat().st_mtime_ns)
@@ -159,14 +174,65 @@ class CaptureIngress:
                 self.ready.clear()
             return None
 
+    def _watch_publications(self,root):
+        root=Path(root)
+        if root in self.notification_paths:return True
+        # The producer publishes by atomic rename. Directory creation matters
+        # only for legacy bucketed .cap producers.
+        wd=self.notification_libc.inotify_add_watch(self.notification_fd,os.fsencode(root),0x80|0x100)
+        if wd<0:return False
+        self.notification_paths[root]=wd;self.notification_roots[wd]=root
+        self.notification_rescan=True
+        return True
+
+    def _publication_events(self):
+        paths=[]
+        for _ in range(8):
+            try:raw=os.read(self.notification_fd,65536)
+            except BlockingIOError:break
+            except OSError:
+                self.close();self.notification_rescan=True;break
+            position=0
+            while position+16<=len(raw):
+                wd,mask,_,length=struct.unpack_from('iIII',raw,position);position+=16
+                name=os.fsdecode(raw[position:position+length].split(b'\0',1)[0]);position+=length
+                if mask&0x4000:self.notification_rescan=True;continue
+                root=self.notification_roots.get(wd)
+                if root is None:continue
+                if mask&0x8000:
+                    self.notification_roots.pop(wd,None);self.notification_paths.pop(root,None)
+                    self.notification_rescan=True;continue
+                path=root/name
+                if mask&0x40000000:
+                    self._watch_publications(path);self.notification_rescan=True
+                elif mask&0x80 and path.suffix in ('.batch','.cap'):
+                    paths.append(path)
+        return paths
+
+    def close(self):
+        if self.notification_fd is not None:
+            os.close(self.notification_fd);self.notification_fd=None
+
     def discover_external(self):
         """Import atomic files from acquisition-only processes, never pixels over IPC."""
         now=time.monotonic()
-        if now<self.next_discovery:return
+        event_paths=[]
+        notifications_ready=self.notification_fd is not None and bool(self.external_roots)
+        if self.notification_fd is not None:
+            for root in list(self.external_roots):
+                if not self._watch_publications(root):notifications_ready=False
+            event_paths=self._publication_events()
+        scan=self.notification_rescan if notifications_ready else now>=self.next_discovery
+        if not scan and not event_paths:return
         self.next_discovery=now+2
         found=[]
         with self.lock:known_paths=set(self.sizes)
-        for root in list(self.external_roots):
+        for path in event_paths:
+            if path in known_paths:continue
+            try:
+                stat=path.stat();found.append((stat.st_mtime_ns,path,stat.st_size));known_paths.add(path)
+            except FileNotFoundError:pass
+        for root in list(self.external_roots) if scan else []:
             # One directory pass, and one stat only for an unknown file. A
             # large flat batch directory must not be walked twice per import.
             try:entries=os.scandir(root)
@@ -176,6 +242,7 @@ class CaptureIngress:
                     if entry.is_file(follow_symlinks=False) and entry.name.endswith('.batch'):
                         paths=[Path(entry.path)]
                     elif entry.is_dir(follow_symlinks=False):
+                        if self.notification_fd is not None:self._watch_publications(Path(entry.path))
                         paths=Path(entry.path).glob('*.cap')
                     else:
                         continue
@@ -193,6 +260,7 @@ class CaptureIngress:
                 if root is not None:self.external_pending.setdefault(root,deque()).append(path)
             if found:self.ready.set()
         # A slow scan must still leave time to import its discovered batches.
+        self.notification_rescan=False
         self.next_discovery=time.monotonic()+2
 
     @staticmethod

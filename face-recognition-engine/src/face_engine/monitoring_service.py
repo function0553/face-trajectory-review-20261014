@@ -797,6 +797,7 @@ class MonitoringRuntime:
         # stopping a P1 process for maintenance is independent of P2 monitoring.
         self._purge_hot_state()
         self.store.close()
+        if self.capture_ingress is not None:self.capture_ingress.close()
         if self.consumer_lease is not None:
             self.consumer_lease.__exit__(None, None, None)
             self.consumer_lease = None
