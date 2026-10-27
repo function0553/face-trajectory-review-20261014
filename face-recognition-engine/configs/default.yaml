@@ -18,8 +18,8 @@ matching:
   low_threshold: 0.35  # development placeholder; calibrate on real data
   high_threshold: 0.48 # development placeholder; calibrate on real data
 quality:
-  min_face_size_px: 20
-  min_inter_eye_distance_px: 10
+  min_face_size_px: 8
+  min_inter_eye_distance_px: 3
   min_detection_score: 0.6
   min_laplacian_variance: 40
   max_clipped_fraction: 0.08
