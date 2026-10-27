@@ -165,13 +165,25 @@ class CaptureIngress:
         if now<self.next_discovery:return
         self.next_discovery=now+2
         found=[]
+        with self.lock:known_paths=set(self.sizes)
         for root in list(self.external_roots):
-            import itertools
-            for path in itertools.chain(Path(root).glob('*/*.cap'),Path(root).glob('*.batch')):
-                with self.lock:known=path in self.sizes
-                if not known:
-                    try:found.append((path.stat().st_mtime_ns,path,path.stat().st_size))
-                    except FileNotFoundError:pass
+            # One directory pass, and one stat only for an unknown file. A
+            # large flat batch directory must not be walked twice per import.
+            try:entries=os.scandir(root)
+            except FileNotFoundError:continue
+            with entries:
+                for entry in entries:
+                    if entry.is_file(follow_symlinks=False) and entry.name.endswith('.batch'):
+                        paths=[Path(entry.path)]
+                    elif entry.is_dir(follow_symlinks=False):
+                        paths=Path(entry.path).glob('*.cap')
+                    else:
+                        continue
+                    for path in paths:
+                        if path in known_paths:continue
+                        try:
+                            stat=path.stat();found.append((stat.st_mtime_ns,path,stat.st_size))
+                        except FileNotFoundError:pass
         with self.lock:
             for _,path,size in sorted(found):
                 if path in self.sizes:continue
@@ -180,6 +192,8 @@ class CaptureIngress:
                 root=next((Path(root) for root in self.external_roots if path.is_relative_to(root)),None)
                 if root is not None:self.external_pending.setdefault(root,deque()).append(path)
             if found:self.ready.set()
+        # A slow scan must still leave time to import its discovered batches.
+        self.next_discovery=time.monotonic()+2
 
     @staticmethod
     def read_batch(path):
