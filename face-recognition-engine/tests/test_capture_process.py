@@ -23,6 +23,32 @@ def metadata(event):
 
 
 class IndependentCapture(unittest.TestCase):
+    def test_native_nvr_channels_have_one_owner_across_video_groups(self):
+        class Process:
+            pid=12345
+            def __init__(self,*args,**kwargs):pass
+            def poll(self):return None
+            def terminate(self):pass
+            def wait(self,**kwargs):return 0
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);manager=CaptureProcesses(root/'control',CaptureIngress(root/'ingress',min_free_mb=0),count=16)
+            rows={}
+            for i in range(3):
+                camera='UUID-'+str(i)
+                rows[camera]=dict(connection=dict(camera_id=camera,source_id=camera,
+                    connection=dict(ip='192.168.50.10',username='SYNTHETIC',password='SYNTHETIC',index=i+1)),
+                    routes=[],clock_profile=None)
+            with patch('face_engine.capture_process.sys.platform','linux'),patch('face_engine.capture_process.subprocess.Popen',Process):
+                manager.configure(rows)
+                configs=[json.loads(path.read_text()) for path in (root/'control').glob('process-*.json')]
+                subscriptions=[s for cfg in configs for s in cfg['auxiliary_subscriptions']]
+                self.assertEqual(len(subscriptions),1)
+                self.assertEqual(set(subscriptions[0]['channels']),{'1','2','3'})
+                self.assertEqual({v['camera_id'] for v in subscriptions[0]['channels'].values()},set(rows))
+                self.assertEqual(sum(len(cfg['cameras']) for cfg in configs),3)
+                self.assertEqual(sum(len(cfg['auxiliary_cameras']) for cfg in configs),3)
+                manager.close()
+
     def test_old_queue_and_new_frames_share_inference_across_cameras(self):
         with tempfile.TemporaryDirectory() as directory:
             store=DeliveryStore(Path(directory)/'p1.sqlite')

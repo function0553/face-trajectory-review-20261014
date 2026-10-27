@@ -324,6 +324,7 @@ class PrivateRTSPReader(LatestFrameReader):
     """Pass the RTSP URL over stdin, keeping credentials out of process argv."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._jpeg_buffer=bytearray()
         self._connect_lock = threading.Lock()
         self._connect_held = False
 
@@ -335,7 +336,38 @@ class PrivateRTSPReader(LatestFrameReader):
 
     def _read_output(self, stream):
         try:
-            return super()._read_output(stream)
+            while True:
+                end=self._jpeg_buffer.find(b'\xff\xd9')
+                if end>=0:
+                    body=bytes(self._jpeg_buffer[:end+2]);del self._jpeg_buffer[:end+2]
+                    if len(body)>12*1024*1024:raise ValueError('decoder JPEG byte limit exceeded')
+                    if not body.startswith(b'\xff\xd8'):raise ValueError('invalid decoder JPEG')
+                    position=2;dimensions=None
+                    while position+4<=len(body):
+                        if body[position]!=255:raise ValueError('invalid decoder JPEG marker')
+                        while position<len(body) and body[position]==255:position+=1
+                        marker=body[position];position+=1
+                        if marker in (216,217):continue
+                        length=int.from_bytes(body[position:position+2],'big')
+                        if length<2 or position+length>len(body):raise ValueError('invalid decoder JPEG segment')
+                        if marker in (192,193,194,195,197,198,199,201,202,203,205,206,207):
+                            if length<8:raise ValueError('invalid decoder JPEG dimensions')
+                            height=int.from_bytes(body[position+3:position+5],'big');width=int.from_bytes(body[position+5:position+7],'big')
+                            dimensions=(height,width);break
+                        if marker==218:break
+                        position+=length
+                    if not dimensions or min(dimensions)<1 or dimensions[0]*dimensions[1]>self.max_pixels:
+                        raise ValueError('oversized decoder JPEG')
+                    import cv2,numpy as np
+                    image=cv2.imdecode(np.frombuffer(body,np.uint8),cv2.IMREAD_COLOR)
+                    if image is None or image.shape[:2]!=dimensions:raise ValueError('invalid decoded JPEG image')
+                    return image,{'_encoded_image':body}
+                if len(self._jpeg_buffer)>12*1024*1024:raise ValueError('decoder JPEG byte limit exceeded')
+                block=getattr(stream,'read1',stream.read)(65536)
+                if not block:
+                    if self._jpeg_buffer:raise EOFError('truncated decoder JPEG')
+                    return None,{}
+                self._jpeg_buffer.extend(block)
         finally:
             self._release_connect()
 
@@ -346,12 +378,16 @@ class PrivateRTSPReader(LatestFrameReader):
     def _command(self):
         command = super()._command()
         index = command.index('-i')
+        tail=command[index+2:]
+        codec=tail.index('-c:v')
+        tail[codec+1]='mjpeg';tail[codec+2:codec+2]=['-q:v','2']
         return [self.ffmpeg, '-hide_banner', '-loglevel', 'error', '-nostdin',
                 '-threads', '1', '-filter_threads', '1', '-filter_complex_threads', '1',
                 '-protocol_whitelist', 'pipe,rtsp,rtsps,tcp,tls,udp,rtp',
-                '-f', 'concat', '-safe', '0', '-i', 'pipe:0'] + command[index+2:]
+                '-f', 'concat', '-safe', '0', '-i', 'pipe:0'] + tail
 
     def _spawn(self, command):
+        self._jpeg_buffer=bytearray()
         # ffconcat quoting, independent of shell parsing. Registry credentials
         # are percent-encoded before URL construction. No playlist is persisted.
         url = self.url.replace('\\', '\\\\').replace("'", "'\\''")

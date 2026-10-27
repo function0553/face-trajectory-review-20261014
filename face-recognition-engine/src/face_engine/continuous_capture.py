@@ -111,10 +111,11 @@ class ContinuousCamera:
                         continue
                     image, metadata = frame.image_bgr, dict(frame.metadata)
                     last_id = metadata['frame_id']
-                    ok, encoded = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 95])
-                    if not ok:
-                        raise ValueError('video candidate encode failed')
-                    body = encoded.tobytes()
+                    body=frame.encoded_image
+                    if body is None:
+                        ok, encoded = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                        if not ok:raise ValueError('video candidate encode failed')
+                        body=encoded.tobytes()
                     self._set(source_transport='UUID_RTSP_VIDEO', stream_kind=metadata['stream_kind'])
                     sequence += 1
                     if profile:

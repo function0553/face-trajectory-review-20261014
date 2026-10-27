@@ -36,6 +36,7 @@ class Frame:
     image_bgr: np.ndarray
     metadata: dict
     received_monotonic: float
+    encoded_image: bytes | None = None
 
 
 def _positive(value, name):
@@ -165,7 +166,7 @@ class LatestFrameReader:
             frame = self._frame
             if frame is None or frame.metadata["frame_id"] == after_frame_id or time.monotonic() - frame.received_monotonic > max_age_s:
                 return None
-            return Frame(frame.image_bgr, copy.deepcopy(frame.metadata), frame.received_monotonic)
+            return Frame(frame.image_bgr, copy.deepcopy(frame.metadata), frame.received_monotonic,frame.encoded_image)
 
     def wait_latest(self, timeout_s, after_frame_id=None):
         deadline = time.monotonic() + _positive(timeout_s, "timeout_s")
@@ -173,7 +174,7 @@ class LatestFrameReader:
             with self._condition:
                 frame = self._frame
                 if frame is not None and frame.metadata["frame_id"] != after_frame_id:
-                    return Frame(frame.image_bgr, copy.deepcopy(frame.metadata), frame.received_monotonic)
+                    return Frame(frame.image_bgr, copy.deepcopy(frame.metadata), frame.received_monotonic,frame.encoded_image)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0 or self._stop.is_set():
                     return None
@@ -259,6 +260,7 @@ class LatestFrameReader:
                         self._frame = None
                     while not self._stop.is_set():
                         image, additional = self._read_output(process.stdout)
+                        encoded_image=additional.pop('_encoded_image',None)
                         if image is None:
                             with self._lock:
                                 if self._metrics["last_error"] is None:
@@ -280,7 +282,7 @@ class LatestFrameReader:
                                 meta["time_record"] = copy.deepcopy(record)
                         image.setflags(write=False)
                         with self._condition:
-                            self._frame = Frame(image, meta, received)
+                            self._frame = Frame(image, meta, received,encoded_image)
                             self._deadline = received + self.stall_timeout
                             self._metrics.update(state="STREAMING", last_error=None)
                             self._metrics["frames"] += 1

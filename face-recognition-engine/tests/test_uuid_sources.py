@@ -190,6 +190,22 @@ class Fallback(unittest.TestCase):
 
 
 class PrivateInput(unittest.TestCase):
+    def test_jpeg_pipe_preserves_exact_frames_and_rejects_oversized_dimensions(self):
+        import cv2,numpy as np
+        reader=PrivateRTSPReader('rtsp://127.0.0.1/example','S','C',max_pixels=10000)
+        pictures=[cv2.imencode('.jpg',np.full((24,32,3),value,np.uint8))[1].tobytes() for value in [30,180]]
+        stream=io.BytesIO(b''.join(pictures))
+        for body in pictures:
+            image,extra=reader._read_output(stream)
+            self.assertEqual(extra['_encoded_image'],body)
+            self.assertTrue(np.array_equal(image,cv2.imdecode(np.frombuffer(body,np.uint8),cv2.IMREAD_COLOR)))
+        self.assertEqual(reader._read_output(stream),(None,{}))
+        reader._jpeg_buffer=bytearray()
+        huge=b'\xff\xd8\xff\xc0\x00\x08\x08\xff\xff\xff\xff\x01\xff\xd9'
+        with self.assertRaisesRegex(ValueError,'oversized'):reader._read_output(io.BytesIO(huge))
+        reader._jpeg_buffer=bytearray()
+        with self.assertRaises(EOFError):reader._read_output(io.BytesIO(pictures[0][:-2]))
+
     def test_rtsp_secret_is_passed_only_through_stdin(self):
         url = 'rtsp://private-user:private-secret@192.0.2.12/Streaming/Channels/101'
         reader = PrivateRTSPReader(url, 'S', 'C', one_shot=True)

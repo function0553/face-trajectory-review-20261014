@@ -176,7 +176,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                             args['continuous'] = True
                             args['preferred_stream'] = item.get('preferred_stream', 'main')
                     signatures[camera] = (encoded([sub, main, args, dynamic]), sub, main, args, dynamic)
-                if dynamic and item.get('continuous'):
+                if dynamic and item.get('continuous') and not self.capture_processes:
                     connection = item.get('capture_connection')
                     if connection:
                         import ipaddress
@@ -426,11 +426,13 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                     frame = camera.request_main(reason='insufficient_face_quality')
                     if frame is not None:
                         if getattr(camera, 'callback', None) is not None:
-                            import cv2
-                            ok, body = cv2.imencode('.jpg', frame.image_bgr, [cv2.IMWRITE_JPEG_QUALITY,95])
-                            if not ok:
-                                raise ValueError('main frame encoding failed')
-                            self._continuous_capture(body.tobytes(),frame.metadata,frame.received_monotonic)
+                            body=frame.encoded_image
+                            if body is None:
+                                import cv2
+                                ok, encoded = cv2.imencode('.jpg', frame.image_bgr, [cv2.IMWRITE_JPEG_QUALITY,95])
+                                if not ok:raise ValueError('main frame encoding failed')
+                                body=encoded.tobytes()
+                            self._continuous_capture(body,frame.metadata,frame.received_monotonic)
                         else:
                             for routed in self._routed_frames(frame):
                                 self.submit_frame(routed)

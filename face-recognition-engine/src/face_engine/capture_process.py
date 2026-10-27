@@ -2,6 +2,7 @@
 import argparse
 import ctypes
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -112,9 +113,26 @@ class CaptureProcesses:
     def configure(self, rows):
         with self.lock:
             self.entries=rows
+            auxiliary={index:dict(cameras={},subscriptions={}) for index in range(self.count)}
+            for camera,entry in rows.items():
+                connection=entry['connection'].get('connection')
+                if not connection or not ipaddress.ip_address(connection['ip']).is_private:continue
+                device=encoded([connection['ip'],connection['username'],connection['password']])
+                group=auxiliary[self.group(device)]
+                group['cameras'][camera]=entry
+                subscription=group['subscriptions'].setdefault(device,dict(
+                    url='http://'+connection['ip']+'/ISAPI/Event/notification/alertStream',
+                    username=connection['username'],password=connection['password'],channels={}))
+                channel=str(connection['index'])
+                value=dict(source_id=entry['connection']['source_id'],camera_id=camera,clock_profile_version=None)
+                if channel in subscription['channels'] and subscription['channels'][channel]!=value:
+                    raise ValueError('ambiguous native acquisition channel')
+                subscription['channels'][channel]=value
             for index in range(self.count):
                 cameras={c:v for c,v in rows.items() if self.group(c)==index}
                 cfg=dict(schema_version=1,parent_pid=os.getpid(),cameras=cameras,
+                    auxiliary_cameras=auxiliary[index]['cameras'],
+                    auxiliary_subscriptions=list(auxiliary[index]['subscriptions'].values()),
                     ingress_directory=str(self.roots[index]),
                     max_mb=max(1,self.ingress.max_bytes//(1024*1024*self.count)),
                     min_free_mb=self.ingress.min_free//(1024*1024))
@@ -123,7 +141,7 @@ class CaptureProcesses:
                 process=self.processes.get(index)
                 if process is not None and process.poll() is not None:
                     process.wait();self.processes.pop(index)
-                if cameras and index not in self.processes:
+                if (cameras or cfg['auxiliary_subscriptions']) and index not in self.processes:
                     if sys.platform!='linux':raise ValueError('acquisition process groups require Linux')
                     env=dict(os.environ,PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                         OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1')
@@ -204,26 +222,47 @@ def run_worker(config_path):
         stop.set()
     signal.signal(signal.SIGTERM,terminate)
     ingress=BatchProducer(cfg['ingress_directory'],max_mb=cfg['max_mb'],min_free_mb=cfg['min_free_mb'])
-    readers={};signatures={};current={};config_lock=threading.Lock()
+    readers={};signatures={};current={};routing={};native={};config_lock=threading.Lock()
     class ClockCache:
         def for_capture(self,camera,connection=None):
-            with config_lock:return current.get(camera,{}).get('clock_profile')
-    def callback(camera,body,metadata,received):
-        with config_lock:entry=current.get(camera,{})
+            with config_lock:return routing.get(camera,{}).get('clock_profile')
+    def callback(camera,body,metadata,received,urgent=False):
+        with config_lock:entry=routing.get(camera,{})
         accepted=0
         for route in entry.get('routes',[]):
             if received<route['since_monotonic']:continue
             meta=dict(metadata,**route['context'])
-            ingress.push(body,meta,route.get('category','NORMAL'))
+            ingress.push(body,meta,'PRIORITY' if urgent else route.get('category','NORMAL'))
             accepted+=1
         if not accepted:raise ValueError('no committed acquisition route')
+    def native_frame(frame):
+        import cv2
+        meta=dict(frame.metadata);camera=meta['camera_id']
+        profile=ClockCache().for_capture(camera)
+        if profile:
+            meta['camera_clock_profile']=profile
+            if isinstance(meta.get('time_record'),dict):
+                meta['time_record']=dict(meta['time_record'],profile_version=profile['profile_version'])
+        meta['capture_origin']='AUXILIARY_NATIVE_FACE_CAPTURE'
+        ok,body=cv2.imencode('.png',frame.image_bgr)
+        if not ok:raise ValueError('native candidate encoding failed')
+        callback(camera,body.tobytes(),meta,frame.received_monotonic,urgent=True)
     try:
         while not stop.is_set():
             if os.getppid()!=parent:break
             try:
                 cfg=json.loads(path.read_text())
                 if cfg.get('schema_version')!=1 or cfg['parent_pid']!=parent:raise ValueError('invalid acquisition owner')
-                with config_lock:current=cfg['cameras']
+                with config_lock:
+                    current=cfg['cameras'];routing=dict(cfg.get('auxiliary_cameras',{}),**current)
+                desired={hashlib.sha256(encoded(value).encode()).hexdigest():value for value in cfg.get('auxiliary_subscriptions',[])}
+                for key in list(native):
+                    if key not in desired:native.pop(key).stop()
+                for key,value in desired.items():
+                    if key not in native:
+                        from face_engine.acquisition import HikvisionEventReader
+                        native[key]=HikvisionEventReader(value['url'],username=value['username'],password=value['password'],
+                            on_frame=native_frame,channel_bindings=value['channels']).start()
                 for camera in list(readers):
                     entry=current.get(camera);sig=encoded(entry['connection']) if entry else None
                     if signatures[camera]!=sig:
@@ -235,17 +274,21 @@ def run_worker(config_path):
                         callback(camera,body,meta,received),camera_clock=ClockCache(),**args)
                     readers[camera]=reader;signatures[camera]=encoded(entry['connection']);reader.start()
                 atomic_json(path.with_suffix('.status.json'),dict(pid=os.getpid(),at_unix_ms=int(time.time()*1000),
-                    cameras={camera:reader.metrics() for camera,reader in readers.items()},ingress=ingress.status()))
+                    cameras={camera:reader.metrics() for camera,reader in readers.items()},
+                    auxiliary=[reader.metrics() for reader in native.values()],ingress=ingress.status()))
             except (OSError,ValueError,KeyError):
                 # A missing/bad control file revokes acquisition, never extends
                 # the lifetime of a stale activity or substitutes a UUID.
-                with config_lock:current={}
+                with config_lock:current={};routing={}
                 for reader in list(readers.values()):reader.stop()
                 readers.clear();signatures.clear()
+                for reader in native.values():reader.stop()
+                native.clear()
             stop.wait(.5)
     finally:
-        with config_lock:current={}
+        with config_lock:current={};routing={}
         for reader in readers.values():reader.stop()
+        for reader in native.values():reader.stop()
         ingress.close()
 
 
