@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sqlite3
+from contextlib import closing
 import sys
 import threading
 import time
@@ -109,6 +111,7 @@ class CameraClock:
         self.probe_slots = threading.BoundedSemaphore(8)
         self.profiles = {}
         self.retry_at = {}
+        self.state_file = settings.get('state_file')
         self.ntp_checked_at = 0
         self.ntp_synced = False
         self.refresh_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix='camera-clock')
@@ -117,22 +120,21 @@ class CameraClock:
     def for_capture(self, camera, connection=None):
         with self.lock:
             cached = self.profiles.get(camera)
-            if not cached:
-                initial = True
-            else:
-                initial = False
-                if time.monotonic() >= cached['refresh_at'] and camera not in self.refreshing:
-                    self.refreshing.add(camera)
-                    def refresh():
-                        try:
-                            self.prepare(camera, connection)
-                        finally:
-                            with self.lock:
-                                self.refreshing.discard(camera)
-                    self.refresh_pool.submit(refresh)
-                if time.monotonic() < cached['expires_at']:
-                    return dict(cached['metadata'])
-        return self.prepare(camera, connection) if initial else None
+            now=time.monotonic()
+            due=now>=self.retry_at.get(camera,0) and (not cached or now>=cached['refresh_at'])
+            if due and camera not in self.refreshing:
+                self.refreshing.add(camera)
+                def refresh():
+                    try:
+                        self.prepare(camera,connection)
+                    finally:
+                        with self.lock:self.refreshing.discard(camera)
+                self.refresh_pool.submit(refresh)
+            if cached and now<cached['expires_at']:
+                return dict(cached['metadata'])
+        # Missing clock evidence holds identity delivery; never hold up video
+        # acquisition while a camera clock API or reference endpoint is slow.
+        return None
 
     def close(self):
         self.refresh_pool.shutdown(wait=True, cancel_futures=True)
@@ -153,11 +155,16 @@ class CameraClock:
     def _reference(self):
         now = time.monotonic()
         with self.lock:
-            if now - self.ntp_checked_at > 60:
-                p = subprocess.run(['timedatectl', 'show', '-p', 'NTPSynchronized', '--value'],
-                                   capture_output=True, text=True, timeout=4)
+            check_ntp = now - self.ntp_checked_at > 60
+        if check_ntp:
+            # A slow D-Bus query must not hold the cache lock used by every
+            # acquisition thread. Duplicate background probes are harmless.
+            p = subprocess.run(['timedatectl', 'show', '-p', 'NTPSynchronized', '--value'],
+                               capture_output=True, text=True, timeout=4)
+            with self.lock:
                 self.ntp_synced = p.returncode == 0 and p.stdout.strip() == 'yes'
                 self.ntp_checked_at = now
+        with self.lock:
             if not self.ntp_synced:
                 raise ValueError('host NTP synchronization unavailable')
         health = self._json(self.endpoint + '/health')
@@ -244,9 +251,29 @@ class CameraClock:
 
     def record(self, image, metadata):
         profile = metadata.get('camera_clock_profile')
+        raw, ocr = self.ocr.read(image, metadata['camera_id'])
+        if not isinstance(profile,dict) and getattr(self,'state_file',None):
+            # Recover only a persisted measured calibration for this exact
+            # camera and the OSD on this exact frame. A newer receiver clock
+            # must never retimestamp a delayed observation.
+            uri=Path(self.state_file).resolve().as_uri()+'?mode=ro'
+            with closing(sqlite3.connect(uri,uri=True,timeout=2)) as db:
+                rows=db.execute("SELECT value FROM state WHERE ns='clock_profile' AND json_extract(value,'$.camera_id')=?",(metadata['camera_id'],)).fetchall()
+            candidates=[]
+            for (text,) in rows:
+                saved=json.loads(text)
+                if saved.get('verified') is not True:continue
+                offset=saved['fixed_utc_offset_minutes']
+                camera_ms=int(raw.replace(tzinfo=timezone(timedelta(minutes=offset))).timestamp()*1000)
+                for calibration in saved.get('calibrations',[]):
+                    utc_ms=camera_ms-calibration['offset_ms']
+                    if calibration['valid_from_utc_ms']<=utc_ms<calibration['valid_until_utc_ms']:
+                        candidates.append((calibration['valid_from_utc_ms'],saved['profile_version'],dict(
+                            profile_version=saved['profile_version'],utc_offset_minutes=offset,
+                            valid_from_utc_ms=calibration['valid_from_utc_ms'],valid_until_utc_ms=calibration['valid_until_utc_ms'])))
+            if candidates:profile=min(candidates,key=lambda row:row[:2])[2]
         if not isinstance(profile, dict):
             raise ValueError('capture has no measured camera clock profile')
-        raw, ocr = self.ocr.read(image, metadata['camera_id'])
         instant = raw.replace(tzinfo=timezone(timedelta(minutes=profile['utc_offset_minutes'])))
         milliseconds = int(instant.timestamp()*1000)
         # A mismatched/old OSD image does not borrow a newer calibration.

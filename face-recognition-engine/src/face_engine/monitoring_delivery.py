@@ -155,7 +155,20 @@ class DeliveryStore:
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture ON captures(created) WHERE image IS NOT NULL")
             self.db.execute("CREATE INDEX IF NOT EXISTS capture_status ON captures(status)")
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture_scope ON captures(category,activity_id,created,id) WHERE status='PENDING' AND image IS NOT NULL")
+            self.db.execute("CREATE TABLE IF NOT EXISTS inbox_counts(kind TEXT PRIMARY KEY,n INTEGER NOT NULL CHECK(n>=0))")
+            # Reconcile once under the exclusive consumer lease. SQL triggers
+            # also see C++ retention deletes and roll back with the owning write.
+            for table,condition in [('captures',"status='PENDING' AND image IS NOT NULL"),('deliveries',"status='PENDING'")]:
+                self.db.execute('INSERT OR REPLACE INTO inbox_counts VALUES(?,(SELECT count(*) FROM '+table+' WHERE '+condition+'))',(table,))
+                fresh=condition.replace('status','NEW.status').replace('image','NEW.image')
+                old=condition.replace('status','OLD.status').replace('image','OLD.image')
+                for operation,delta,when in [('INSERT','1',fresh),('DELETE','-1',old)]:
+                    self.db.execute('CREATE TRIGGER IF NOT EXISTS count_'+table+'_'+operation.lower()+' AFTER '+operation+' ON '+table+' WHEN '+when+" BEGIN UPDATE inbox_counts SET n=n+("+delta+") WHERE kind='"+table+"'; END")
+                self.db.execute('CREATE TRIGGER IF NOT EXISTS count_'+table+'_update AFTER UPDATE ON '+table+' WHEN ('+fresh+') != ('+old+") BEGIN UPDATE inbox_counts SET n=n+CAST(("+fresh+") AS INTEGER)-CAST(("+old+") AS INTEGER) WHERE kind='"+table+"'; END")
             self.db.commit()
+
+    def _pending_count(self,table):
+        return self.db.execute('SELECT n FROM inbox_counts WHERE kind=?',(table,)).fetchone()[0]
 
     @contextmanager
     def consumer_lease(self, *, wait=False):
@@ -184,8 +197,8 @@ class DeliveryStore:
             return activity not in self.blocked or not self._blocked_full()
 
     def _capacity(self, fanout=False, activities=()):
-        captures = self.db.execute("SELECT count(*) FROM captures INDEXED BY pending_capture_scope WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0]
-        deliveries = self.db.execute("SELECT count(*) FROM deliveries WHERE status='PENDING'").fetchone()[0]
+        captures = self._pending_count('captures')
+        deliveries = self._pending_count('deliveries')
         # Separate ingress/egress budgets leave room to turn one image into many
         # observations even when the capture inbox is completely full.
         allowance = self.max_faces_per_capture if fanout else 0
@@ -229,7 +242,7 @@ class DeliveryStore:
                 raise RuntimeError('CAPACITY: activity is waiting for P2 push capacity')
             self.db.execute("INSERT INTO captures(id,hash,image,metadata,result,created,category,activity_id,source_id,event_id,context,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (key, digest, image_bytes, body, report, time.time(), category, context.get('activity_id'), metadata['source_id'], metadata['frame_id'], encoded(context), status))
-            if self.db.execute("SELECT count(*) FROM captures INDEXED BY pending_capture_scope WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0] > self.max_pending:
+            if self._pending_count('captures') > self.max_pending:
                 raise RuntimeError('CAPACITY: capture inbox full')
         return key
 
@@ -316,7 +329,7 @@ class DeliveryStore:
             counts = dict(self.db.execute("SELECT status,count(*) FROM deliveries GROUP BY status"))
             age = self.db.execute("SELECT min(created) FROM deliveries WHERE status='PENDING'").fetchone()[0]
             capture_age = self.db.execute("SELECT min(created) FROM captures INDEXED BY pending_capture_scope WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0]
-            return {"deliveries": counts, "captures_pending": self.db.execute("SELECT count(*) FROM captures INDEXED BY pending_capture_scope WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0],
+            return {"deliveries": counts, "captures_pending": self._pending_count('captures'),
                     "captures_quarantined": self.db.execute("SELECT count(*) FROM captures WHERE status='QUARANTINED'").fetchone()[0],
                     "oldest_capture_age_seconds": max(0, time.time()-capture_age) if capture_age else 0,
                     "oldest_delivery_age_seconds": max(0, time.time()-age) if age else 0}

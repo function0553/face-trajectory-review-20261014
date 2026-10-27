@@ -70,6 +70,7 @@ class CapacityIsolation(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
 
     def tearDown(self):
+        self.doCleanups()  # Close SQLite before removing its directory on Windows.
         self.temp.cleanup()
 
     def store(self, **kwargs):

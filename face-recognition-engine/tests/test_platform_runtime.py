@@ -98,6 +98,16 @@ class PlatformRuntime(unittest.TestCase):
         self.activity('B',enabled=False);self.runtime.refresh_bindings()
         self.assertFalse(self.runtime.cameras)
         self.assertEqual(Reader.made[0].stopped,1)
+
+    def test_reader_outage_does_not_revoke_a_committed_saved_frame(self):
+        from face_engine.monitoring_service import MonitoringRuntime
+        self.activity('A');self.runtime.refresh_bindings()
+        saved=self.runtime._routed_frames(self.frame())[0]
+        self.runtime.platform_routes.clear()
+        with patch.object(MonitoringRuntime,'process_frame',return_value={'processed':True}):
+            self.assertEqual(self.runtime.process_frame(saved.image_bgr,saved.metadata),{'processed':True})
+        self.activity('A',enabled=False)
+        with self.assertRaises(ActivityContextError):self.runtime.process_frame(saved.image_bgr,saved.metadata)
     def test_cached_frame_cannot_enter_newly_bound_activity(self):
         self.activity('A');self.runtime.refresh_bindings()
         cached=self.frame()
@@ -181,7 +191,7 @@ class PlatformRuntime(unittest.TestCase):
             self.assertEqual(Reader.made[0].stopped, 1)
             self.assertEqual(self.runtime.binding_status['status'], 'IDLE')
 
-    def test_uuid_registry_failure_closes_existing_reader(self):
+    def test_uuid_registry_failure_does_not_close_explicit_catalog_reader(self):
         from face_engine.uuid_sources import UUIDSourceUnavailable
         class Resolver:
             known = set()
@@ -191,9 +201,34 @@ class PlatformRuntime(unittest.TestCase):
         self.runtime.refresh_bindings()
         self.runtime.uuid_sources = Resolver()
         self.runtime.refresh_bindings()
-        self.assertFalse(self.runtime.cameras)
-        self.assertEqual(Reader.made[0].stopped, 1)
-        self.assertEqual(self.runtime.binding_status['status'], 'BINDING_SOURCE_UNAVAILABLE')
+        self.assertTrue(self.runtime.cameras)
+        self.assertEqual(Reader.made[0].stopped, 0)
+        self.assertEqual(self.runtime.binding_status['status'], 'BOUND')
+
+    def test_verified_uuid_survives_registry_outage_but_not_activity_revocation(self):
+        from face_engine.uuid_sources import UUIDSources, UUIDSourceUnavailable
+        self.catalog.write_text(json.dumps(dict(schema_version=1, cameras=[])))
+        resolver = UUIDSources(dict(registry_url='http://127.0.0.1:7600/api/devices',
+            rtsp_base_url='rtsp://127.0.0.1:554', live_app='hiklive', ffmpeg_path='/private/ffmpeg'))
+        resolver.known = {'BACKEND-UUID'}
+        resolver.available = True
+        resolver.next_refresh = time.monotonic()+60
+        self.runtime.uuid_sources = resolver
+        self.activity('A')
+        with patch('face_engine.uuid_sources.FailoverCamera', Reader):
+            self.runtime.refresh_bindings()
+            reader = self.runtime.cameras['BACKEND-UUID']
+            with patch.object(resolver, 'resolve', side_effect=UUIDSourceUnavailable('offline')):
+                self.activity('B', camera='NEW-UNKNOWN-UUID')
+                self.runtime.refresh_bindings()
+                self.assertIs(self.runtime.cameras['BACKEND-UUID'], reader)
+                self.assertEqual(reader.stopped, 0)
+                self.assertEqual(self.runtime.binding_status['missing_camera_ids'], ['NEW-UNKNOWN-UUID'])
+                self.assertEqual(self.runtime.binding_status['uuid_sources']['status'], 'REGISTRY_UNAVAILABLE_CACHED')
+                self.activity('A', enabled=False)
+                self.runtime.refresh_bindings()
+                self.assertFalse(self.runtime.cameras)
+                self.assertEqual(reader.stopped, 1)
 
     def test_health_reader_metrics_survives_concurrent_rotation(self):
         from types import SimpleNamespace
@@ -358,8 +393,9 @@ class PlatformRuntime(unittest.TestCase):
             image=np.zeros((128,264,3),np.uint8);image[:,:128]=red;image[:,132:260]=blue
             frame=Frame(image,dict(source_id='LOCAL-SOURCE',camera_id='C1',frame_id='TWO-PEOPLE',stream_kind='sub',
                 time_record=dict(source_id='LOCAL-SOURCE',camera_id='C1',profile_version='good',raw_time=iso(T0+1000))),time.monotonic())
-            for routed in runtime._routed_frames(frame):
-                runtime.process_frame(routed.image_bgr,routed.metadata)
+            with patch('face_engine.platform_runtime.time.time',return_value=(T0+100000)/1000):
+                for routed in runtime._routed_frames(frame):
+                    runtime.process_frame(routed.image_bgr,routed.metadata)
             deliveries=store.db.execute('SELECT payload FROM deliveries').fetchall()
             self.assertEqual(len(deliveries),4)
             for (payload,) in deliveries:

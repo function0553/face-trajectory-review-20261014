@@ -25,11 +25,20 @@ already enabled. A picture polling endpoint is not the primary input.
 
 Video candidates are sampled uniformly at up to 2 fps. A generic motion gate
 retains moving-scene candidates, a short post-motion interval and periodic idle
-checks. Admitted JPEG candidates enter the durable P1 SQLite inbox before face
-recognition; eight CPU inference workers claim each pending capture once. Pending
+checks. Admitted JPEG candidates first enter an independent durable disk ingress
+queue. Camera callbacks do not wait for the inference SQLite mutex. One importer
+feeds the existing P1 SQLite inbox; eight CPU inference workers claim each pending capture once. Pending
 captures survive restart. Native face captures use the weighted urgent queue as
 auxiliary confirmations; this does not change the person's business category.
 Processing delay is separate from camera capture time.
+`capture_ingress` can configure the directory, maximum MiB (default 8192), and
+reserved free MiB (default 1024). Files have SHA-256 integrity checks and atomic
+publication; acknowledged files recover after restart. Full storage is surfaced
+as an acquisition error and never overwrites older pending evidence. Invalid or
+conflicting files are retained for review. SQLite pending counts use transactional
+triggers so larger queues do not add a full queue scan to every camera write.
+Saved frames are checked against committed activity bindings, rather than whether
+the physical reader happens to be connected when delayed inference runs.
 No finite camera/recognizer system can promise zero missed faces: field of view,
 face visibility, sampling, connectivity, quality and resource limits still apply.
 The previous eight-camera rotation is not used for continuous operation.
@@ -38,6 +47,12 @@ Health includes per-camera frames, last-frame age, persisted candidates, inbox
 refusals and acquisition errors, plus oldest pending capture age. An offline UUID,
 failed decoder, full inbox or unresolved clock is not successful coverage.
 Capacity and delay require verification on the real camera population.
+The continuous reader uses a shorter CPython thread handoff interval for large
+I/O populations. Camera directory outages retain previously verified UUID
+connections only while their committed activity bindings remain valid; unknown
+UUIDs are never guessed. A successful directory refresh remains authoritative.
+Deployment must provision open-file and memory limits for the measured number
+of readers, and check actual frame freshness after the population has connected.
 
 ## Camera time
 
@@ -48,6 +63,8 @@ is calibration, not a substitute for a frame's capture time. The existing
 `/v1/clocks/profiles` endpoint stores measured offset/uncertainty, with evidence
 from the camera time API and NTP-synchronized reference UTC. Profiles are attached
 at acquisition so delayed recognition does not retimestamp older pictures.
+Clock API probes run asynchronously and cannot pause the camera capture loop.
+The runtime HTTP dependency (`requests`) is required during deployment validation.
 Illegible or ambiguous OSD and unqualified clocks remain pending, not confirmed
 identity/trajectory results. No quality or identity thresholds are relaxed.
 

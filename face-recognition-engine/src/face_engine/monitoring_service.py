@@ -156,13 +156,21 @@ class MonitoringRuntime:
         self.maintenance_paused = False
         self.maintenance_state = 'NEW'
         self.maintenance_thread = None
+        ingress = config.get('capture_ingress', {})
+        self.capture_ingress = None
+        self.maintenance_marker = maintenance_request(store.path) if store is not None else None
+        if ingress.get('enabled', config.get('uuid_sources', {}).get('continuous', False)):
+            from face_engine.capture_ingress import CaptureIngress
+            self.capture_ingress = CaptureIngress(ingress.get('directory', str(store.path)+'.ingress'),
+                max_mb=ingress.get('max_mb',8192), min_free_mb=ingress.get('min_free_mb',1024))
 
     @contextmanager
     def operation(self):
         depth = getattr(self.operation_local, 'depth', 0)
         if depth == 0:
+            requested = self.maintenance_marker.exists()
             with self.maintenance_condition:
-                if self.maintenance_paused or maintenance_request(self.store.path).exists() or self.stop_event.is_set():
+                if self.maintenance_paused or requested or self.stop_event.is_set():
                     raise MaintenancePaused('P1 maintenance or shutdown; retry the same event')
                 self.active_operations += 1
         self.operation_local.depth = depth + 1
@@ -178,6 +186,37 @@ class MonitoringRuntime:
     def count(self, key, amount=1):
         with self.stats_lock:
             self.counters[key] += amount
+
+    def persist_camera_capture(self, body, metadata, category='NORMAL'):
+        if self.capture_ingress is not None:
+            return self.capture_ingress.push(body,metadata,category)
+        return self.store.capture(body,metadata,category)
+
+    def _ingress_loop(self):
+        from face_engine.trajectory_bridge import RetentionExpired
+        while not self.stop_event.is_set():
+            path=self.capture_ingress.claim()
+            if path is None:
+                self.capture_ingress.ready.wait(.1)
+                continue
+            try:
+                with self.operation():
+                    header,body=self.capture_ingress.read(path)
+                    key=self.store.capture(body,header['metadata'],header['category'])
+                    if key!=header['key']:raise EventConflict('ingress import event identity differs')
+                    self.capture_ingress.acknowledge(path)
+                self.count('ingress_imported')
+            except RetentionExpired:
+                # Only the authoritative retention tombstone permits deletion.
+                self.capture_ingress.acknowledge(path)
+                self.count('ingress_expired_by_authority')
+            except (ValueError,KeyError,EventConflict):
+                self.capture_ingress.quarantine(path,'INVALID_OR_CONFLICTING_INGRESS')
+                self.count('ingress_quarantined')
+            except Exception:
+                self.capture_ingress.retry(path)
+                self.count('ingress_import_retries')
+                self.stop_event.wait(.2)
 
     @runtime_operation
     def submit_frame(self, frame):
@@ -528,6 +567,8 @@ class MonitoringRuntime:
                 reader.start()
             operations = [('infer' if i==0 else 'infer-'+str(i), self._infer_loop) for i in range(self.inference_workers)]
             operations += [('deliver', self._send_loop), ('sample', self._poll_loop)]
+            if self.capture_ingress is not None:
+                operations.append(('ingress',self._ingress_loop))
             for name, fn in operations:
                 thread = threading.Thread(target=fn, name='monitoring-'+name, daemon=True)
                 self.threads.append(thread)
@@ -692,6 +733,7 @@ class MonitoringRuntime:
         except MaintenancePaused:
             delivery_status = {'status': 'MAINTENANCE_PAUSED'}
         return dict(ok=True, counters=counters, queue=self.queue.stats(), admission=self.admission.stats(), delivery=delivery_status, maintenance=maintenance, live_camera_coverage=coverage,
+            capture_ingress=self.capture_ingress.status() if self.capture_ingress is not None else None,
             latency={key: summary(key) for key in ('inference_seconds', 'acquisition_to_enqueued_seconds')},
             backend={'detector': getattr(self.extractor.detector, 'backend', 'UNKNOWN'),
                      'recognizer': getattr(self.extractor.recognizer, 'backend', 'UNKNOWN')},

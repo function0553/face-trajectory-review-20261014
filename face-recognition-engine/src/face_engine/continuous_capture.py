@@ -4,6 +4,7 @@ Every online bound source stays open. Motion admission reduces idle inference
 cost; it never turns cameras off or depends on an enrolled person's identity.
 """
 import hashlib
+import sys
 import threading
 import time
 import uuid
@@ -43,6 +44,10 @@ class MotionAdmission:
 class ContinuousCamera:
     def __init__(self, sub_url, main_url, source_id, camera_id, *, connection=None,
                  on_capture, camera_clock=None, ffmpeg='ffmpeg', sample_fps=2, preferred_stream='main'):
+        # Hundreds of I/O readers otherwise convoy behind CPython's default
+        # 5 ms GIL handoff, delaying unrelated cameras and control requests.
+        if sys.getswitchinterval() > .0005:
+            sys.setswitchinterval(.0005)
         self.source_id, self.camera_id = source_id, camera_id
         self.connection = connection
         self.sub_url, self.main_url = sub_url, main_url

@@ -70,13 +70,14 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         self.binding_status = dict(status='NOT_REFRESHED', missing_camera_ids=[])
         self.next_binding_poll = 0
         self.uuid_sources = None
+        self.uuid_cached_entries = {}
         if config.get('uuid_sources'):
             from face_engine.uuid_sources import UUIDSources
             self.uuid_sources = UUIDSources(config['uuid_sources'])
         self.capture_clock = None
         if config.get('camera_clock'):
             from face_engine.camera_clock import CameraClock
-            self.capture_clock = CameraClock(config['camera_clock'], config['camera_clock'].get('endpoint', config['endpoint']),
+            self.capture_clock = CameraClock(dict(config['camera_clock'],state_file=self.binding_state), config['camera_clock'].get('endpoint', config['endpoint']),
                 os.environ.get(config.get('p2_authorization_env', 'FACE_TRAJECTORY_AUTHORIZATION'), ''))
 
     def configure_cameras(self):
@@ -114,8 +115,21 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 entries[camera] = item
             deferred = set()
             if self.uuid_sources is not None:
+                from face_engine.uuid_sources import UUIDSourceUnavailable
                 requested = set(routes) - set(entries)
-                resolved = self.uuid_sources.resolve(requested)
+                try:
+                    resolved = self.uuid_sources.resolve(requested)
+                    self.uuid_cached_entries = copy.deepcopy(resolved)
+                except UUIDSourceUnavailable:
+                    # Registry reachability does not revoke a committed P2
+                    # binding or invalidate an already identified connection.
+                    # Never invent a new UUID or reuse another camera's input.
+                    resolved = {camera: item for camera, item in self.uuid_cached_entries.items()
+                                if camera in requested}
+                    self.uuid_sources.status = dict(status='REGISTRY_UNAVAILABLE_CACHED',
+                        selected=len(resolved), unresolved=len(requested-set(resolved)))
+                    if requested and not resolved:
+                        raise
                 entries.update(resolved)
                 deferred = requested & self.uuid_sources.known - set(resolved)
             live, signatures, subscriptions = {}, {}, {}
@@ -252,8 +266,9 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             self.last_sample = {key: value for key, value in self.last_sample.items() if key in keys}
             self.last_frame = {key: value for key, value in self.last_frame.items() if key in keys}
             self.admission.retain_keys(keys)
-        except Exception:
-            self.binding_status = dict(status='BINDING_SOURCE_UNAVAILABLE', missing_camera_ids=[])
+        except Exception as exc:
+            self.binding_status = dict(status='BINDING_SOURCE_UNAVAILABLE', missing_camera_ids=[],
+                error_type=type(exc).__name__, error_errno=getattr(exc, 'errno', None))
             with self.platform_lock:
                 self.platform_routes.clear()
                 self.route_since.clear()
@@ -305,7 +320,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             raise ActivityContextError('continuous frame has no current activity route')
         for routed in routed_frames:
             meta = routed.metadata
-            self.store.capture(body, meta,
+            self.persist_camera_capture(body, meta,
                 self.priority.category(meta['camera_id'], activity_id=meta['activity_id']))
         self.count('continuous_candidates_persisted')
 
@@ -335,7 +350,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 auxiliary = self.config.get('uuid_sources', {}).get('continuous') is True
                 if auxiliary:
                     meta['capture_origin'] = 'AUXILIARY_NATIVE_FACE_CAPTURE'
-                self.store.capture(body.tobytes(), meta,
+                self.persist_camera_capture(body.tobytes(), meta,
                     'PRIORITY' if auxiliary else self.priority.category(meta['camera_id'], activity_id=meta['activity_id']))
             except RuntimeError as error:
                 # One activity out of capacity must not cost the camera's other activities.
@@ -349,11 +364,24 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         return any(all(metadata.get(key) == value for key, value in context.items())
                    for context in self.platform_routes.get(metadata.get('camera_id'), []))
 
+    def _committed_route_current(self, metadata):
+        # A transient registry failure or a disconnected reader does not revoke
+        # an already durable frame. Only committed activity state can do that.
+        try:
+            routes=binding_snapshot(self.binding_state,int(time.time()*1000))
+            catalog=json.loads(Path(self.config['cameras_file']).read_text(encoding='utf-8-sig'))
+        except (OSError,ValueError,sqlite3.Error) as error:
+            raise RuntimeError('committed binding unavailable; keep capture for retry') from error
+        camera=metadata.get('camera_id')
+        source=next((item.get('source_id',camera) for item in catalog['cameras'] if item.get('camera_id')==camera),camera)
+        return metadata.get('source_id')==source and any(
+            all(metadata.get(key)==value for key,value in context.items() if key!='camera_name')
+            for context in routes.get(camera,[]))
+
     @runtime_operation
     def process_frame(self, image, metadata, **kwargs):
-        with self.platform_lock:
-            if not self._route_current(metadata):
-                raise ActivityContextError('platform camera route was revoked; frame rejected')
+        if not self._committed_route_current(metadata):
+            raise ActivityContextError('platform camera route was revoked; frame rejected')
         return super().process_frame(image, metadata, **kwargs)
 
     def _request_main(self, metadata):
