@@ -90,12 +90,63 @@ class OSDClockReader:
                 if float(score) >= .90:
                     candidates.append((region, str(text), float(score)))
             raw = ' '.join(row[1] for row in candidates)
-            value = osd_datetime(raw)
+            try:
+                value = osd_datetime(raw)
+            except ValueError:
+                # Small OSD characters can disappear in the full-frame text
+                # detector. Retry unchanged edge strips at a larger OCR scale;
+                # require agreement between colour and grayscale reads. Neither
+                # receipt time nor expected digits participate in this retry.
+                return self._read_edge_strips(image, key)
             if not candidates:
                 raise ValueError('camera OSD not legible')
             self.regions[key] = [row[0] for row in candidates]
             return value, dict(text=raw, confidence=min(row[2] for row in candidates),
                                regions=self.regions[key])
+
+    def _read_edge_strips(self, image, key):
+        import cv2
+        import numpy as np
+        height, width = image.shape[:2]
+        strip_height = min(height, max(96, height // 4))
+        for top in dict.fromkeys((0, height - strip_height)):
+            crop = image[top:top + strip_height]
+            readings = []
+            variants = (crop, cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY))
+            for variant in variants:
+                scaled = cv2.resize(variant, None, fx=2, fy=2,
+                                    interpolation=cv2.INTER_CUBIC)
+                result, _ = self.engine(scaled, use_cls=False)
+                pieces, scores, regions = [], [], []
+                for box, text, score in result or []:
+                    norm = unicodedata.normalize('NFKC', str(text))
+                    if float(score) < .90 or not (
+                            re.search(r'20\d{2}[年/.-]', norm) or
+                            re.search(r'\d\d:', norm)):
+                        continue
+                    points = np.asarray(box, dtype=float) / 2
+                    points[:, 1] += top
+                    x1, y1 = np.maximum(0, np.floor(points.min(axis=0)).astype(int) - 4)
+                    x2, y2 = np.minimum([width, height],
+                                       np.ceil(points.max(axis=0)).astype(int) + 5)
+                    pieces.append(str(text)); scores.append(float(score))
+                    regions.append(tuple(map(int, (x1, y1, x2, y2))))
+                raw = ' '.join(pieces)
+                try:
+                    value = osd_datetime(raw)
+                except ValueError:
+                    continue
+                readings.append((value, raw, scores, regions))
+            if len(readings) == 2:
+                if readings[0][0] != readings[1][0]:
+                    raise ValueError('camera OSD retry readings disagree')
+                value, raw, scores, regions = readings[0]
+                self.regions[key] = regions
+                return value, dict(text=raw,
+                    confidence=min(score for row in readings for score in row[2]),
+                    regions=regions, preprocessing='same-image-edge-strip-2x',
+                    consensus_passes=len(readings))
+        raise ValueError('one complete unambiguous camera date and time required')
 
 
 class CameraClock:
