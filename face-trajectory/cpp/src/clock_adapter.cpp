@@ -122,9 +122,9 @@ void ClockAdapter::Put(const json& profile) {
     Required(profile, "source_evidence_id");
     if (!profile.at("verified").is_boolean()) throw std::invalid_argument("verified must be explicit boolean");
     const auto semantics = Required(profile, "capture_semantics");
-    if (semantics != "DEVICE_CAPTURE" && semantics != "UNKNOWN")
-        throw std::invalid_argument("capture_semantics must be DEVICE_CAPTURE or UNKNOWN");
-    if (profile.at("verified") == true && semantics != "DEVICE_CAPTURE")
+    if (semantics != "DEVICE_CAPTURE" && semantics != "SERVER_RECEIVED_AT" && semantics != "UNKNOWN")
+        throw std::invalid_argument("capture_semantics must be DEVICE_CAPTURE, SERVER_RECEIVED_AT or UNKNOWN");
+    if (profile.at("verified") == true && semantics == "UNKNOWN")
         throw std::invalid_argument("verified profile requires device capture semantics");
     if (profile.contains("fixed_utc_offset_minutes")) FixedOffset(profile);
     const auto& calibrations = profile.at("calibrations");
@@ -140,6 +140,8 @@ void ClockAdapter::Put(const json& profile) {
         const auto first = Integer(calibration, "valid_from_utc_ms"), last = Integer(calibration, "valid_until_utc_ms");
         if (first >= last) throw std::invalid_argument("calibration validity must be nonempty [from,until)");
         Integer(calibration, "offset_ms");
+        if (semantics == "SERVER_RECEIVED_AT" && Integer(calibration, "offset_ms") != 0)
+            throw std::invalid_argument("server reception clock must not apply a camera offset");
         const auto uncertainty = Integer(calibration, "uncertainty_ms"), resolution = Integer(calibration, "time_resolution_ms");
         if (uncertainty < 0 || resolution < 1 || resolution > 86400000)
             throw std::invalid_argument("nonnegative uncertainty and resolution from 1ms to 1 day required");
@@ -179,7 +181,21 @@ json ClockAdapter::Normalize(const json& request) const {
     provenance["profile_verified"] = profile.at("verified");
     provenance["capture_semantics"] = profile.at("capture_semantics");
     if (profile.at("verified") != true) return Hold("UNVERIFIED_CLOCK_PROFILE", provenance);
-    if (profile.at("capture_semantics") != "DEVICE_CAPTURE") return Hold("UNKNOWN_CAPTURE_SEMANTICS", provenance);
+    const bool server_received = profile.at("capture_semantics") == "SERVER_RECEIVED_AT";
+    if (profile.at("capture_semantics") != "DEVICE_CAPTURE" && !server_received) return Hold("UNKNOWN_CAPTURE_SEMANTICS", provenance);
+    if (server_received) {
+        if (request.value("source_kind", std::string{}) != "SERVER_FRAME_RECEIVED" ||
+            request.value("source_evidence_id", std::string{}).empty())
+            return Hold("SERVER_RECEIVE_EVIDENCE_REQUIRED", provenance);
+        // UTC_CAPTURE is the existing normalized event-time representation.
+        // Preserve its actual origin: this is reception order, not optical
+        // camera capture time and not inference/queue-drain time.
+        provenance["time_basis"] = "SERVER_RECEIVED_AT";
+        provenance["camera_capture_time_verified"] = false;
+        provenance["source_kind"] = "SERVER_FRAME_RECEIVED";
+        provenance["source_evidence_id"] = request.at("source_evidence_id");
+        provenance["network_delay_bounded"] = false;
+    }
     ParsedTime parsed{};
     try { parsed = Parse(raw, profile); }
     catch (const std::invalid_argument& error) {

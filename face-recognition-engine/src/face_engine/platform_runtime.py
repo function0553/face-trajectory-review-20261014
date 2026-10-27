@@ -77,7 +77,11 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         self.capture_clock = None
         if config.get('camera_clock'):
             from face_engine.camera_clock import CameraClock
-            self.capture_clock = CameraClock(dict(config['camera_clock'],state_file=self.binding_state), config['camera_clock'].get('endpoint', config['endpoint']),
+            clock_type = CameraClock
+            if config['camera_clock'].get('time_basis') == 'SERVER_RECEIVED_AT':
+                from face_engine.server_clock import ServerReceivedClock
+                clock_type = ServerReceivedClock
+            self.capture_clock = clock_type(dict(config['camera_clock'],state_file=self.binding_state), config['camera_clock'].get('endpoint', config['endpoint']),
                 os.environ.get(config.get('p2_authorization_env', 'FACE_TRAJECTORY_AUTHORIZATION'), ''))
         self.capture_processes = None
         process_count = config.get('uuid_sources',{}).get('acquisition_processes',1)

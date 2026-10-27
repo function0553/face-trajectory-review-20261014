@@ -39,6 +39,7 @@ class BatchProducer:
         self.max_bytes=max_mb*1024*1024;self.min_free=min_free_mb*1024*1024
         self.condition=threading.Condition();self.pending=[];self.queued_bytes=0
         self.bytes=0;self.next_size=0;self.error=None;self.stop=False
+        self.quota_scans=0
         self.thread=threading.Thread(target=self._run,name='acquisition-group-commit',daemon=True);self.thread.start()
     def push(self,body,metadata,category='NORMAL'):
         if not isinstance(body,bytes) or not 0<len(body)<=12*1024*1024:raise ValueError('invalid candidate size')
@@ -70,15 +71,23 @@ class BatchProducer:
             temporary=self.root/(uuid.uuid4().hex+'.batch.partial');final=temporary.with_suffix('')
             error=None
             try:
-                if time.monotonic()>=self.next_size or self.bytes+size>self.max_bytes:
-                    self.bytes=0
-                    for pattern in ['*.batch','*/*.cap']:
-                        for path in self.root.glob(pattern):
-                            try:self.bytes+=path.stat().st_size
-                            except FileNotFoundError:pass
+                if self.next_size==0 or (self.bytes+size>self.max_bytes and time.monotonic()>=self.next_size):
+                    used=0
+                    with os.scandir(self.root) as entries:
+                        for entry in entries:
+                            if entry.name.endswith('.batch') and entry.is_file(follow_symlinks=False):
+                                try:used+=entry.stat(follow_symlinks=False).st_size
+                                except FileNotFoundError:pass
+                            elif entry.is_dir(follow_symlinks=False):
+                                for path in Path(entry.path).glob('*.cap'):
+                                    try:used+=path.stat().st_size
+                                    except FileNotFoundError:pass
+                    self.bytes=used;self.quota_scans+=1
                     self.next_size=time.monotonic()+5
-                if self.bytes+size>self.max_bytes or shutil.disk_usage(self.root).free<self.min_free+size:
-                    raise RuntimeError('CAPACITY: durable acquisition group storage full')
+                if self.bytes+size>self.max_bytes:
+                    raise RuntimeError('CAPACITY_DURABLE_GROUP_BYTES')
+                if shutil.disk_usage(self.root).free<self.min_free+size:
+                    raise RuntimeError('CAPACITY_DISK_RESERVE')
                 with temporary.open('xb') as stream:
                     if os.name!='nt':os.chmod(temporary,0o600)
                     stream.write(b'FACEBT01')
@@ -88,13 +97,14 @@ class BatchProducer:
                 from face_engine.capture_ingress import CaptureIngress
                 CaptureIngress._sync_directory(self.root);self.bytes+=size;self.error=None
             except BaseException as exc:
-                error='DURABLE_BATCH_WRITE_'+type(exc).__name__;self.error=error
+                error=str(exc) if isinstance(exc,RuntimeError) and str(exc).startswith('CAPACITY_') else 'DURABLE_BATCH_WRITE_'+type(exc).__name__
+                self.error=error
                 if temporary.exists():temporary.unlink()
             finally:
                 for item in items:item[4]=error;item[3].set()
     def status(self):
         with self.condition:return dict(bytes=self.bytes,queued=len(self.pending),queued_bytes=self.queued_bytes,
-            max_bytes=self.max_bytes,last_error=self.error)
+            max_bytes=self.max_bytes,last_error=self.error,quota_scans=self.quota_scans)
     def close(self):
         with self.condition:self.stop=True;self.condition.notify()
         self.thread.join(30)

@@ -376,6 +376,7 @@ class PrivateRTSPReader(LatestFrameReader):
         super().__init__(*args, **kwargs)
         self.archive_directory=None
         self.archive_next_check=0
+        self.archive_session=None
         if archive:
             root=Path(archive)
             if not root.is_absolute():raise ValueError('main archive root must be absolute')
@@ -405,8 +406,8 @@ class PrivateRTSPReader(LatestFrameReader):
             while True:
                 if self.archive_directory and time.monotonic()>=self.archive_next_check:
                     self.archive_next_check=time.monotonic()+30
-                    used=sum(p.stat().st_size for p in self.archive_directory.glob('*.mkv') if p.is_file())
-                    if used>=8*1024**3 or shutil.disk_usage(self.archive_directory).free<10*1024**3:
+                    self._prune_archive()
+                    if shutil.disk_usage(self.archive_directory).free<10*1024**3:
                         raise ValueError('MAIN_VIDEO_ARCHIVE_CAPACITY')
                 end=self._jpeg_buffer.find(b'\xff\xd9')
                 if end>=0:
@@ -447,6 +448,17 @@ class PrivateRTSPReader(LatestFrameReader):
         finally:
             self._release_connect()
 
+    def _prune_archive(self):
+        # Keep the active four-segment ring. Old sessions are cache, not an NVR;
+        # allow sixty seconds for an earlier decoder to close its last segment.
+        cutoff=time.time()-60
+        for path in self.archive_directory.glob('*.mkv'):
+            if self.archive_session and path.name.startswith(self.archive_session+'-'):
+                continue
+            try:
+                if not path.is_symlink() and path.stat().st_mtime<cutoff:path.unlink()
+            except FileNotFoundError:pass
+
     def stop(self, *args, **kwargs):
         self._release_connect()
         return super().stop(*args, **kwargs)
@@ -466,8 +478,9 @@ class PrivateRTSPReader(LatestFrameReader):
         if self.archive_directory:
             self.archive_next_check=0
             session=uuid_module.uuid4().hex
+            self.archive_session=session
             archive=['-map','0:v:0','-an','-sn','-dn','-c:v','copy','-f','segment',
-                     '-segment_time','30','-reset_timestamps','1','-segment_format','matroska',
+                     '-segment_time','30','-segment_wrap','4','-reset_timestamps','1','-segment_format','matroska',
                      str(self.archive_directory/(session+'-%06d.mkv'))]
         return [self.ffmpeg, '-hide_banner', '-loglevel', 'error', '-nostdin',
                 '-threads', '1', '-filter_threads', '1', '-filter_complex_threads', '1',

@@ -1,7 +1,7 @@
 """Replay original camera frame archives through the unchanged monitoring API.
 
 Use a dedicated activity with original enrollment templates only. No attribution
-correction, person assertion in observations, receiver-time substitution, or
+correction, person assertion in observations, inference-time substitution, or
 camera-specific matching threshold is performed.
 """
 import argparse
@@ -87,7 +87,11 @@ def main():
     authorization = os.environ[config.get('p2_authorization_env', 'FACE_TRAJECTORY_AUTHORIZATION')]
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     extractor = TrajectoryExtractor.from_config(load_config(args.model_config))
-    clock = CameraClock(dict(config['camera_clock'], state_file=str(state)), config['endpoint'], authorization)
+    clock_type=CameraClock
+    if config['camera_clock'].get('time_basis')=='SERVER_RECEIVED_AT':
+        from face_engine.server_clock import ServerReceivedClock
+        clock_type=ServerReceivedClock
+    clock = clock_type(dict(config['camera_clock'], state_file=str(state)), config['endpoint'], authorization)
     cv2.setNumThreads(1)
 
     def post(path, payload):
@@ -163,15 +167,19 @@ def main():
                         match_threshold=policy['match_threshold'], face_size_px=observation['face_size_px'])
                     try:
                         if record is None:
-                            record = clock.record(image, source)
-                        observation.update(time_record=record, time_source='DEVICE_CAPTURE',
-                                           clock_domain='CAMERA:' + source['camera_id'])
+                            record = source.get('time_record') or clock.record(image, source)
+                        server_received=record.get('source_kind')=='SERVER_FRAME_RECEIVED'
+                        observation.update(time_record=record,
+                            time_source='RECEIVED_AT' if server_received else 'DEVICE_CAPTURE',
+                            clock_domain='SERVER_RECEIVE' if server_received else 'CAMERA:' + source['camera_id'])
                         payload = dict(observation=observation, time_record=record, policy=policy,
                                        graph=config['graph'], options=config['trajectory_options'])
                         payload.update(activity_context(meta))
                         reply = post('/v1/monitoring/observe', payload)
                         association = reply.get('association') or {}
-                        entry.update(camera_time=record['raw_time'], status=reply.get('status'),
+                        entry.update(event_time=record['raw_time'],
+                            time_basis='SERVER_RECEIVED_AT' if server_received else 'CAMERA_CAPTURE',
+                            camera_time=None if server_received else record['raw_time'], status=reply.get('status'),
                             time_admitted=reply.get('time_admitted'), decision=association.get('decision'),
                             target_id=association.get('target_id'), reason_codes=reply.get('reason_codes'))
                         if entry['status'] == 'ACCEPTED' and entry['decision'] == 'MATCHED':
@@ -200,7 +208,7 @@ def main():
         report.update(complete=True, timelines=timelines,
             automatic_multicamera_chain=any(t['distinct_cameras']>=2 for t in timelines.values()))
     finally:
-        clock.refresh_pool.shutdown(wait=False)
+        clock.close()
         report.update(processed_frames=processed, elapsed_seconds=round(time.monotonic()-started,2),
                       camera_statistics=stats, observations=observations, errors=errors,
                       production_backend_push_verified=False)

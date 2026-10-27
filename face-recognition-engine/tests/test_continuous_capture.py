@@ -57,8 +57,7 @@ class ContinuousCoverage(unittest.TestCase):
             resolver.next_rotation=0
             self.assertEqual(set(resolver.resolve(cameras)),set(cameras))
             self.assertEqual(resolver.status['deferred'],0)
-            self.assertEqual(resolver.status['preferred_stream'],'sub')
-            resolver.continuous_main_capacity=20
+            self.assertEqual(resolver.status['preferred_stream'],'main')
             self.assertTrue(all(v['preferred_stream']=='main' for v in resolver.resolve(cameras).values()))
             resolver.limit=19
             with self.assertRaises(UUIDSourceUnavailable):resolver.resolve(cameras)

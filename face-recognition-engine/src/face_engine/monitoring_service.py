@@ -133,6 +133,13 @@ def read_runtime_config(path):
         raise ValueError("HTTP(S) P2 endpoint required")
     association_policy_for_stream(value, 'main')
     association_policy_for_stream(value, 'sub')
+    retention=value.get('cache_retention',{})
+    if retention.get('enabled'):
+        if type(retention.get('ingress_max_mb')) is not int or retention['ingress_max_mb']<1:
+            raise ValueError('positive ingress cache retention budget required')
+        age=retention.get('max_age_seconds')
+        if type(age) not in (int,float) or not np.isfinite(age) or not 1<=age<=604800:
+            raise ValueError('cache age must be 1 second to 7 days')
     return value
 
 
@@ -182,6 +189,7 @@ class MonitoringRuntime:
         self.maintenance_thread = None
         ingress = config.get('capture_ingress', {})
         self.capture_ingress = None
+        self.cache_retention = config.get('cache_retention',{})
         self.maintenance_marker = maintenance_request(store.path) if store is not None else None
         if ingress.get('enabled', config.get('uuid_sources', {}).get('continuous', False)):
             from face_engine.capture_ingress import CaptureIngress
@@ -220,6 +228,15 @@ class MonitoringRuntime:
         from face_engine.trajectory_bridge import RetentionExpired
         while not self.stop_event.is_set():
             self.capture_ingress.discover_external()
+            try:
+                with self.operation():
+                    if self.store.capture_room()==0:
+                        self.count('ingress_capacity_waits')
+                        self.stop_event.wait(.25)
+                        continue
+            except MaintenancePaused:
+                self.stop_event.wait(.05)
+                continue
             path=self.capture_ingress.claim()
             if path is None:
                 self.capture_ingress.ready.wait(.1)
@@ -359,8 +376,9 @@ class MonitoringRuntime:
                 raise RuntimeError('Camera capture time is not yet qualified') from error
             for observation in result['observations']:
                 observation['time_record'] = record
-                observation['time_source'] = 'DEVICE_CAPTURE'
-                observation['clock_domain'] = 'CAMERA:'+metadata['camera_id']
+                server_received=record.get('source_kind')=='SERVER_FRAME_RECEIVED'
+                observation['time_source'] = 'RECEIVED_AT' if server_received else 'DEVICE_CAPTURE'
+                observation['clock_domain'] = 'SERVER_RECEIVE' if server_received else 'CAMERA:'+metadata['camera_id']
         deliveries = self._deliveries(result['observations'], metadata.get('stream_kind'))
         with self.stats_lock:
             for observation in result['observations']:
@@ -496,6 +514,26 @@ class MonitoringRuntime:
             except MaintenancePaused:
                 self.stop_event.wait(.05)
 
+    def _cache_loop(self):
+        age=self.cache_retention['max_age_seconds']
+        while not self.stop_event.is_set():
+            try:
+                with self.operation():
+                    with self.capture_claim_lock:
+                        removed=self.store.prune_capture_cache(age,exclude_keys=tuple(self.capture_inflight))
+                    self.count('cache_expired_unprocessed_captures',removed)
+                    if self.capture_ingress is not None:
+                        result=self.capture_ingress.prune_cache(max_mb=self.cache_retention['ingress_max_mb'],max_age_seconds=age)
+                        self.count('cache_evicted_unprocessed_files',result['files'])
+                    archive=self.config.get('uuid_sources',{}).get('main_archive_directory')
+                    if archive and self.cache_retention.get('main_archive_max_mb'):
+                        from face_engine.cache_retention import prune_video_archive
+                        result=prune_video_archive(archive,max_mb=self.cache_retention['main_archive_max_mb'])
+                        self.count('cache_expired_video_segments',result['files'])
+            except MaintenancePaused:pass
+            except Exception:self.count('cache_retention_errors')
+            self.stop_event.wait(self.cache_retention.get('sweep_seconds',10))
+
     @runtime_operation
     def _poll_cycle(self):
         now = time.monotonic()
@@ -599,6 +637,8 @@ class MonitoringRuntime:
             operations += [('deliver', self._send_loop), ('sample', self._poll_loop)]
             if self.capture_ingress is not None:
                 operations.append(('ingress',self._ingress_loop))
+            if self.cache_retention.get('enabled'):
+                operations.append(('cache',self._cache_loop))
             for name, fn in operations:
                 thread = threading.Thread(target=fn, name='monitoring-'+name, daemon=True)
                 self.threads.append(thread)
@@ -770,7 +810,9 @@ class MonitoringRuntime:
             p2_ack_latency={'samples': len(completed), 'p95_seconds': float(np.percentile(completed, 95)) if completed else None,
                             'basis': 'decode receipt for live frames; inference start for durable captures; not camera transport latency'},
             threads={thread.name: thread.is_alive() for thread in self.threads},
-            clocks='camera evidence required; reception time does not qualify',
+            clocks=('original server reception UTC; camera capture time is not verified'
+                if self.config.get('camera_clock',{}).get('time_basis')=='SERVER_RECEIVED_AT'
+                else 'camera evidence required; reception time does not qualify'),
             camera_count=len(self.cameras), capture_source_count=len(self.hikvision), device_names=self.camera_names.status())
 
     def stop(self):

@@ -2257,6 +2257,7 @@ components:
           type: string
           enum:
           - DEVICE_CAPTURE
+          - SERVER_RECEIVED_AT
           - UNKNOWN
         fixed_utc_offset_minutes:
           type: integer
@@ -2418,6 +2419,7 @@ components:
               type: string
               enum:
               - DEVICE_CAPTURE
+              - SERVER_RECEIVED_AT
               - UNKNOWN
             timezone_source:
               type: string
