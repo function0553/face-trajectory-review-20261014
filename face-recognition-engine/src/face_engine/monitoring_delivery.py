@@ -284,18 +284,34 @@ class DeliveryStore:
         for _ in self.cycle:
             category = self.cycle[self.cursors[table]]
             self.cursors[table] = (self.cursors[table]+1) % len(self.cycle)
-            activities = [r[0] for r in self.db.execute(f'SELECT DISTINCT activity_id FROM {source} WHERE {condition} AND category=? ORDER BY activity_id', (*params, category))]
+            previous = self.activity_cursors.get((table, category), '')
+            if table == 'captures':
+                # Seek the next eligible scope instead of reading every image
+                # row to enumerate DISTINCT values while owning the store lock.
+                row = self.db.execute(f'SELECT activity_id FROM {source} WHERE {condition} AND category=? AND activity_id>? ORDER BY activity_id LIMIT 1',
+                    (*params, category, previous)).fetchone()
+                if row is None:
+                    row = self.db.execute(f'SELECT activity_id FROM {source} WHERE {condition} AND category=? ORDER BY activity_id LIMIT 1',
+                        (*params, category)).fetchone()
+                activities = [row[0]] if row else []
+            else:
+                activities = [r[0] for r in self.db.execute(f'SELECT DISTINCT activity_id FROM {source} WHERE {condition} AND category=? ORDER BY activity_id', (*params, category))]
             if activities:
-                previous = self.activity_cursors.get((table, category), '')
                 activity = next((item for item in activities if item > previous), activities[0])
                 self.activity_cursors[table, category] = activity
                 if table=='captures':
                     scope=(category,activity)
-                    sources=[row[0] for row in self.db.execute(
-                        f'SELECT DISTINCT source_id FROM captures INDEXED BY pending_capture_source WHERE {condition} AND category=? AND activity_id=? ORDER BY source_id',
-                        (*params,category,activity))]
                     previous_source=self.capture_source_cursors.get(scope,'')
-                    source_id=next((value for value in sources if value>previous_source),sources[0])
+                    row=self.db.execute(
+                        f'SELECT source_id FROM captures INDEXED BY pending_capture_source WHERE {condition} AND category=? AND activity_id=? AND source_id>? ORDER BY source_id LIMIT 1',
+                        (*params,category,activity,previous_source)).fetchone()
+                    if row is None:
+                        row=self.db.execute(
+                            f'SELECT source_id FROM captures INDEXED BY pending_capture_source WHERE {condition} AND category=? AND activity_id=? ORDER BY source_id LIMIT 1',
+                            (*params,category,activity)).fetchone()
+                    if row is None:
+                        continue
+                    source_id=row[0]
                     self.capture_source_cursors[scope]=source_id
                     key=scope+(source_id,);fresh=self.capture_fresh_turns.get(key,False)
                     self.capture_fresh_turns[key]=not fresh
