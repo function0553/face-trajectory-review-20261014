@@ -85,7 +85,8 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             if not config.get('uuid_sources',{}).get('continuous') or self.capture_ingress is None:
                 raise ValueError('acquisition processes require continuous durable capture')
             from face_engine.capture_process import CaptureProcesses
-            self.capture_processes=CaptureProcesses(str(store.path)+'.acquisition',self.capture_ingress,count=process_count)
+            acquisition_root=config['uuid_sources'].get('acquisition_directory',str(store.path)+'.acquisition')
+            self.capture_processes=CaptureProcesses(acquisition_root,self.capture_ingress,count=process_count)
 
     def configure_cameras(self):
         # The maintenance owner configures readers while ingress is paused.
