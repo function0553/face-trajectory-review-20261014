@@ -68,6 +68,8 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         self.hik_signatures = {}
         self.cleanup_pending = False
         self.binding_status = dict(status='NOT_REFRESHED', missing_camera_ids=[])
+        from face_engine.fleet_diagnostics import FleetDiagnostics
+        self.feed_diagnostics = FleetDiagnostics()
         self.next_binding_poll = 0
         self.uuid_sources = None
         self.uuid_cached_entries = {}
@@ -518,4 +520,5 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             result['platform_bindings'] = copy.deepcopy(self.binding_status)
             result['video_inputs'] = {camera: reader.metrics() for camera, reader in list(self.cameras.items())
                                       if hasattr(reader, 'metrics')}
+            result['fleet_diagnostics'] = self.feed_diagnostics.snapshot(result['video_inputs'], self.binding_status)
         return result
