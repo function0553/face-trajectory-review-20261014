@@ -434,6 +434,12 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             raise RuntimeError('platform camera route is paused or revoked; retain original capture')
         return super().process_burst(body, metadata, **kwargs)
 
+    @runtime_operation
+    def process_photo_window(self, captures):
+        if not all(self._committed_route_current(meta) for _, _, meta in captures):
+            raise RuntimeError('platform camera route is paused or revoked; retain original captures')
+        return super().process_photo_window(captures)
+
     def _request_main(self, metadata):
         camera_id = metadata['camera_id']
         with self.platform_lock:

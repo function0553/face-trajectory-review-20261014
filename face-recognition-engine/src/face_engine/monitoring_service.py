@@ -178,6 +178,13 @@ class MonitoringRuntime:
         self.capture_claim_lock = threading.Lock()
         self.capture_inflight = set()
         self.capture_retry_at = {}
+        self.photo_scope_inflight = set()
+        self.photo_scope_reservations = {}
+        self.photo_scope_retry_at = {}
+        self.photo_window_seconds = scheduling.get('photo_selection_window_seconds', 6)
+        if (type(self.photo_window_seconds) not in (int, float) or not np.isfinite(self.photo_window_seconds)
+                or not 0 <= self.photo_window_seconds <= 12):
+            raise ValueError('photo_selection_window_seconds must be 0..12')
         self.inference_workers = scheduling.get('inference_workers', 1)
         if type(self.inference_workers) is not int or not 1 <= self.inference_workers <= 16:
             raise ValueError('inference_workers must be 1..16')
@@ -466,6 +473,66 @@ class MonitoringRuntime:
         self._record_live_completion(encoded([context['activity_id'], metadata['source_id'], metadata['camera_id']]), category, time.monotonic())
         return report
 
+    @runtime_operation
+    def process_photo_window(self, captures):
+        """Durable, bounded per-camera best shot before the first P2 delivery."""
+        from face_engine.main_photo import unpack_burst
+        from face_engine.photo_window import select_window
+        start = time.monotonic()
+        records = []
+        for _, body, metadata in captures:
+            if metadata.get('capture_format') == 'main-photo-burst-v1':
+                records.extend(unpack_burst(body, metadata))
+            else:
+                records.append((body, metadata))
+        records.sort(key=lambda x: (x[1].get('received_at_unix_ms', 0), x[1]['frame_id']))
+        # Decode one full frame at a time. Only small aligned crops survive
+        # detection; there is no unbounded native-resolution frame cache.
+        extract = getattr(self.extractor, 'extract_selected', self.extractor.extract_detailed)
+        results = extract((decode_image(raw), meta) for raw, meta in records)
+        if len(results) != len(records):
+            raise ValueError('photo-window extractor returned a different frame count')
+        selected = select_window(results)
+        deliveries, clocks = [], {}
+        capture_clock = getattr(self, 'capture_clock', None)
+        for fi, observation in selected:
+            raw, meta = records[fi]
+            if capture_clock and not meta.get('time_record'):
+                if fi not in clocks:
+                    clocks[fi] = capture_clock.record(decode_image(raw), meta)
+                record = clocks[fi]
+                server_received = record.get('source_kind') == 'SERVER_FRAME_RECEIVED'
+                observation['time_record'] = record
+                observation['time_source'] = 'RECEIVED_AT' if server_received else 'DEVICE_CAPTURE'
+                observation['clock_domain'] = 'SERVER_RECEIVE' if server_received else 'CAMERA:' + meta['camera_id']
+            deliveries.extend(self._deliveries([observation], meta.get('stream_kind')))
+        report = dict(status='PHOTO_WINDOW_SELECTED',
+            observation_ids=[o['observation_id'] for _, o in selected],
+            selected_original_frame_ids=[records[fi][1]['frame_id'] for fi, _ in selected],
+            original_frames=len(records), selected_faces=len(selected),
+            repeated_embeddings_avoided=sum(x.get('repeated_embeddings_avoided', 0) for x in results),
+            embeddings_computed=sum(len(x['observations']) for x in results),
+            main_evidence_required=sum(len(x.get('low_resolution_identity_suppressed', [])) for x in results),
+            frames=[dict(original_image_sha256=hashlib.sha256(raw).hexdigest(),
+                frame_id=meta['frame_id'], **{k:v for k,v in result.items() if k != 'observations'})
+                for (raw, meta), result in zip(records, results)])
+        self.store.finish_photo_window([c[0] for c in captures], report, deliveries)
+        with self.stats_lock:
+            self.counters['processed_frames'] += len(records)
+            self.counters['qualified_faces'] += len(selected)
+            self.counters['quality_rejected_faces'] += sum(len(x['rejected_faces']) for x in results)
+            self.counters['photo_windows_processed'] += 1
+            self.counters['repeated_embeddings_avoided'] += report['repeated_embeddings_avoided']
+            self.counters['low_resolution_main_evidence_required'] += report['main_evidence_required']
+            for _, observation in selected:
+                if len(self.pending_latency) < self.store.max_pending + self.store.max_faces_per_capture:
+                    self.pending_latency[(observation['activity_id'], observation['source_id'], observation['observation_id'])] = start
+            self.latencies.append(dict(inference_seconds=time.monotonic() - start, acquisition_to_enqueued_seconds=None))
+        meta = captures[0][2]
+        category = self.priority.category(meta['camera_id'], activity_id=meta['activity_id'])
+        self._record_live_completion(encoded([meta['activity_id'], meta['source_id'], meta['camera_id']]), category, time.monotonic())
+        return report
+
     def _record_live_completion(self, camera_id, category, completed):
         with self.stats_lock:
             previous = self.live_last_processed.pop(camera_id, None)
@@ -512,10 +579,15 @@ class MonitoringRuntime:
             with self.capture_claim_lock:
                 now = time.monotonic()
                 self.capture_retry_at = {k:v for k,v in self.capture_retry_at.items() if v>now}
+                self.photo_scope_retry_at = {k:v for k,v in self.photo_scope_retry_at.items() if v>now}
                 excluded = tuple(self.capture_inflight | set(self.capture_retry_at))
-                item = self.store.next_capture(excluded) if excluded else self.store.next_capture()
+                scopes = tuple(self.photo_scope_inflight | set(self.photo_scope_reservations) | set(self.photo_scope_retry_at))
+                item = self.store.next_capture(excluded, exclude_scopes=scopes) if scopes else (
+                    self.store.next_capture(excluded) if excluded else self.store.next_capture())
                 if item:
                     self.capture_inflight.add(item[0])
+                    if item[2].get('photo_window_managed') is True and self.photo_window_seconds > 0:
+                        self.photo_scope_reservations[(item[2]['activity_id'], item[2]['source_id'])] = item[0]
                 return item
         capture = next_capture() if capture_turn else None
         job = None if capture else self.queue.pop()
@@ -530,10 +602,28 @@ class MonitoringRuntime:
             # live frame before inference instead of stalling every other activity.
             self.count('inference_or_capacity_errors')
             return capture_turn
+        claimed_keys = [capture[0]] if capture else []
+        photo_scope = None
         try:
             if capture:
                 key, body, metadata = capture
-                if metadata.get('capture_format') == 'main-photo-burst-v1':
+                if metadata.get('photo_window_managed') is True and self.photo_window_seconds > 0:
+                    with self.capture_claim_lock:
+                        photo_scope = (metadata['activity_id'], metadata['source_id'])
+                        if photo_scope in self.photo_scope_inflight:
+                            photo_scope = None
+                            return capture_turn
+                        rows, delay = self.store.photo_window(capture, seconds=self.photo_window_seconds)
+                        if delay > 0:
+                            if len(self.photo_scope_retry_at) < 1024:
+                                self.photo_scope_retry_at[photo_scope] = time.monotonic() + min(delay, 1)
+                            photo_scope = None
+                            return capture_turn
+                        self.photo_scope_inflight.add(photo_scope)
+                        claimed_keys = list({capture[0]} | {r[0] for r in rows})
+                        self.capture_inflight.update(claimed_keys)
+                    self.process_photo_window(rows)
+                elif metadata.get('capture_format') == 'main-photo-burst-v1':
                     self.process_burst(body, metadata, capture_key=key)
                 else:
                     self.process_frame(decode_image(body), metadata, capture_key=key)
@@ -541,7 +631,13 @@ class MonitoringRuntime:
                 self.process_frame(job.image, job.metadata, received_monotonic=job.received_monotonic, scheduling_category=job.category)
         except (ValueError, KeyError) as error:
             self.count('input_errors')
-            if capture:
+            if photo_scope is not None:
+                # Do not quarantine the unrelated newest seed or bypass the
+                # main-evidence gate after a malformed member of a window.
+                with self.capture_claim_lock:
+                    self.photo_scope_retry_at[photo_scope] = time.monotonic() + 5
+                self.count('photo_window_input_errors')
+            elif capture:
                 self.store.quarantine_capture(capture[0], {'status': 'QUARANTINED', 'reason': type(error).__name__})
         except MaintenancePaused:
             # A request arriving during an admitted capture leaves it pending
@@ -559,7 +655,12 @@ class MonitoringRuntime:
         finally:
             if capture:
                 with self.capture_claim_lock:
-                    self.capture_inflight.discard(capture[0])
+                    self.capture_inflight.difference_update(claimed_keys)
+                    scope = (capture[2]['activity_id'], capture[2]['source_id'])
+                    if self.photo_scope_reservations.get(scope) == capture[0]:
+                        self.photo_scope_reservations.pop(scope)
+                    if photo_scope is not None:
+                        self.photo_scope_inflight.discard(photo_scope)
         return capture_turn
 
     def _infer_loop(self):

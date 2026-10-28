@@ -213,7 +213,10 @@ class TrajectoryExtractor:
         """Compatibility wrapper. Use extract_detailed to retain rejected evidence."""
         return [frame["observations"] for frame in self.extract_detailed(frames)]
 
-    def extract_detailed(self, frames):
+    def extract_selected(self, frames):
+        return self.extract_detailed(frames, select_before_embedding=True)
+
+    def extract_detailed(self, frames, *, select_before_embedding=False):
         """Each (BGR image, acquisition metadata) returns observations/rejected_faces.
 
         face_index is sorted detection order BEFORE quality filtering, keeping IDs
@@ -263,6 +266,9 @@ class TrajectoryExtractor:
             faces = sorted(faces, key=lambda face: tuple(face["bbox"]))
             output = dict(observations=[], rejected_faces=[], needs_high_resolution=False,
                           detected_faces=len(faces))
+            output['frame_info'] = dict(scope=encoded([context, meta['source_id'], meta['camera_id']]),
+                dimensions=[image.shape[1], image.shape[0]], stream_kind=meta.get('stream_kind'),
+                received_at_unix_ms=meta.get('received_at_unix_ms'))
             outputs.append(output)
             for index, face in enumerate(faces):
                 quality = evaluate_face_quality(image, face, self.quality_policy, metadata=meta)
@@ -313,6 +319,10 @@ class TrajectoryExtractor:
                 output["observations"].append(observation)
                 aligned.append(crop)
                 targets.append(observation)
+        if aligned and select_before_embedding:
+            from face_engine.photo_window import recognition_candidates
+            keep = recognition_candidates(outputs, aligned, targets)
+            aligned, targets = [aligned[i] for i in keep], [targets[i] for i in keep]
         if aligned:
             vectors = np.asarray(self.recognizer.extract_embeddings(aligned), dtype=np.float32)
             if vectors.shape != (len(aligned), 512) or not np.isfinite(vectors).all():

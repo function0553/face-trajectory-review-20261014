@@ -104,6 +104,8 @@ class ContinuousCamera:
 
     def _persist(self, body, metadata, now):
         try:
+            if self.main_photo_enabled:
+                metadata = dict(metadata, photo_window_managed=True)
             self.callback(body, metadata, now)
             with self.lock:
                 self.state['persisted_candidates'] += 1

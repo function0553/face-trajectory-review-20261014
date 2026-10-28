@@ -163,6 +163,7 @@ class DeliveryStore:
             self.db.execute("CREATE INDEX IF NOT EXISTS capture_status ON captures(status)")
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture_scope ON captures(category,activity_id,created,id) WHERE status='PENDING' AND image IS NOT NULL")
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture_source ON captures(category,activity_id,source_id,created,id) WHERE status='PENDING' AND image IS NOT NULL")
+            self.db.execute("CREATE INDEX IF NOT EXISTS pending_photo_window ON captures(activity_id,source_id,context,created,id) WHERE status='PENDING' AND image IS NOT NULL")
             self.db.execute("CREATE TABLE IF NOT EXISTS inbox_counts(kind TEXT PRIMARY KEY,n INTEGER NOT NULL CHECK(n>=0))")
             # Reconcile once under the exclusive consumer lease. SQL triggers
             # also see C++ retention deletes and roll back with the owning write.
@@ -302,7 +303,7 @@ class DeliveryStore:
             raise RuntimeError('CAPACITY: capture inbox full')
         return key
 
-    def next_capture(self, exclude_keys=()):
+    def next_capture(self, exclude_keys=(), exclude_scopes=()):
         with self.lock:
             # Captures of a blocked activity over its share wait unprocessed; their
             # observations could not be queued, so do not spend inference on them.
@@ -314,8 +315,66 @@ class DeliveryStore:
                 raise ValueError('too many in-flight capture exclusions')
             if excluded:
                 condition += f" AND id NOT IN ({','.join('?' * len(excluded))})"
-            row = self._next('captures', 'id,image,metadata', condition, tuple(full)+excluded)
+            scopes = tuple(exclude_scopes)
+            if len(scopes) > 1024:
+                raise ValueError('too many photo-window scopes')
+            if scopes:
+                condition += ' AND (activity_id,source_id) NOT IN (' + ','.join('(?,?)' for _ in scopes) + ')'
+            row = self._next('captures', 'id,image,metadata', condition, tuple(full)+excluded+tuple(x for s in scopes for x in s))
             return (row[0], row[1], json.loads(row[2])) if row else None
+
+    def photo_window(self, seed, *, seconds=6, max_records=24, max_bytes=64*1024*1024, now=None):
+        """Oldest camera-local originals first; no model work or waiting in SQL.
+
+        Selection state remains in durable captures until ALL winners commit.
+        A delayed/restarted worker therefore cannot lose its low-res fallback.
+        """
+        now = time.time() if now is None else now
+        meta = seed[2]
+        context = encoded(activity_context(meta))
+        with self.lock:
+            rows = self.db.execute("SELECT id,metadata,created,length(image) FROM captures "
+                "WHERE status='PENDING' AND image IS NOT NULL AND activity_id=? AND source_id=? AND context=? "
+                "ORDER BY created,id LIMIT 64", (meta['activity_id'], meta['source_id'], context)).fetchall()
+            eligible = []
+            for key, raw, created, size in rows:
+                record_meta = json.loads(raw)
+                if record_meta.get('photo_window_managed') is True and record_meta.get('camera_id') == meta['camera_id']:
+                    eligible.append((key, record_meta, created, size))
+            if not eligible:
+                return [seed], 0
+            start = eligible[0][2]
+            if now < start + seconds:
+                return [], start + seconds - now
+            chosen, total = [], 0
+            for key, record_meta, created, size in eligible:
+                if created > start + seconds or len(chosen) >= max_records:
+                    break
+                if chosen and total + size > max_bytes:
+                    break
+                chosen.append((key, record_meta)); total += size
+            result = []
+            for key, record_meta in chosen:
+                raw = self.db.execute("SELECT image FROM captures WHERE id=?", (key,)).fetchone()[0]
+                result.append((key, raw, record_meta))
+            return result, 0
+
+    def finish_photo_window(self, keys, report, deliveries):
+        if len(deliveries) > self.max_faces_per_capture:
+            raise ValueError('photo window face fanout exceeds configured bound')
+        with self.lock, self.db:
+            retention_write_guard(self.db)
+            for key in keys:
+                if retention_tombstone(self.db, 'captures', key):
+                    raise RetentionExpired('EXPIRED: deleted photo-window capture')
+                row = self.db.execute('SELECT status FROM captures WHERE id=?', (key,)).fetchone()
+                if row is None or row[0] != 'PENDING':
+                    raise EventConflict('photo-window capture is not pending')
+            for delivery in deliveries:
+                self._enqueue(*delivery)
+            for key in keys:
+                self.db.execute("UPDATE captures SET image=NULL,result=?,status='PROCESSED' WHERE id=?", (encoded(report), key))
+            self._capacity(fanout=True, activities=[d[2].get('activity_id') for d in deliveries])
 
     def _next(self, table, columns, condition, params):
         source = table + (' INDEXED BY pending_capture_scope' if table=='captures' else '')
