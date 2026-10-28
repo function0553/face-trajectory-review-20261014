@@ -147,6 +147,9 @@ class MonitoringRuntime:
     def __init__(self, config, extractor, store):
         self.config, self.extractor, self.store = config, extractor, store
         scheduling = config.get('scheduling', {})
+        from face_engine.analysis_admission import AnalysisBudget
+        self.analysis_budget = AnalysisBudget(scheduling.get('analysis_fps_limit', 0),
+            scheduling.get('analysis_burst', 4))
         self.queue = FairLatestQueue(weights=tuple(scheduling.get('weights', [6, 3, 1])),
             max_cameras=scheduling.get('max_queued_cameras', 128),
             max_bytes=scheduling.get('max_queue_mb', 512)*1024*1024,
@@ -509,6 +512,8 @@ class MonitoringRuntime:
     def _infer_loop(self):
         capture_turn = True
         while not self.stop_event.is_set():
+            if not self.analysis_budget.wait(self.stop_event):
+                break
             try:
                 capture_turn = self._infer_cycle(capture_turn)
             except MaintenancePaused:
@@ -805,6 +810,7 @@ class MonitoringRuntime:
         return dict(ok=True, counters=counters, queue=self.queue.stats(), admission=self.admission.stats(), delivery=delivery_status, maintenance=maintenance, live_camera_coverage=coverage,
             capture_ingress=self.capture_ingress.status() if self.capture_ingress is not None else None,
             latency={key: summary(key) for key in ('inference_seconds', 'acquisition_to_enqueued_seconds')},
+            analysis_budget=self.analysis_budget.stats(),
             backend={'detector': getattr(self.extractor.detector, 'backend', 'UNKNOWN'),
                      'recognizer': getattr(self.extractor.recognizer, 'backend', 'UNKNOWN')},
             p2_ack_latency={'samples': len(completed), 'p95_seconds': float(np.percentile(completed, 95)) if completed else None,

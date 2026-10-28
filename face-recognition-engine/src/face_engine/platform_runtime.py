@@ -182,6 +182,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                             args['preferred_stream'] = item.get('preferred_stream', 'main')
                             args['decode_keyframes_only'] = item.get('decode_keyframes_only',False)
                             args['main_archive_directory'] = item.get('main_archive_directory')
+                            args['motion_admission'] = item.get('motion_admission', {})
                     signatures[camera] = (encoded([sub, main, args, dynamic]), sub, main, args, dynamic)
                 if dynamic and item.get('continuous') and not self.capture_processes:
                     connection = item.get('capture_connection')

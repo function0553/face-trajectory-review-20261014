@@ -15,35 +15,13 @@ cv2.setNumThreads(1)
 
 from face_engine.acquisition import _base_metadata
 from face_engine.uuid_sources import FailoverCamera
-
-
-class MotionAdmission:
-    def __init__(self, idle_seconds=60):
-        self.previous = None
-        self.active_until = 0
-        self.last_saved = -float('inf')
-        self.idle_seconds = idle_seconds
-
-    def admit(self, image, now):
-        small = cv2.resize(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), (96, 54))
-        if self.previous is None:
-            self.previous = small
-            self.last_saved = now
-            return True
-        changed = np.count_nonzero(cv2.absdiff(small, self.previous)>12) >= 16
-        self.previous = small
-        if changed:
-            self.active_until = now+2
-        admitted = changed or now < self.active_until or now-self.last_saved >= self.idle_seconds
-        if admitted:
-            self.last_saved = now
-        return admitted
+from face_engine.analysis_admission import MotionAdmission
 
 
 class ContinuousCamera:
     def __init__(self, sub_url, main_url, source_id, camera_id, *, connection=None,
                  on_capture, camera_clock=None, ffmpeg='ffmpeg', sample_fps=2, preferred_stream='main',
-                 decode_keyframes_only=False, main_archive_directory=None):
+                 decode_keyframes_only=False, main_archive_directory=None, motion_admission=None):
         self.source_id, self.camera_id = source_id, camera_id
         self.connection = connection
         self.sub_url, self.main_url = sub_url, main_url
@@ -56,7 +34,8 @@ class ContinuousCamera:
         self.thread = None
         self.video = None
         self.lock = threading.RLock()
-        self.motion = MotionAdmission()
+        self.motion = MotionAdmission(**(motion_admission or {}))
+        self.motion_stream_kind = None
         self.state = dict(state='NEW', frames=0, persisted_candidates=0, idle_frames=0,
                           capture_errors=0, inbox_errors=0, last_error=None, stream_kind='main')
         self.last_frame_at = None
@@ -75,6 +54,10 @@ class ContinuousCamera:
             self.state.update(values)
 
     def _accept(self, body, image, metadata, now):
+        stream_kind = metadata.get('stream_kind')
+        if stream_kind != self.motion_stream_kind:
+            self.motion.reset()
+            self.motion_stream_kind = stream_kind
         with self.lock:
             self.state['frames'] += 1
             self.last_frame_at = now
@@ -88,6 +71,7 @@ class ContinuousCamera:
             with self.lock:
                 self.state['persisted_candidates'] += 1
         except Exception:
+            self.motion.capture_failed()
             with self.lock:
                 self.state['inbox_errors'] += 1
                 self.state['last_error'] = 'DURABLE_INBOX_REFUSED_CAPTURE'
@@ -160,6 +144,7 @@ class ContinuousCamera:
     def metrics(self):
         with self.lock:
             result = dict(self.state, continuous=True, durable_candidates=True)
+            result['motion_admission'] = self.motion.stats()
             if self.last_frame_at is not None:
                 result['frame_age_seconds'] = round(time.monotonic()-self.last_frame_at, 3)
             return result
