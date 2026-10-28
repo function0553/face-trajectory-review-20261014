@@ -395,9 +395,9 @@ class MonitoringRuntime:
         else:
             for item in deliveries:
                 self.store.enqueue(*item)
-        if result['needs_high_resolution'] and metadata.get('stream_kind') != 'main':
+        if result['needs_high_resolution'] and metadata.get('stream_kind') != 'main' and not metadata.get('hd_upgrade_managed'):
             self._request_main(metadata)
-        elif result.get('detected_faces') == 0 and metadata.get('stream_kind') == 'sub':
+        elif result.get('detected_faces') == 0 and metadata.get('stream_kind') == 'sub' and not metadata.get('hd_upgrade_managed'):
             # No detection in a low-resolution stream is not proof that no face
             # exists. Probe sparingly; every replacement is independent evidence.
             interval = self.config.get('scheduling', {}).get('empty_main_probe_seconds', 30)
@@ -414,6 +414,56 @@ class MonitoringRuntime:
                 acquisition_to_enqueued_seconds=time.monotonic()-received_monotonic if received_monotonic is not None else None))
         if metadata.get('stream_kind') in ('sub', 'main'):
             self._record_live_completion(encoded([context['activity_id'], metadata['source_id'], metadata['camera_id']]), scheduling_category, time.monotonic())
+        return report
+
+    @runtime_operation
+    def process_burst(self, body, metadata, *, capture_key):
+        """Infer original main frames, atomically deliver the best per face track."""
+        from face_engine.main_photo import unpack_burst, select_best
+        start = time.monotonic()
+        context = activity_context(metadata)
+        records = unpack_burst(body, metadata)
+        frames = [(decode_image(raw), meta) for raw, meta in records]
+        results = self.extractor.extract_detailed(frames)
+        selected = select_best(results)
+        grouped = {}
+        for fi, observation in selected:
+            grouped.setdefault(fi, []).append(observation)
+        deliveries, ids = [], []
+        capture_clock = getattr(self, 'capture_clock', None)
+        for fi, observations in grouped.items():
+            image, meta = frames[fi]
+            if capture_clock and not meta.get('time_record'):
+                # Qualify the chosen original, never copy the trigger's time.
+                record = capture_clock.record(image, meta)
+                server_received = record.get('source_kind') == 'SERVER_FRAME_RECEIVED'
+                for observation in observations:
+                    observation['time_record'] = record
+                    observation['time_source'] = 'RECEIVED_AT' if server_received else 'DEVICE_CAPTURE'
+                    observation['clock_domain'] = 'SERVER_RECEIVE' if server_received else 'CAMERA:' + meta['camera_id']
+            deliveries.extend(self._deliveries(observations, 'main'))
+            ids.extend(o['observation_id'] for o in observations)
+        report = dict(capture_format='main-photo-burst-v1',
+            frames=[dict(frame_id=meta['frame_id'], original_image_sha256=hashlib.sha256(raw).hexdigest(),
+                         received_at_unix_ms=meta['received_at_unix_ms'],
+                         **{k: v for k, v in result.items() if k != 'observations'})
+                    for (raw, meta), result in zip(records, results)],
+            observation_ids=ids, selected_faces=len(selected),
+            selected_original_frame_ids=sorted({frames[fi][1]['frame_id'] for fi, _ in selected}),
+            qualified_faces_before_selection=sum(len(x['observations']) for x in results))
+        self.store.finish_capture(capture_key, report, deliveries)
+        with self.stats_lock:
+            for _, observation in selected:
+                if len(self.pending_latency) < self.store.max_pending + self.store.max_faces_per_capture:
+                    self.pending_latency[(context['activity_id'], observation['source_id'], observation['observation_id'])] = start
+            self.counters['processed_frames'] += len(frames)
+            self.counters['qualified_faces'] += len(selected)
+            self.counters['quality_rejected_faces'] += sum(len(x['rejected_faces']) for x in results)
+            self.counters['main_photo_bursts_processed'] += 1
+            self.counters['main_photo_repeated_faces_skipped'] += report['qualified_faces_before_selection'] - len(selected)
+            self.latencies.append(dict(inference_seconds=time.monotonic() - start, acquisition_to_enqueued_seconds=None))
+        category = self.priority.category(metadata['camera_id'], activity_id=context['activity_id'])
+        self._record_live_completion(encoded([context['activity_id'], metadata['source_id'], metadata['camera_id']]), category, time.monotonic())
         return report
 
     def _record_live_completion(self, camera_id, category, completed):
@@ -483,7 +533,10 @@ class MonitoringRuntime:
         try:
             if capture:
                 key, body, metadata = capture
-                self.process_frame(decode_image(body), metadata, capture_key=key)
+                if metadata.get('capture_format') == 'main-photo-burst-v1':
+                    self.process_burst(body, metadata, capture_key=key)
+                else:
+                    self.process_frame(decode_image(body), metadata, capture_key=key)
             else:
                 self.process_frame(job.image, job.metadata, received_monotonic=job.received_monotonic, scheduling_category=job.category)
         except (ValueError, KeyError) as error:

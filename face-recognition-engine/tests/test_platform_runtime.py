@@ -93,7 +93,7 @@ class PlatformRuntime(unittest.TestCase):
         self.assertEqual(len(self.runtime._routed_frames(self.frame())),2)
         self.activity('A',enabled=False);self.runtime.refresh_bindings()
         self.assertEqual([x.metadata['activity_id'] for x in self.runtime._routed_frames(self.frame())],['B'])
-        with self.assertRaises(ActivityContextError):
+        with self.assertRaisesRegex(RuntimeError, 'paused or revoked'):
             self.runtime.process_frame(np.zeros((1,1,3)),old)
         self.activity('B',enabled=False);self.runtime.refresh_bindings()
         self.assertFalse(self.runtime.cameras)
@@ -101,13 +101,32 @@ class PlatformRuntime(unittest.TestCase):
 
     def test_reader_outage_does_not_revoke_a_committed_saved_frame(self):
         from face_engine.monitoring_service import MonitoringRuntime
+        # Current v4 routes require the physical source to be the backend UUID.
+        catalog=json.loads(self.catalog.read_text());catalog['cameras'][0]['source_id']='BACKEND-UUID'
+        self.catalog.write_text(json.dumps(catalog))
         self.activity('A');self.runtime.refresh_bindings()
-        saved=self.runtime._routed_frames(self.frame())[0]
+        original=self.frame()
+        meta=dict(original.metadata,source_id='BACKEND-UUID')
+        meta['time_record']=dict(meta['time_record'],source_id='BACKEND-UUID')
+        saved=self.runtime._routed_frames(Frame(original.image_bgr,meta,original.received_monotonic))[0]
         self.runtime.platform_routes.clear()
         with patch.object(MonitoringRuntime,'process_frame',return_value={'processed':True}):
             self.assertEqual(self.runtime.process_frame(saved.image_bgr,saved.metadata),{'processed':True})
         self.activity('A',enabled=False)
-        with self.assertRaises(ActivityContextError):self.runtime.process_frame(saved.image_bgr,saved.metadata)
+        with self.assertRaisesRegex(RuntimeError, 'paused or revoked'):self.runtime.process_frame(saved.image_bgr,saved.metadata)
+
+    def test_main_photo_burst_uses_committed_route_and_revocation_guard(self):
+        from face_engine.monitoring_service import MonitoringRuntime
+        self.activity('A')
+        meta=dict(activity_id='A',activity_num='NUM-A',source_id='BACKEND-UUID',
+                  camera_id='BACKEND-UUID',route_rule_id='PLATFORM-V4')
+        with patch.object(MonitoringRuntime,'process_burst',return_value={'processed':True}) as process:
+            self.assertEqual(self.runtime.process_burst(b'original-burst',meta,capture_key='key'),{'processed':True})
+            self.assertEqual(process.call_count,1)
+            self.activity('A',enabled=False)
+            with self.assertRaisesRegex(RuntimeError,'paused or revoked'):
+                self.runtime.process_burst(b'original-burst',meta,capture_key='key')
+            self.assertEqual(process.call_count,1)
     def test_cached_frame_cannot_enter_newly_bound_activity(self):
         self.activity('A');self.runtime.refresh_bindings()
         cached=self.frame()

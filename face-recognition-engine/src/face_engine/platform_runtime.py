@@ -185,6 +185,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                             args['decode_keyframes_only'] = item.get('decode_keyframes_only',False)
                             args['main_archive_directory'] = item.get('main_archive_directory')
                             args['motion_admission'] = item.get('motion_admission', {})
+                            args['main_photo_enabled'] = item.get('main_photo_enabled', True)
                     signatures[camera] = (encoded([sub, main, args, dynamic]), sub, main, args, dynamic)
                 if dynamic and item.get('continuous') and not self.capture_processes:
                     connection = item.get('capture_connection')
@@ -426,6 +427,12 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         if not self._committed_route_current(metadata):
             raise RuntimeError('platform camera route is paused or revoked; retain original capture')
         return super().process_frame(image, metadata, **kwargs)
+
+    @runtime_operation
+    def process_burst(self, body, metadata, **kwargs):
+        if not self._committed_route_current(metadata):
+            raise RuntimeError('platform camera route is paused or revoked; retain original capture')
+        return super().process_burst(body, metadata, **kwargs)
 
     def _request_main(self, metadata):
         camera_id = metadata['camera_id']

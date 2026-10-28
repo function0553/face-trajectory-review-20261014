@@ -56,6 +56,9 @@ class UUIDSources:
             raise ValueError('preferred_stream must be main or sub')
         self.keyframes_only = settings.get('continuous_decode_keyframes_only', False)
         self.motion_admission = dict(settings.get('motion_admission', {}))
+        self.main_photo_enabled = settings.get('main_photo_enabled', True)
+        if type(self.main_photo_enabled) is not bool:
+            raise ValueError('main_photo_enabled must be boolean')
         if self.motion_admission:
             from face_engine.analysis_admission import MotionAdmission
             MotionAdmission(**self.motion_admission)
@@ -217,7 +220,8 @@ class UUIDSources:
                            preferred_stream=self.status['preferred_stream'],
                            ffmpeg_path=self.ffmpeg, sample_fps=2 if self.continuous else 1,
                            **(dict(decode_keyframes_only=self.keyframes_only, main_archive_directory=self.main_archive,
-                                   motion_admission=dict(self.motion_admission)) if self.continuous else {}))
+                                   motion_admission=dict(self.motion_admission),
+                                   main_photo_enabled=self.main_photo_enabled) if self.continuous else {}))
                 for uuid in selected}
 
 

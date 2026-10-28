@@ -307,6 +307,9 @@ class TrajectoryExtractor:
                 if meta.get('purpose') != 'GALLERY_ENROLLMENT':
                     from face_engine.platform_photos import capture_base64
                     observation['capture_photo_base64'] = capture_base64(image, face['bbox'])
+                    # Internal burst selector only; never add these boxes to the
+                    # public observation or use sub coordinates on main video.
+                    output.setdefault('observation_boxes', {})[oid] = np.asarray(face['bbox']).tolist()
                 output["observations"].append(observation)
                 aligned.append(crop)
                 targets.append(observation)
