@@ -475,7 +475,11 @@ class MonitoringRuntime:
 
     @runtime_operation
     def process_photo_window(self, captures):
-        """Durable, bounded per-camera best shot before the first P2 delivery."""
+        """Select originals before delivery, for durable or in-memory windows.
+
+        A None capture key denotes a live ndarray; the normal platform override
+        still checks its committed route before this shared selection runs.
+        """
         from face_engine.main_photo import unpack_burst
         from face_engine.photo_window import select_window
         start = time.monotonic()
@@ -489,7 +493,9 @@ class MonitoringRuntime:
         # Decode one full frame at a time. Only small aligned crops survive
         # detection; there is no unbounded native-resolution frame cache.
         extract = getattr(self.extractor, 'extract_selected', self.extractor.extract_detailed)
-        results = extract((decode_image(raw), meta) for raw, meta in records)
+        def original(raw):
+            return raw if isinstance(raw, np.ndarray) else decode_image(raw)
+        results = extract((original(raw), meta) for raw, meta in records)
         if len(results) != len(records):
             raise ValueError('photo-window extractor returned a different frame count')
         selected = select_window(results)
@@ -499,7 +505,7 @@ class MonitoringRuntime:
             raw, meta = records[fi]
             if capture_clock and not meta.get('time_record'):
                 if fi not in clocks:
-                    clocks[fi] = capture_clock.record(decode_image(raw), meta)
+                    clocks[fi] = capture_clock.record(original(raw), meta)
                 record = clocks[fi]
                 server_received = record.get('source_kind') == 'SERVER_FRAME_RECEIVED'
                 observation['time_record'] = record
@@ -513,10 +519,16 @@ class MonitoringRuntime:
             repeated_embeddings_avoided=sum(x.get('repeated_embeddings_avoided', 0) for x in results),
             embeddings_computed=sum(len(x['observations']) for x in results),
             main_evidence_required=sum(len(x.get('low_resolution_identity_suppressed', [])) for x in results),
-            frames=[dict(original_image_sha256=hashlib.sha256(raw).hexdigest(),
+            frames=[dict(original_image_sha256=(meta.get('encoded_sha256') or
+                    hashlib.sha256(memoryview(np.ascontiguousarray(raw)) if isinstance(raw, np.ndarray) else raw).hexdigest()),
                 frame_id=meta['frame_id'], **{k:v for k,v in result.items() if k != 'observations'})
                 for (raw, meta), result in zip(records, results)])
-        self.store.finish_photo_window([c[0] for c in captures], report, deliveries)
+        keys = [c[0] for c in captures if c[0] is not None]
+        if keys:
+            self.store.finish_photo_window(keys, report, deliveries)
+        else:
+            for item in deliveries:
+                self.store.enqueue(*item)
         with self.stats_lock:
             self.counters['processed_frames'] += len(records)
             self.counters['qualified_faces'] += len(selected)
@@ -528,10 +540,69 @@ class MonitoringRuntime:
                 if len(self.pending_latency) < self.store.max_pending + self.store.max_faces_per_capture:
                     self.pending_latency[(observation['activity_id'], observation['source_id'], observation['observation_id'])] = start
             self.latencies.append(dict(inference_seconds=time.monotonic() - start, acquisition_to_enqueued_seconds=None))
-        meta = captures[0][2]
-        category = self.priority.category(meta['camera_id'], activity_id=meta['activity_id'])
-        self._record_live_completion(encoded([meta['activity_id'], meta['source_id'], meta['camera_id']]), category, time.monotonic())
+        scopes = {(meta['activity_id'], meta['source_id'], meta['camera_id']) for _, meta in records}
+        for activity_id, source_id, camera_id in scopes:
+            category = self.priority.category(camera_id, activity_id=activity_id)
+            self._record_live_completion(encoded([activity_id, source_id, camera_id]), category, time.monotonic())
         return report
+
+    @runtime_operation
+    def _live_infer_cycle(self, first=None):
+        """Read only the live queue; an old capture cannot stall this worker."""
+        first = first or self.queue.pop()
+        if first is None:
+            self.stop_event.wait(.01)
+            return
+        jobs, size = [first], int(first.image.nbytes)
+        deadline = time.monotonic() + min(self.photo_window_seconds, 2.5)
+        # One final frame can cross the byte budget, then collection stops.
+        # Every individual frame is already bounded by FairLatestQueue.
+        max_bytes = min(self.queue.max_bytes, 128 * 1024 * 1024)
+        while len(jobs) < 32 and size < max_bytes and time.monotonic() < deadline:
+            if self.stop_event.is_set():
+                return
+            job = self.queue.pop()
+            if job is None:
+                self.stop_event.wait(.01)
+                continue
+            jobs.append(job)
+            size += int(job.image.nbytes)
+        accepted = {}
+        captures = []
+        for job in jobs:
+            activity_id = job.metadata.get('activity_id')
+            if activity_id not in accepted:
+                accepted[activity_id] = self.store.accepts(activity_id)
+            if accepted[activity_id]:
+                captures.append((None, job.image, job.metadata))
+            else:
+                self.count('inference_or_capacity_errors')
+        if captures:
+            # Keep original pixels and the receipt timestamp. This deliberately
+            # uses extract_selected + select_window, including the main-face
+            # veto, rather than the single-frame delivery shortcut.
+            report = self.process_photo_window(captures)
+            self.count('live_photo_windows_processed')
+            self.count('live_frames_processed', len(captures))
+            self.count('live_faces_selected', report['selected_faces'])
+
+    def _live_infer_loop(self):
+        while not self.stop_event.is_set():
+            if not self.analysis_budget.wait(self.stop_event):
+                break
+            try:
+                self._live_infer_cycle()
+            except MaintenancePaused:
+                self.stop_event.wait(.05)
+            except Exception as error:
+                self.count('inference_or_capacity_errors')
+                self.count('live_inference_error_' + type(error).__name__)
+                trace = error.__traceback__
+                while trace and trace.tb_next:
+                    trace = trace.tb_next
+                if trace:
+                    self.count('live_inference_error_at_' + trace.tb_frame.f_code.co_name + '_' + str(trace.tb_lineno))
+                self.stop_event.wait(.25)
 
     def _record_live_completion(self, camera_id, category, completed):
         with self.stats_lock:
@@ -574,7 +645,7 @@ class MonitoringRuntime:
                 self.stop_event.wait(.05)
 
     @runtime_operation
-    def _infer_cycle(self, capture_turn):
+    def _infer_cycle(self, capture_turn, *, history_only=False):
         def next_capture():
             with self.capture_claim_lock:
                 now = time.monotonic()
@@ -589,8 +660,8 @@ class MonitoringRuntime:
                     if item[2].get('photo_window_managed') is True and self.photo_window_seconds > 0:
                         self.photo_scope_reservations[(item[2]['activity_id'], item[2]['source_id'])] = item[0]
                 return item
-        capture = next_capture() if capture_turn else None
-        job = None if capture else self.queue.pop()
+        capture = next_capture() if capture_turn or history_only else None
+        job = None if capture or history_only else self.queue.pop()
         if job is None and capture is None:
             capture = next_capture()
         capture_turn = not capture_turn
@@ -628,7 +699,7 @@ class MonitoringRuntime:
                 else:
                     self.process_frame(decode_image(body), metadata, capture_key=key)
             else:
-                self.process_frame(job.image, job.metadata, received_monotonic=job.received_monotonic, scheduling_category=job.category)
+                self._live_infer_cycle(job)
         except (ValueError, KeyError) as error:
             self.count('input_errors')
             if photo_scope is not None:
@@ -669,13 +740,13 @@ class MonitoringRuntime:
                         self.photo_scope_inflight.discard(photo_scope)
         return capture_turn
 
-    def _infer_loop(self):
+    def _infer_loop(self, *, history_only=False):
         capture_turn = True
         while not self.stop_event.is_set():
             if not self.analysis_budget.wait(self.stop_event):
                 break
             try:
-                capture_turn = self._infer_cycle(capture_turn)
+                capture_turn = self._infer_cycle(capture_turn, history_only=history_only)
             except MaintenancePaused:
                 self.stop_event.wait(.05)
 
@@ -798,7 +869,12 @@ class MonitoringRuntime:
                 camera.start()
             for reader in self.hikvision:
                 reader.start()
-            operations = [('infer' if i==0 else 'infer-'+str(i), self._infer_loop) for i in range(self.inference_workers)]
+            if self.inference_workers > 1:
+                operations = [('infer', self._live_infer_loop)]
+                operations += [('infer-'+str(i), lambda: self._infer_loop(history_only=True))
+                    for i in range(1, self.inference_workers)]
+            else:
+                operations = [('infer', self._infer_loop)]
             operations += [('deliver', self._send_loop), ('sample', self._poll_loop)]
             if self.capture_ingress is not None:
                 operations.append(('ingress',self._ingress_loop))

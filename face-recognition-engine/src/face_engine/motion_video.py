@@ -22,9 +22,9 @@ import cv2
 
 cv2.setNumThreads(1)
 
-from face_engine.acquisition import _base_metadata
+from face_engine.acquisition import Frame, _base_metadata
 from face_engine.analysis_admission import SceneMotionGate
-from face_engine.uuid_sources import PrivateRTSPReader
+from face_engine.uuid_sources import FailoverCamera, PrivateRTSPReader
 
 
 def _write(path, value):
@@ -75,9 +75,15 @@ def _spool_room(root, maximum, reserve):
 class MotionVideoCamera:
     def __init__(self, sub_url, main_url, source_id, camera_id, *, on_capture,
                  motion_video, activity_routes=(), ffmpeg='ffmpeg', sample_fps=2,
-                 camera_clock=None, connection=None, **legacy):
+                 camera_clock=None, connection=None, on_live_frame=None, **legacy):
         self.source_id,self.camera_id=source_id,camera_id;self.sub_url=sub_url;self.main_url=main_url
         self.callback=on_capture;self.ffmpeg=ffmpeg;self.settings=dict(motion_video)
+        enabled=self.settings.get('live_camera_ids')
+        if enabled is not None and (not isinstance(enabled,list) or any(not isinstance(v,str) for v in enabled)):
+            raise ValueError('live_camera_ids must be a camera UUID list')
+        self.live_enabled=enabled is None or camera_id in enabled
+        self.on_live_frame=on_live_frame;self.live_frame=None;self.live_last_published=0;self.live_consumed_id=None
+        self.camera_clock=camera_clock;self.connection=connection
         devices=self.settings.get('cuda_decode_devices',[])
         if not isinstance(devices,list) or any(type(d) is not int or d<0 for d in devices):raise ValueError('invalid CUDA decode devices')
         self.cuda_device=devices[int(hashlib.sha256(camera_id.encode()).hexdigest()[:8],16)%len(devices)] if devices else None
@@ -179,6 +185,50 @@ class MotionVideoCamera:
                 with self.lock:self.recorder=None;self.recording_session=None
             self.stop_event.wait(1)
     def _motion(self):
+        if not self.live_enabled:return self._motion_preview()
+        reader=None;last=None;gate=SceneMotionGate();cuda_slot=None;device=None
+        try:
+            if self.cuda_device is not None:
+                with _CUDA_LOCK:slot=_CUDA_READERS.setdefault(self.cuda_device,threading.BoundedSemaphore(1))
+                if slot.acquire(blocking=False):cuda_slot=slot;device=self.cuda_device
+            reader=FailoverCamera(self.sub_url,self.main_url,self.source_id,self.camera_id,
+                ffmpeg=self.ffmpeg,sample_fps=self.fps,preferred_stream='main',decode_keyframes_only=False)
+            if device is not None:
+                def native_reader(*args,**kwargs):
+                    kwargs.update(ffmpeg=self.hardware_ffmpeg,decode_cuda_device=device,cpu_ffmpeg=self.ffmpeg,
+                        concat_input_options=self.settings.get('hardware_concat_options',True))
+                    return PrivateRTSPReader(*args,**kwargs)
+                reader.reader_type=native_reader
+            with self.lock:self.motion_reader=reader
+            reader.start()
+            idle_seconds=float(self.settings.get('idle_face_check_seconds',60))
+            while not self.stop_event.is_set():
+                frame=reader.latest(after_frame_id=last,max_age_s=2)
+                if frame is None:
+                    self.stop_event.wait(.02);continue
+                last=frame.metadata['frame_id'];active=gate.admit(frame.image_bgr,frame.received_monotonic)
+                with self.lock:
+                    self.history.append((frame.metadata['received_at_unix_ms'],active));self.stats['frames']+=1
+                    self.stats['idle_frames']+=not active;self.last_frame_at=frame.received_monotonic
+                if not active and frame.received_monotonic-self.live_last_published<idle_seconds:continue
+                if frame.encoded_image is None:continue
+                meta=dict(frame.metadata,capture_origin='LIVE_MOTION_VIDEO',motion_scene_active=active,
+                    detection_native_tiles=frame.metadata.get('stream_kind')=='main')
+                if self.camera_clock:
+                    profile=self.camera_clock.for_capture(self.camera_id,self.connection)
+                    if profile:meta['camera_clock_profile']=profile
+                # Keep the decoder's JPEG. MotionGate alone shrinks its own working image.
+                current=Frame(None,meta,frame.received_monotonic,frame.encoded_image)
+                with self.lock:
+                    self.live_frame=current;self.live_last_published=frame.received_monotonic
+                    self.stats['live_published']=self.stats.get('live_published',0)+1
+                if self.on_live_frame:self.on_live_frame(current)
+        except Exception:
+            with self.lock:self.stats['last_error']='LIVE_FEED_UNAVAILABLE_MAIN_VIDEO_RETAINED'
+        finally:
+            if reader:reader.stop()
+            if cuda_slot:cuda_slot.release()
+    def _motion_preview(self):
         reader=None;last=None;gate=SceneMotionGate();cuda_slot=None;device=None
         try:
             if self.cuda_device is not None:
@@ -363,14 +413,24 @@ class MotionVideoCamera:
                 with self.lock:self.stats['capture_errors']+=1;self.stats.update(last_error='PENDING_VIDEO_RETAINED_FOR_RETRY',last_error_type=type(error).__name__,last_error_function=location.name,last_error_line=location.lineno)
                 self.stop_event.wait(1)
             self.stop_event.wait(.1)
-    def latest(self,*args,**kwargs):return None
+    def latest(self,after_frame_id=None,max_age_s=2):
+        from face_engine.monitoring_service import decode_image
+        with self.lock:
+            frame=self.live_frame
+            if (frame is None or frame.metadata['frame_id'] in (after_frame_id,self.live_consumed_id)
+                    or time.monotonic()-frame.received_monotonic>max_age_s):return None
+            self.live_consumed_id=frame.metadata['frame_id']
+        return Frame(decode_image(frame.encoded_image),frame.metadata,frame.received_monotonic,frame.encoded_image)
     def request_main(self,*args,**kwargs):return None  # Native main frames are already retained.
     def metrics(self):
         with self.lock:
             result=dict(self.stats,continuous=True,motion_video=True,main_photo_enabled=True)
             if self.motion_reader:
-                result['cuda_decode_device']=self.motion_reader.decode_cuda_device
-                result['motion_hardware_fallbacks']=self.motion_reader.metrics().get('hardware_decode_fallbacks',0)
+                current=getattr(self.motion_reader,'reader',self.motion_reader)
+                result['cuda_decode_device']=getattr(current,'decode_cuda_device',None)
+                result['motion_hardware_fallbacks']=current.metrics().get('hardware_decode_fallbacks',0) if current else 0
+            result['live_enabled']=self.live_enabled
+            result['live_frame_id']=self.live_frame.metadata['frame_id'] if self.live_frame else None
             if self.last_frame_at is not None:result['frame_age_seconds']=round(time.monotonic()-self.last_frame_at,3)
             return result
     def stop(self):

@@ -1,5 +1,6 @@
 """Acquisition-only process groups; no face models, matching or public API."""
 import argparse
+from collections import OrderedDict
 import ctypes
 import hashlib
 import ipaddress
@@ -16,6 +17,48 @@ import time
 import uuid
 
 from face_engine.trajectory_bridge import encoded,scoped_event_key
+
+
+class LiveFramePipe:
+    """Latest original JPEG per camera; disk commits never gate this pipe."""
+    def __init__(self, stream, max_bytes=64*1024*1024):
+        self.stream=stream;self.max_bytes=max_bytes;self.bytes=0
+        self.pending=OrderedDict();self.condition=threading.Condition();self.stopped=False
+        self.sent=0;self.replaced=0;self.error=None
+        self.thread=threading.Thread(target=self._run,name='acquisition-live-send',daemon=True)
+        self.thread.start()
+    def offer(self, frame):
+        body=frame.encoded_image
+        if not isinstance(body,bytes) or not 0<len(body)<=12*1024*1024:return
+        header=encoded(dict(metadata=frame.metadata,received_monotonic=frame.received_monotonic)).encode()
+        if len(header)>256*1024:return
+        camera=frame.metadata['camera_id'];size=len(header)+len(body)
+        with self.condition:
+            if self.stopped:return
+            old=self.pending.get(camera)
+            if old:self.bytes-=len(old[0])+len(old[1]);self.replaced+=1
+            # Updating an existing camera preserves its place in the send round.
+            self.pending[camera]=(header,body);self.bytes+=size
+            while self.bytes>self.max_bytes:
+                _,old=self.pending.popitem(last=False);self.bytes-=len(old[0])+len(old[1]);self.replaced+=1
+            self.condition.notify()
+    def _run(self):
+        try:
+            while True:
+                with self.condition:
+                    while not self.pending and not self.stopped:self.condition.wait(.5)
+                    if self.stopped:return
+                    _,(header,body)=self.pending.popitem(last=False);self.bytes-=len(header)+len(body)
+                # Only this independent thread can block on the parent pipe.
+                self.stream.write(struct.pack('>II',len(header),len(body)))
+                self.stream.write(header);self.stream.write(body);self.stream.flush();self.sent+=1
+        except (OSError,ValueError):
+            with self.condition:self.error='LIVE_PIPE_CLOSED';self.stopped=True;self.pending.clear();self.bytes=0
+    def close(self):
+        with self.condition:self.stopped=True;self.pending.clear();self.bytes=0;self.condition.notify()
+    def status(self):
+        with self.condition:return dict(pending=len(self.pending),bytes=self.bytes,sent=self.sent,
+            replaced=self.replaced,last_error=self.error)
 
 
 def atomic_json(path, value):
@@ -117,9 +160,51 @@ class CaptureProcesses:
         self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True,mode=0o700)
         self.ingress=ingress;self.count=count;self.lock=threading.RLock()
         self.entries={};self.processes={};self.configs={};self.last={};self.cached_metrics={};self.next_metrics=0
+        self.live_lock=threading.Lock();self.live_frames=OrderedDict();self.live_bytes=0
+        self.live_max_bytes=128*1024*1024;self.live_threads={}
         self.roots=[ingress.root/('process-'+str(i)) for i in range(count)]
         ingress.external_roots=self.roots
     def group(self,camera):return int(hashlib.sha256(camera.encode()).hexdigest()[:8],16)%self.count
+    def _receive_live(self,index,process):
+        def read_exact(amount):
+            chunks=[]
+            while amount:
+                block=process.stdout.read(amount)
+                if not block:raise EOFError
+                chunks.append(block);amount-=len(block)
+            return b''.join(chunks)
+        try:
+            while True:
+                header_size,body_size=struct.unpack('>II',read_exact(8))
+                if not 0<header_size<=256*1024 or not 0<body_size<=12*1024*1024:raise ValueError('invalid live frame size')
+                header=json.loads(read_exact(header_size));body=read_exact(body_size)
+                metadata=header['metadata'];camera=metadata['camera_id'];received=header['received_monotonic']
+                if self.group(camera)!=index:continue
+                with self.lock:
+                    entry=self.entries.get(camera)
+                    if self.processes.get(index) is not process or not entry:continue
+                    if metadata.get('source_id')!=entry['connection']['source_id']:continue
+                with self.live_lock:
+                    old=self.live_frames.pop(camera,None)
+                    if old:self.live_bytes-=len(old[0])
+                    self.live_frames[camera]=(body,metadata,received);self.live_bytes+=len(body)
+                    while self.live_bytes>self.live_max_bytes:
+                        _,old=self.live_frames.popitem(last=False);self.live_bytes-=len(old[0])
+        except (EOFError,OSError,ValueError,KeyError,TypeError):
+            pass
+        finally:
+            process.stdout.close()
+    def latest(self,camera,after_frame_id=None,max_age_s=2):
+        from face_engine.acquisition import Frame
+        from face_engine.monitoring_service import decode_image
+        # Decode only when consumed; hundreds of cameras retain JPEGs, not BGR copies.
+        with self.live_lock:
+            value=self.live_frames.pop(camera,None)
+            if value:self.live_bytes-=len(value[0])
+        if value is None:return None
+        body,metadata,received=value
+        if metadata.get('frame_id')==after_frame_id or time.monotonic()-received>max_age_s:return None
+        return Frame(decode_image(body),metadata,received,body)
     def configure(self, rows):
         with self.lock:
             self.entries=rows
@@ -156,13 +241,20 @@ class CaptureProcesses:
                     env=dict(os.environ,PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                         OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1')
                     self.processes[index]=subprocess.Popen([sys.executable,'-m','face_engine.capture_process',
-                        '--config',str(path)],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+                        '--config',str(path)],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL,env=env,start_new_session=sys.platform=='linux')
+                    process=self.processes[index]
+                    thread=threading.Thread(target=self._receive_live,args=(index,process),
+                        name='acquisition-live-receive-'+str(index),daemon=True)
+                    self.live_threads[index]=thread;thread.start()
     def remove(self,camera):
         with self.lock:
             if camera not in self.entries:return
             rows=dict(self.entries);rows.pop(camera)
             self.configure(rows)
+            with self.live_lock:
+                old=self.live_frames.pop(camera,None)
+                if old:self.live_bytes-=len(old[0])
     def metrics(self,camera):
         now=time.monotonic()
         with self.lock:
@@ -183,16 +275,21 @@ class CaptureProcesses:
     def close(self):
         with self.lock:
             processes=list(self.processes.values());self.entries={}
-            for p in processes:
-                if p.poll() is None:p.terminate()
-            deadline=time.monotonic()+40
-            for p in processes:
-                try:p.wait(timeout=max(.1,deadline-time.monotonic()))
-                except subprocess.TimeoutExpired:
-                    if sys.platform=='linux' and os.getpgid(p.pid)==p.pid:os.killpg(p.pid,signal.SIGKILL)
-                    else:p.kill()
-                    p.wait(timeout=5)
+        # The pipe receiver must be able to drain while children finish recording.
+        for p in processes:
+            if p.poll() is None:p.terminate()
+        deadline=time.monotonic()+40
+        for p in processes:
+            try:p.wait(timeout=max(.1,deadline-time.monotonic()))
+            except subprocess.TimeoutExpired:
+                if sys.platform=='linux' and os.getpgid(p.pid)==p.pid:os.killpg(p.pid,signal.SIGKILL)
+                else:p.kill()
+                p.wait(timeout=5)
+        with self.lock:
             self.processes.clear();self.last.clear();self.cached_metrics.clear()
+        for thread in self.live_threads.values():thread.join(2)
+        self.live_threads.clear()
+        with self.live_lock:self.live_frames.clear();self.live_bytes=0
 
 
 class ProcessCamera:
@@ -200,9 +297,13 @@ class ProcessCamera:
                  source_id=None, clock=None, connection=None):
         self.camera_id=camera;self.manager=manager;self.main_url=main_url;self.sub_url=sub_url
         self.ffmpeg=ffmpeg;self.source_id=source_id or camera;self.clock=clock;self.connection=connection
+        self.live_last_id=None
         self.callback=True  # Parent persists one-shot main frames through its durable ingress.
     def start(self):return self
-    def latest(self,*args,**kwargs):return None
+    def latest(self,after_frame_id=None,max_age_s=2):
+        frame=self.manager.latest(self.camera_id,after_frame_id or self.live_last_id,max_age_s)
+        if frame is not None:self.live_last_id=frame.metadata['frame_id']
+        return frame
     def metrics(self):return self.manager.metrics(self.camera_id)
     def stop(self):self.manager.remove(self.camera_id)
     def request_main(self,reason='insufficient_face_quality',**kwargs):
@@ -236,6 +337,7 @@ def run_worker(config_path):
         stop.set()
     signal.signal(signal.SIGTERM,terminate)
     ingress=BatchProducer(cfg['ingress_directory'],max_mb=cfg['max_mb'],min_free_mb=cfg['min_free_mb'])
+    live=LiveFramePipe(sys.stdout.buffer)
     readers={};signatures={};current={};routing={};native={};config_lock=threading.Lock()
     class ClockCache:
         def for_capture(self,camera,connection=None):
@@ -304,13 +406,14 @@ def run_worker(config_path):
                     factory=ContinuousCamera;extra={}
                     if motion_video.get('enabled'):
                         from face_engine.motion_video import MotionVideoCamera
-                        factory=MotionVideoCamera;extra=dict(motion_video=motion_video,activity_routes=entry['routes'])
+                        factory=MotionVideoCamera;extra=dict(motion_video=motion_video,
+                            activity_routes=entry['routes'],on_live_frame=live.offer)
                     reader=factory(sub,main,on_capture=lambda body,meta,received,camera=camera:
                         callback(camera,body,meta,received),camera_clock=ClockCache(),**extra,**args)
                     readers[camera]=reader;signatures[camera]=encoded(entry['connection']);reader.start()
                 atomic_json(path.with_suffix('.status.json'),dict(pid=os.getpid(),at_unix_ms=int(time.time()*1000),
                     cameras={camera:reader.metrics() for camera,reader in readers.items()},
-                    auxiliary=[reader.metrics() for reader in native.values()],ingress=ingress.status()))
+                    auxiliary=[reader.metrics() for reader in native.values()],ingress=ingress.status(),live=live.status()))
             except (OSError,ValueError,KeyError):
                 # A missing/bad control file revokes acquisition, never extends
                 # the lifetime of a stale activity or substitutes a UUID.
@@ -321,6 +424,7 @@ def run_worker(config_path):
                 native.clear()
             stop.wait(.5)
     finally:
+        live.close()
         with config_lock:current={};routing={}
         for reader in readers.values():reader.stop()
         for reader in native.values():reader.stop()
