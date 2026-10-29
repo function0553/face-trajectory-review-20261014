@@ -259,7 +259,13 @@ class DeliveryStore:
         for offset in range(0,len(records),4):
             with self.lock, self.db:
                 for header,body in records[offset:offset+4]:
-                    try:key=self._capture_locked(body,header['metadata'],header['category'])
+                    # Earlier durable motion producers used an unsupported
+                    # internal label for idle probes. Recover their original
+                    # evidence without changing public capture categories.
+                    category=header['category']
+                    if category=='BACKGROUND' and header['metadata'].get('capture_origin')=='DURABLE_MOTION_VIDEO':
+                        category='NORMAL'
+                    try:key=self._capture_locked(body,header['metadata'],category)
                     except RetentionExpired:key=header['key']
                     if key!=header['key']:raise EventConflict('batch event identity differs')
                     keys.append(key)

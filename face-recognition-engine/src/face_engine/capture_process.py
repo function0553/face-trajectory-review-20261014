@@ -252,7 +252,7 @@ def run_worker(config_path):
                 if context.get('source_id')!=metadata.get('source_id'):raise ValueError('recorded source conflict')
                 if metadata['received_at_unix_ms']<route['since_unix_ms']:continue
                 category='PRIORITY' if metadata.get('motion_scene_active') else (
-                    'PRIORITY' if route.get('category')=='PRIORITY' else 'BACKGROUND')
+                    'PRIORITY' if route.get('category')=='PRIORITY' else 'NORMAL')
                 ingress.push(body,dict(metadata,**context),category);accepted+=1
             if not accepted:raise ValueError('recorded frame predates its committed activity route')
             return
