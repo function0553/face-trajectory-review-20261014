@@ -232,12 +232,15 @@ class MotionVideoCamera:
                 if slot.acquire(blocking=False):cuda_slot=slot;device=self.cuda_device
             reader=FailoverCamera(None if self.main_only else self.sub_url,self.main_url,self.source_id,self.camera_id,
                 ffmpeg=self.ffmpeg,sample_fps=self.fps,preferred_stream=self.live_preferred_stream,decode_keyframes_only=False)
-            if device is not None:
-                def native_reader(*args,**kwargs):
+            def native_reader(*args,**kwargs):
+                # Only motion screening sees a reduced JPEG decode. The encoded
+                # main image is unchanged and inference decodes its full pixels.
+                kwargs['motion_decode_scale']=4
+                if device is not None:
                     kwargs.update(ffmpeg=self.hardware_ffmpeg,decode_cuda_device=device,cpu_ffmpeg=self.ffmpeg,
                         concat_input_options=self.settings.get('hardware_concat_options',True))
-                    return PrivateRTSPReader(*args,**kwargs)
-                reader.reader_type=native_reader
+                return PrivateRTSPReader(*args,**kwargs)
+            reader.reader_type=native_reader
             with self.lock:self.motion_reader=reader
             reader.start()
             idle_seconds=float(self.settings.get('idle_face_check_seconds',60))
@@ -249,6 +252,8 @@ class MotionVideoCamera:
                 with self.lock:
                     self.history.append((frame.metadata['received_at_unix_ms'],active));self.stats['frames']+=1
                     self.stats['idle_frames']+=not active;self.last_frame_at=frame.received_monotonic
+                    self.stats['motion_thumbnail_scale']=frame.metadata.get('motion_thumbnail_scale',1)
+                    self.stats['original_image_dimensions']=frame.metadata.get('encoded_image_dimensions')
                 if not active and frame.received_monotonic-self.live_last_published<idle_seconds:continue
                 if frame.encoded_image is None:continue
                 meta=dict(frame.metadata,capture_origin='LIVE_MOTION_VIDEO',motion_scene_active=active,
@@ -481,11 +486,11 @@ class MotionVideoCamera:
         frames=0
         try:
             while not self.stop_event.is_set():
-                try:image,extra=parser._read_output(process.stdout)
+                try:body,extra=parser.read_encoded_output(process.stdout)
                 except (OSError,ValueError) as error:
                     if device is not None:raise _HardwareDecodeFailure('NVDEC_READ_'+type(error).__name__,frames) from error
                     raise
-                if image is None:break
+                if body is None:break
                 if frames<start_frame:
                     frames+=1;continue
                 at=job['start_unix_ms']+round(frames*1000/self.fps)
@@ -498,7 +503,7 @@ class MotionVideoCamera:
                     detection_native_tiles=job['stream_kind']=='main',
                     motion_scene_active=job.get('active',True),
                     _durable_routes=job['routes'])
-                body=extra['_encoded_image'];received=time.monotonic()-(time.time()-at/1000)
+                received=time.monotonic()-(time.time()-at/1000)
                 while not self.stop_event.is_set():
                     try:self.callback(body,meta,received);break
                     except Exception:

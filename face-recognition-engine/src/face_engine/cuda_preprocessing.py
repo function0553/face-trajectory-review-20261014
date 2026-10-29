@@ -6,6 +6,8 @@ import numpy as np
 class CUDAInput:
     def __init__(self, session):
         import torch
+        # CUDA tensor preparation must not create a venue-wide CPU thread pool.
+        torch.set_num_threads(1)
         if session.get_providers()[0] != 'CUDAExecutionProvider':
             raise RuntimeError('GPU preprocessing requires an active CUDA model')
         options = session.get_provider_options().get('CUDAExecutionProvider', {})

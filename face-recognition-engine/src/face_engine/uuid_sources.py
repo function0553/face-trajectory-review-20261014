@@ -390,6 +390,9 @@ class PrivateRTSPReader(LatestFrameReader):
         self.cpu_ffmpeg=kwargs.pop('cpu_ffmpeg',None)
         self.concat_input_options=kwargs.pop('concat_input_options',True)
         self.motion_preview=kwargs.pop('motion_preview',False)
+        self.motion_decode_scale=kwargs.pop('motion_decode_scale',1)
+        if type(self.motion_decode_scale) is not int or self.motion_decode_scale not in (1,2,4,8):
+            raise ValueError('motion_decode_scale must be 1, 2, 4 or 8')
         if self.decode_cuda_device is not None and (type(self.decode_cuda_device) is not int or self.decode_cuda_device<0):
             raise ValueError('decode_cuda_device must be a nonnegative integer')
         archive=kwargs.pop('main_archive_directory',None)
@@ -476,7 +479,8 @@ class PrivateRTSPReader(LatestFrameReader):
                 self._connect_held = False
                 _RTSP_CONNECT_SLOTS.release()
 
-    def _read_output(self, stream):
+    def read_encoded_output(self, stream):
+        """Read the original JPEG without decoding pixels that ingress discards."""
         try:
             while True:
                 if (self._preferred_cuda_device is not None and self.decode_cuda_device is None
@@ -510,15 +514,12 @@ class PrivateRTSPReader(LatestFrameReader):
                         position+=length
                     if not dimensions or min(dimensions)<1 or dimensions[0]*dimensions[1]>self.max_pixels:
                         raise ValueError('oversized decoder JPEG')
-                    import cv2,numpy as np
-                    image=cv2.imdecode(np.frombuffer(body,np.uint8),cv2.IMREAD_COLOR)
-                    if image is None or image.shape[:2]!=dimensions:raise ValueError('invalid decoded JPEG image')
-                    evidence={'_encoded_image':body}
+                    evidence={'_encoded_image':body,'encoded_image_dimensions':[dimensions[1],dimensions[0]]}
                     if self.archive_directory:
                         evidence['main_video_archive_directory']=str(self.archive_directory)
                         evidence['archive_timing_basis']='RECEIVE_CLOCK_NOT_CAPTURE'
                     evidence['decode_keyframes_only']=self.decode_keyframes_only
-                    return image,evidence
+                    return body,evidence
                 if len(self._jpeg_buffer)>12*1024*1024:raise ValueError('decoder JPEG byte limit exceeded')
                 block=getattr(stream,'read1',stream.read)(65536)
                 if not block:
@@ -528,6 +529,20 @@ class PrivateRTSPReader(LatestFrameReader):
                 self._jpeg_buffer.extend(block)
         finally:
             self._release_connect()
+
+    def _read_output(self, stream):
+        body,evidence=self.read_encoded_output(stream)
+        if body is None:return None,evidence
+        import cv2,numpy as np
+        scale=self.motion_decode_scale
+        flags={1:cv2.IMREAD_COLOR,2:cv2.IMREAD_REDUCED_COLOR_2,
+               4:cv2.IMREAD_REDUCED_COLOR_4,8:cv2.IMREAD_REDUCED_COLOR_8}
+        image=cv2.imdecode(np.frombuffer(body,np.uint8),flags[scale])
+        width,height=evidence['encoded_image_dimensions']
+        expected=((height+scale-1)//scale,(width+scale-1)//scale)
+        if image is None or image.shape[:2]!=expected:raise ValueError('invalid decoded JPEG image')
+        if scale!=1:evidence['motion_thumbnail_scale']=scale
+        return image,evidence
 
     def _prune_archive(self):
         # Unacknowledged recording is evidence, not a rolling cache.
