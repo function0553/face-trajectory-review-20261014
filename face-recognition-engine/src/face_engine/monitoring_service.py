@@ -644,8 +644,14 @@ class MonitoringRuntime:
             # for retry. Release its image-bearing exception stack before the
             # operation fence drains and hands the consumer lease to C++.
             return capture_turn
-        except Exception:
+        except Exception as error:
             self.count('inference_or_capacity_errors')
+            self.count('inference_error_' + type(error).__name__)
+            trace = error.__traceback__
+            while trace and trace.tb_next:
+                trace = trace.tb_next
+            if trace:
+                self.count('inference_error_at_' + trace.tb_frame.f_code.co_name + '_' + str(trace.tb_lineno))
             if capture:
                 with self.capture_claim_lock:
                     if len(self.capture_retry_at)<256:

@@ -29,17 +29,18 @@ class AdmissionEvidence(unittest.TestCase):
             attempts.append(args)
             if len(attempts) == 1:
                 raise RuntimeError('inbox temporarily full')
-        camera = ContinuousCamera('sub', 'main', 'S', 'C', on_capture=capture)
+        camera = ContinuousCamera('sub', 'main', 'S', 'C', on_capture=capture,main_photo_enabled=False)
         image = np.zeros((54, 96, 3), np.uint8)
         camera._accept(b'original', image, {'stream_kind': 'sub'}, 0)
         camera._accept(b'original', image, {'stream_kind': 'sub'}, .5)
         self.assertEqual(len(attempts), 2)
         self.assertEqual(camera.metrics()['persisted_candidates'], 1)
-        self.assertEqual(camera.motion.stats()['persistence_retry_resets'], 1)
+        self.assertEqual(attempts[0][0],attempts[1][0])
+        self.assertEqual(camera.motion.stats().get('persistence_retry_resets',0),0)
 
     def test_stream_switch_checks_first_frame_of_new_stream(self):
         captures = []
-        camera = ContinuousCamera('sub', 'main', 'S', 'C', on_capture=lambda *args: captures.append(args))
+        camera = ContinuousCamera('sub', 'main', 'S', 'C', on_capture=lambda *args: captures.append(args),main_photo_enabled=False)
         image = np.zeros((54, 96, 3), np.uint8)
         camera._accept(b'sub-original', image, {'stream_kind': 'sub'}, 0)
         camera._accept(b'sub-next', image, {'stream_kind': 'sub'}, 3)

@@ -107,6 +107,7 @@ class DeliveryStore:
             # time keeps those refusals (each a full P2 recognition and rollback) from
             # crowding out other activities; see _blocked_share for their queue share.
             self.blocked = {}
+            self.capture_routes = None
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA synchronous=FULL")
             # Image-bearing imports otherwise evict the tiny default page
@@ -223,28 +224,32 @@ class DeliveryStore:
     def capture_room(self):
         with self.lock:return max(0,self.max_pending-self._pending_count('captures'))
 
-    def prune_capture_cache(self, max_age_seconds, *, max_rows=256, exclude_keys=()):
-        """Drop expired queue images under an explicit cache-retention policy.
+    @staticmethod
+    def capture_route(metadata):
+        return tuple(metadata.get(k) for k in ('activity_id','activity_num','source_id','camera_id','route_rule_id'))
 
-        Keep immutable IDs/hashes and a QUARANTINED receipt, so a duplicate
-        import cannot recreate an evicted frame or claim it was recognized.
-        Recognition receipts and queued deliveries are never removed here.
-        """
-        if max_age_seconds<=0:raise ValueError('positive capture cache age required')
-        cutoff=time.time()-max_age_seconds
-        with self.lock,self.db:
+    def set_capture_routes(self, routes):
+        """Retain revoked originals without letting them block current routes."""
+        routes=frozenset(tuple(row) for row in routes)
+        with self.lock, self.db:
+            changed=routes!=self.capture_routes
+            if not changed and self._pending_count('captures')>=self.max_pending:return
             retention_write_guard(self.db)
-            excluded=tuple(exclude_keys)
-            if len(excluded)>512:raise ValueError('too many in-flight capture exclusions')
-            condition="status='PENDING' AND image IS NOT NULL AND created<?"
-            if excluded:condition+=' AND id NOT IN ('+','.join('?'*len(excluded))+')'
-            rows=self.db.execute('SELECT id,created FROM captures INDEXED BY pending_capture_scope WHERE '+condition+' ORDER BY created,id LIMIT ?',
-                (cutoff,*excluded,max_rows)).fetchall()
-            for key,created in rows:
-                report=encoded(dict(status='QUARANTINED',reason='CACHE_RETENTION_UNPROCESSED',
-                    recognition_completed=False,received_created_unix_ms=int(created*1000)))
-                self.db.execute("UPDATE captures SET image=NULL,result=?,status='QUARANTINED' WHERE id=? AND status='PENDING'",(report,key))
-            return len(rows)
+            self.capture_routes=routes
+            self.db.execute('CREATE TEMP TABLE IF NOT EXISTS allowed_capture_routes(a TEXT,n TEXT,s TEXT,c TEXT,r TEXT,PRIMARY KEY(a,n,s,c,r))')
+            if changed:
+                self.db.execute('DELETE FROM allowed_capture_routes')
+                self.db.executemany('INSERT INTO allowed_capture_routes VALUES(?,?,?,?,?)',routes)
+            allowed="EXISTS (SELECT 1 FROM allowed_capture_routes x WHERE x.a=captures.activity_id AND x.n=json_extract(captures.metadata,'$.activity_num') AND x.s=captures.source_id AND x.c=json_extract(captures.metadata,'$.camera_id') AND x.r=json_extract(captures.metadata,'$.route_rule_id'))"
+            if changed:self.db.execute("UPDATE captures SET status='HELD_ROUTE' WHERE status='PENDING' AND image IS NOT NULL AND NOT "+allowed)
+            room=max(0,self.max_pending-self._pending_count('captures'))
+            self.db.execute("UPDATE captures SET status='PENDING' WHERE id IN (SELECT id FROM captures WHERE status='HELD_ROUTE' AND image IS NOT NULL AND "+allowed+" ORDER BY created,id LIMIT ?)",(room,))
+
+    def prune_capture_cache(self, max_age_seconds, *, max_rows=256, exclude_keys=()):
+        """Never expire an unprocessed image to make room for a newer one."""
+        if max_age_seconds<=0:raise ValueError('positive capture cache age required')
+        return 0
+
 
     def capture_batch(self, records):
         # Publish small durable chunks so a large multi-camera batch cannot
@@ -272,6 +277,8 @@ class DeliveryStore:
         try:
             context = activity_context(metadata)
             status, report = 'PENDING', None
+            if self.capture_routes is not None and self.capture_route(metadata) not in self.capture_routes:
+                status='HELD_ROUTE'
         except ActivityContextError:
             context, status = {}, 'QUARANTINED'
             report = encoded({'status': status, 'reason': 'ACTIVITY_CONTEXT_REQUIRED'})
@@ -481,6 +488,7 @@ class DeliveryStore:
             age = self.db.execute("SELECT min(created) FROM deliveries WHERE status='PENDING'").fetchone()[0]
             capture_age = self.db.execute("SELECT min(created) FROM captures INDEXED BY pending_capture_scope WHERE status='PENDING' AND image IS NOT NULL").fetchone()[0]
             return {"deliveries": counts, "captures_pending": self._pending_count('captures'),
+                    "captures_held_route": self.db.execute("SELECT count(*) FROM captures WHERE status='HELD_ROUTE'").fetchone()[0],
                     "captures_quarantined": self.db.execute("SELECT count(*) FROM captures WHERE status='QUARANTINED'").fetchone()[0],
                     "oldest_capture_age_seconds": max(0, time.time()-capture_age) if capture_age else 0,
                     "oldest_delivery_age_seconds": max(0, time.time()-age) if age else 0}

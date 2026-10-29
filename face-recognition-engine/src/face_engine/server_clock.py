@@ -41,6 +41,12 @@ class ServerReceivedClock:
         first, last = day*86400000, (day+1)*86400000
         # Include a margin around day boundaries for clock quantization.
         version = 'server-receive-v1:'+self.node+':'+str(day)
+        uncertainty=1000
+        if 'video_segment_start_unix_ms' in metadata:
+            uncertainty=metadata.get('server_receive_uncertainty_ms',-1)
+            if type(uncertainty) is not int or not 1000<=uncertainty<=60000:
+                raise ValueError('bounded segment reception uncertainty required')
+            version='server-video-receive-v1:'+self.node+':'+str(day)+':'+str(uncertainty)
         camera = metadata['camera_id']
         key = camera, version
         with self.lock:
@@ -56,7 +62,7 @@ class ServerReceivedClock:
                     fixed_utc_offset_minutes=0, calibrations=[dict(calibration_id=version,
                         source_evidence_id=version, valid_from_utc_ms=first-60000,
                         valid_until_utc_ms=last+60000, offset_ms=0,
-                        uncertainty_ms=1000, time_resolution_ms=1)])
+                        uncertainty_ms=uncertainty, time_resolution_ms=1)])
                 request = urllib.request.Request(self.endpoint+'/v1/clocks/profiles',
                     data=json.dumps(dict(profile=profile)).encode(),
                     headers={'Authorization':self.authorization,'Content-Type':'application/json'})

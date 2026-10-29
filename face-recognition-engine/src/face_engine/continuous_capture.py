@@ -103,17 +103,20 @@ class ContinuousCamera:
         self._persist(body, metadata, now)
 
     def _persist(self, body, metadata, now):
-        try:
-            if self.main_photo_enabled:
-                metadata = dict(metadata, photo_window_managed=True)
-            self.callback(body, metadata, now)
-            with self.lock:
-                self.state['persisted_candidates'] += 1
-        except Exception:
-            self.motion.capture_failed()
-            with self.lock:
-                self.state['inbox_errors'] += 1
-                self.state['last_error'] = 'DURABLE_INBOX_REFUSED_CAPTURE'
+        if self.main_photo_enabled:
+            metadata = dict(metadata, photo_window_managed=True)
+        while not self.stop_event.is_set():
+            try:
+                self.callback(body, metadata, now)
+                with self.lock:
+                    self.state['persisted_candidates'] += 1
+                return
+            except Exception:
+                with self.lock:
+                    self.state['inbox_errors'] += 1
+                    self.state['state'] = 'WAITING_DURABLE_STORAGE'
+                    self.state['last_error'] = 'DURABLE_INBOX_BACKPRESSURE_RETAINING_FRAME'
+                self.stop_event.wait(.25)
 
     def _emit_photo(self, frames, received):
         if not frames:

@@ -19,6 +19,8 @@ from contextlib import redirect_stdout, contextmanager
 from pathlib import Path
 
 import numpy as np
+import cv2
+cv2.setNumThreads(1)
 from face_engine.alignment.face_align import align_face
 
 
@@ -226,6 +228,7 @@ class TrajectoryExtractor:
         """
         from face_engine.quality import evaluate_face_quality, alignment_rejection
         outputs, aligned, targets = [], [], []
+        native_previous={}
         for image, meta in frames:
             if not isinstance(meta, dict):
                 raise ValueError("acquisition metadata must be a dictionary")
@@ -256,6 +259,11 @@ class TrajectoryExtractor:
             if not isinstance(per_face_meta, dict):
                 raise ValueError("faces metadata must be a dictionary keyed by detection index")
             faces = self.detector.detect_faces(image)
+            if meta.get('stream_kind')=='main' and meta.get('detection_native_tiles') is True:
+                from face_engine.native_tiles import motion_region_faces
+                key=(meta['source_id'],meta['camera_id'],image.shape[:2])
+                if not faces:faces=motion_region_faces(self.detector,image,native_previous.get(key))
+                native_previous[key]=cv2.cvtColor(cv2.resize(image,(320,180)),cv2.COLOR_BGR2GRAY)
             if not faces and meta.get("stream_kind") not in ("sub", "main"):
                 # Still photos and camera face captures may be tight high-resolution
                 # close-ups that the standard input misses. Continuous video frames

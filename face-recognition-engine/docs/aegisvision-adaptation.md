@@ -14,7 +14,7 @@ face model is installed by this adaptation.
   both the previous frame and the last admitted frame catches gradual movement
   that stays below the change threshold between adjacent frames.
 * The first frame, a stream switch, and a finite idle deadline admit a frame.
-  A failed durable write resets admission so the next unchanged frame retries.
+  A failed durable write retries the same original frame before progressing.
 * Moving scenes keep the existing capture frequency and two-second motion tail.
   Idle scenes admit at the configured maximum interval. All bound streams stay
   open; this does not rotate cameras or use a person's identity to prioritize one.
@@ -41,7 +41,10 @@ Private runtime configuration, with no change to backend requests:
 }
 ```
 
-The bounded rolling video cache from the previous release remains in place.
+The optional [continuous motion-video mode](motion-video-coverage.md) replaces the
+overwriting rolling cache with durable encoded segments, camera-local background
+subtraction and fair deferred native-frame decoding. Pending originals are retained;
+capacity pressure is explicit instead of deleting unprocessed evidence.
 Camera metrics expose `motion_admission`; runtime health exposes `analysis_budget`.
 Counters distinguish idle skips, cumulative motion and maximum-gap admissions.
 Admission is not recognition success or a backend receipt. A maximum admission

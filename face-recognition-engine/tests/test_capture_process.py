@@ -134,7 +134,7 @@ class IndependentCapture(unittest.TestCase):
                 while not status.exists() and process.poll() is None and time.monotonic()<deadline:time.sleep(.05)
                 self.assertTrue(status.exists())
                 self.assertEqual(json.loads(status.read_text())['pid'],process.pid)
-                process.terminate();self.assertEqual(process.wait(timeout=5),-signal.SIGKILL)
+                process.terminate();self.assertEqual(process.wait(timeout=5),0)
             finally:
                 if process.poll() is None:os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=5)
 

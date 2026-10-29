@@ -225,12 +225,16 @@ std::vector<Row> Inventory(sqlite3* db,const ClockAdapter& clocks,std::int64_t n
         const auto hash=columns.count("hash")?"hash":columns.count("fingerprint")?"fingerprint":columns.count("payload_hash")?"payload_hash":"''";
         const auto body=columns.count("metadata")?"metadata":columns.count("payload")?"payload":"NULL";
         const auto route=columns.count("route")?"route":"''";
-        Statement s(db,std::string("SELECT id,")+hash+","+body+","+route+" FROM "+name+" ORDER BY id");
+        const auto pending=columns.count("status")?"status IN ('PENDING','HELD_ROUTE')":columns.count("image")?"image IS NOT NULL":"0";
+        Statement s(db,std::string("SELECT id,")+hash+","+body+","+route+","+pending+" FROM "+name+" ORDER BY id");
         while(s.Step()==SQLITE_ROW) {
             Row row{name,s.Text(0),s.Text(1),s.Text(3),Parse(s.Text(2))};
             if(row.hash.size()!=64 || !std::all_of(row.hash.begin(),row.hash.end(),[](unsigned char c){return (c>='0'&&c<='9')||(c>='a'&&c<='f');}))
                 row.hash=ActivityStore::Digest(row.hash.empty()?s.Text(2):row.hash);
             try {Qualify(row,clocks,now);} catch(const std::exception&) {}
+            // Queue age is not a processing acknowledgement. Preserve pending
+            // images and deliveries even if a clock profile is not yet ready.
+            if(s.Text(4)=="1")row.expired=false;
             rows.push_back(std::move(row));
         }
     }

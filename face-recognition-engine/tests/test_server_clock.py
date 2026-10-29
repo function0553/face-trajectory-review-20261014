@@ -33,6 +33,19 @@ class ServerClock(unittest.TestCase):
             clock=ServerReceivedClock(dict(evidence_dir=directory),'http://127.0.0.1:1','Bearer unit-only')
             with self.assertRaisesRegex(ValueError,'original server'):
                 clock.record(None,dict(camera_id='C',source_id='C',frame_id='original'))
+    def test_delayed_video_uses_recording_time_and_separate_uncertainty_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            clock=ServerReceivedClock(dict(evidence_dir=directory),'http://127.0.0.1:1','Bearer unit-only')
+            received=int(time.time()*1000)-600000
+            meta=dict(camera_id='C',source_id='C',frame_id='recorded-video:0',received_at_unix_ms=received,
+                video_segment_start_unix_ms=received,server_receive_uncertainty_ms=4000)
+            synced=type('Synced',(),dict(returncode=0,stdout='yes\n'))()
+            with patch('face_engine.server_clock.subprocess.run',return_value=synced),patch.object(clock.opener,'open',return_value=io.BytesIO(b'{"ok":true}')) as posted:
+                record=clock.record(None,meta)
+            profile=json.loads(posted.call_args.args[0].data)['profile']
+            self.assertEqual(profile['calibrations'][0]['uncertainty_ms'],4000)
+            from datetime import datetime
+            self.assertEqual(round(datetime.fromisoformat(record['raw_time']).timestamp()*1000),received)
 
 
 if __name__=='__main__':unittest.main()

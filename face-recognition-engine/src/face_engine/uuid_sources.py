@@ -56,6 +56,10 @@ class UUIDSources:
             raise ValueError('preferred_stream must be main or sub')
         self.keyframes_only = settings.get('continuous_decode_keyframes_only', False)
         self.motion_admission = dict(settings.get('motion_admission', {}))
+        self.motion_video = dict(settings.get('motion_video', {}))
+        if self.motion_video.get('enabled'):
+            if not isinstance(self.motion_video.get('directory'),str) or not Path(self.motion_video['directory']).is_absolute():
+                raise ValueError('motion-video directory must be absolute')
         self.main_photo_enabled = settings.get('main_photo_enabled', True)
         if type(self.main_photo_enabled) is not bool:
             raise ValueError('main_photo_enabled must be boolean')
@@ -221,7 +225,8 @@ class UUIDSources:
                            ffmpeg_path=self.ffmpeg, sample_fps=2 if self.continuous else 1,
                            **(dict(decode_keyframes_only=self.keyframes_only, main_archive_directory=self.main_archive,
                                    motion_admission=dict(self.motion_admission),
-                                   main_photo_enabled=self.main_photo_enabled) if self.continuous else {}))
+                                   main_photo_enabled=self.main_photo_enabled,
+                                   motion_video=dict(self.motion_video)) if self.continuous else {}))
                 for uuid in selected}
 
 
@@ -458,15 +463,9 @@ class PrivateRTSPReader(LatestFrameReader):
             self._release_connect()
 
     def _prune_archive(self):
-        # Keep the active four-segment ring. Old sessions are cache, not an NVR;
-        # allow sixty seconds for an earlier decoder to close its last segment.
-        cutoff=time.time()-60
-        for path in self.archive_directory.glob('*.mkv'):
-            if self.archive_session and path.name.startswith(self.archive_session+'-'):
-                continue
-            try:
-                if not path.is_symlink() and path.stat().st_mtime<cutoff:path.unlink()
-            except FileNotFoundError:pass
+        # Unacknowledged recording is evidence, not a rolling cache.
+        return
+
 
     def stop(self, *args, **kwargs):
         self._release_connect()
@@ -489,7 +488,7 @@ class PrivateRTSPReader(LatestFrameReader):
             session=uuid_module.uuid4().hex
             self.archive_session=session
             archive=['-map','0:v:0','-an','-sn','-dn','-c:v','copy','-f','segment',
-                     '-segment_time','30','-segment_wrap','4','-reset_timestamps','1','-segment_format','matroska',
+                     '-segment_time','30','-reset_timestamps','1','-segment_format','matroska',
                      str(self.archive_directory/(session+'-%06d.mkv'))]
         return [self.ffmpeg, '-hide_banner', '-loglevel', 'error', '-nostdin',
                 '-threads', '1', '-filter_threads', '1', '-filter_complex_threads', '1',

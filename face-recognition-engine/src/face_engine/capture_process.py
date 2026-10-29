@@ -188,7 +188,10 @@ class CaptureProcesses:
             deadline=time.monotonic()+40
             for p in processes:
                 try:p.wait(timeout=max(.1,deadline-time.monotonic()))
-                except subprocess.TimeoutExpired:p.kill();p.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    if sys.platform=='linux' and os.getpgid(p.pid)==p.pid:os.killpg(p.pid,signal.SIGKILL)
+                    else:p.kill()
+                    p.wait(timeout=5)
             self.processes.clear();self.last.clear();self.cached_metrics.clear()
 
 
@@ -228,7 +231,8 @@ def run_worker(config_path):
         if os.getppid()!=parent:return
     stop=threading.Event()
     def terminate(*_):
-        if sys.platform=='linux':os.killpg(os.getpgrp(),signal.SIGKILL)
+        # Let copy-only recorders finalize their current segment before exit.
+        # The parent force-kills this owned process group after its stop limit.
         stop.set()
     signal.signal(signal.SIGTERM,terminate)
     ingress=BatchProducer(cfg['ingress_directory'],max_mb=cfg['max_mb'],min_free_mb=cfg['min_free_mb'])
@@ -238,6 +242,20 @@ def run_worker(config_path):
             with config_lock:return routing.get(camera,{}).get('clock_profile')
     def callback(camera,body,metadata,received,urgent=False):
         with config_lock:entry=routing.get(camera,{})
+        metadata=dict(metadata);recorded_routes=metadata.pop('_durable_routes',None)
+        if recorded_routes is not None:
+            if metadata.get('capture_origin')!='DURABLE_MOTION_VIDEO' or metadata.get('camera_id')!=camera:
+                raise ValueError('invalid recorded acquisition route')
+            accepted=0
+            for route in recorded_routes:
+                context=route['context']
+                if context.get('source_id')!=metadata.get('source_id'):raise ValueError('recorded source conflict')
+                if metadata['received_at_unix_ms']<route['since_unix_ms']:continue
+                category='PRIORITY' if metadata.get('motion_scene_active') else (
+                    'PRIORITY' if route.get('category')=='PRIORITY' else 'BACKGROUND')
+                ingress.push(body,dict(metadata,**context),category);accepted+=1
+            if not accepted:raise ValueError('recorded frame predates its committed activity route')
+            return
         accepted=0
         for route in entry.get('routes',[]):
             if received<route['since_monotonic']:continue
@@ -278,10 +296,17 @@ def run_worker(config_path):
                     if signatures[camera]!=sig:
                         readers.pop(camera).stop();signatures.pop(camera)
                 for camera,entry in current.items():
-                    if camera in readers:continue
+                    if camera in readers:
+                        if hasattr(readers[camera],'update_routes'):readers[camera].update_routes(entry['routes'])
+                        continue
                     args=dict(entry['connection']);sub=args.pop('sub_url');main=args.pop('main_url')
-                    reader=ContinuousCamera(sub,main,on_capture=lambda body,meta,received,camera=camera:
-                        callback(camera,body,meta,received),camera_clock=ClockCache(),**args)
+                    motion_video=args.pop('motion_video',{})
+                    factory=ContinuousCamera;extra={}
+                    if motion_video.get('enabled'):
+                        from face_engine.motion_video import MotionVideoCamera
+                        factory=MotionVideoCamera;extra=dict(motion_video=motion_video,activity_routes=entry['routes'])
+                    reader=factory(sub,main,on_capture=lambda body,meta,received,camera=camera:
+                        callback(camera,body,meta,received),camera_clock=ClockCache(),**extra,**args)
                     readers[camera]=reader;signatures[camera]=encoded(entry['connection']);reader.start()
                 atomic_json(path.with_suffix('.status.json'),dict(pid=os.getpid(),at_unix_ms=int(time.time()*1000),
                     cameras={camera:reader.metrics() for camera,reader in readers.items()},

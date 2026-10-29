@@ -311,63 +311,15 @@ class CaptureIngress:
             self.published.pop(path,None)
 
     def prune_cache(self, *, max_mb, max_age_seconds, max_files=4096):
-        """Operator-selected cache eviction, never reported as recognition.
+        """Pending evidence is not disposable cache, regardless of age/quota.
 
-        Only unclaimed files may be removed. Persist the receiver-time window
-        and dropped byte/file counts before unlinking originals. The log calls
-        these unprocessed/partial cache evictions, not completed observations.
+        Storage pressure must backpressure producers. Only acknowledge() after
+        durable SQLite import may unlink an ingress original.
         """
         if type(max_mb) is not int or max_mb < 1 or max_age_seconds <= 0:
             raise ValueError('positive bounded cache retention required')
-        now=time.time();cutoff=now-max_age_seconds;limit=max_mb*1024*1024
-        with self.lock:
-            candidates=sorted(self.available,key=lambda path:(self.published.get(path,0),str(path)))
-            selected=[];remaining=self.bytes
-            groups=set(map(Path,self.external_roots))
-            def group(path):
-                if path.parent in groups:return path.parent
-                if path.parent.parent in groups:return path.parent.parent
-                return self.root
-            group_bytes={root:0 for root in groups|{self.root}}
-            for path,size in self.sizes.items():group_bytes[group(path)]+=size
-            group_limit=limit//max(1,len(groups))
-            for path in candidates:
-                published=self.published.get(path,0)
-                owner=group(path)
-                if published>=cutoff and remaining<=limit and group_bytes[owner]<=group_limit:continue
-                if len(selected)>=max_files:break
-                size=self.sizes.get(path,0)
-                selected.append((path,size,published));remaining-=size;group_bytes[owner]-=size
-            if not selected:return dict(files=0,bytes=0)
-            roots=[root.resolve() for root in [self.root,*map(Path,self.external_roots)]]
-            parents={}
-            for path,_,_ in selected:
-                parent=parents.get(path.parent)
-                if parent is None:parent=path.parent.resolve();parents[path.parent]=parent
-                if not any(parent.is_relative_to(root) for root in roots) or path.is_symlink():
-                    raise ValueError('cache eviction outside configured roots')
-            audit=dict(at_unix_ms=int(now*1000),reason='CACHE_AGE_OR_CAPACITY',
-                recognition_completed=False,state='UNPROCESSED_OR_PARTIALLY_IMPORTED',
-                planned_files=len(selected),planned_bytes=sum(x[1] for x in selected),
-                receiver_file_time_from_ms=int(min(x[2] for x in selected)*1000),
-                receiver_file_time_to_ms=int(max(x[2] for x in selected)*1000),
-                filenames=[str(x[0]) for x in selected])
-            ledger=self.root/'cache-evictions.jsonl'
-            with ledger.open('a',encoding='utf-8') as stream:
-                if os.name!='nt':os.chmod(ledger,0o600)
-                stream.write(encoded(audit)+'\n');stream.flush();os.fsync(stream.fileno())
-            removed=removed_bytes=0
-            for path,size,_ in selected:
-                try:path.unlink()
-                except FileNotFoundError:pass
-                self.bytes-=self.sizes.pop(path,0);self.published.pop(path,None);self.available.discard(path)
-                removed+=1;removed_bytes+=size
-            self.evicted_files+=removed;self.evicted_bytes+=removed_bytes
-            if len(self.pending)>2*max(1,len(self.available)):
-                self.pending=deque(path for path in self.pending if path in self.available)
-                self.external_pending={root:deque(path for path in queue if path in self.available)
-                    for root,queue in self.external_pending.items()}
-            return dict(files=removed,bytes=removed_bytes)
+        return dict(files=0,bytes=0,pending_protected=True)
+
 
     def quarantine(self,path,reason):
         path=Path(path)

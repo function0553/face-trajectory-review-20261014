@@ -21,7 +21,8 @@ class MotionAdmission:
     admitted image is a second reference so slow movement is not forgotten on
     every frame. Failed persistence resets admission for a prompt retry.
     """
-    def __init__(self, idle_seconds=60, thumbnail_size=(96, 54), cumulative=True):
+    def __init__(self, idle_seconds=60, thumbnail_size=(96, 54), cumulative=True,
+                 min_changed_pixels=16, pixel_threshold=12):
         if (type(idle_seconds) not in (int, float) or not math.isfinite(idle_seconds)
                 or not 1 <= idle_seconds <= 60):
             raise ValueError('motion idle_seconds must be 1..60')
@@ -30,6 +31,11 @@ class MotionAdmission:
             raise ValueError('motion thumbnail_size must contain two dimensions in 16..320')
         if type(cumulative) is not bool:
             raise ValueError('motion cumulative must be boolean')
+        if type(min_changed_pixels) is not int or not 1<=min_changed_pixels<=4096:
+            raise ValueError('motion min_changed_pixels must be 1..4096')
+        if type(pixel_threshold) is not int or not 1<=pixel_threshold<=255:
+            raise ValueError('motion pixel_threshold must be 1..255')
+        self.min_changed_pixels,self.pixel_threshold=min_changed_pixels,pixel_threshold
         self.idle_seconds, self.thumbnail_size, self.cumulative = idle_seconds, tuple(thumbnail_size), cumulative
         self.previous = self.reference = None
         self.active_until = 0
@@ -60,9 +66,9 @@ class MotionAdmission:
             changed = False
             accumulated = False
             if not first:
-                changed = np.count_nonzero(cv2.absdiff(small, self.previous) > 12) >= 16
+                changed = np.count_nonzero(cv2.absdiff(small, self.previous) > self.pixel_threshold) >= self.min_changed_pixels
                 if self.cumulative and not changed and self.reference is not None:
-                    accumulated = np.count_nonzero(cv2.absdiff(small, self.reference) > 12) >= 16
+                    accumulated = np.count_nonzero(cv2.absdiff(small, self.reference) > self.pixel_threshold) >= self.min_changed_pixels
             self.previous = small
             self.last_seen = now
             if changed or accumulated:
@@ -83,7 +89,28 @@ class MotionAdmission:
     def stats(self):
         with self.lock:
             return dict(self.counters, idle_seconds=self.idle_seconds,
-                        thumbnail_size=list(self.thumbnail_size), cumulative=self.cumulative)
+                        thumbnail_size=list(self.thumbnail_size), cumulative=self.cumulative,
+                        min_changed_pixels=self.min_changed_pixels,pixel_threshold=self.pixel_threshold)
+
+
+class SceneMotionGate:
+    """Camera-local background motion; suppress compression grain/clock flicker.
+
+    No identity or camera-name rule is used. A missing feed is handled by the
+    durable video owner as uncertain coverage, never as an idle scene.
+    """
+    def __init__(self):
+        self.background=cv2.createBackgroundSubtractorMOG2(history=120,varThreshold=24,detectShadows=False)
+        self.first=True;self.active_until=0
+    def admit(self,image,now):
+        small=cv2.resize(image,(320,180));gray=cv2.GaussianBlur(cv2.cvtColor(small,cv2.COLOR_BGR2GRAY),(3,3),0)
+        foreground=self.background.apply(gray,learningRate=.025)
+        foreground=cv2.morphologyEx(foreground,cv2.MORPH_OPEN,np.ones((2,2),np.uint8))
+        count,_,stats,_=cv2.connectedComponentsWithStats(foreground,8)
+        motion=any(stats[i,cv2.CC_STAT_AREA]>=12 and stats[i,cv2.CC_STAT_HEIGHT]>=4 for i in range(1,count))
+        if motion or self.first:self.active_until=now+2
+        self.first=False
+        return motion or now<self.active_until
 
 
 class AnalysisBudget:

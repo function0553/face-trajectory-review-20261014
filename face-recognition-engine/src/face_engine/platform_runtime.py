@@ -116,6 +116,21 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             self.cleanup_pending = False
         try:
             routes = binding_snapshot(self.binding_state, int(time.time()*1000))
+            # Delayed images keep their original route. Revoked routes wait on
+            # disk outside the active inference budget, without deleting bytes.
+            uri=Path(self.binding_state).resolve().as_uri()+'?mode=ro'
+            with closing(sqlite3.connect(uri,uri=True,timeout=1)) as route_db:
+                committed=[json.loads(v) for (v,) in route_db.execute("SELECT value FROM state WHERE ns='activity'")]
+            allowed=[]
+            for activity in committed:
+                conf=activity.get('configuration',{})
+                if activity.get('enabled') is not True or conf.get('platform_protocol')!=4 or conf.get('activity_state')=='2':continue
+                for binding in activity.get('bindings',[]):
+                    camera=binding.get('device_id')
+                    if binding.get('kind')=='CAMERA' and binding.get('source_id')==camera:
+                        allowed.append((activity['activity_id'],activity['activity_num'],camera,camera,binding.get('route_rule_id')))
+            if self.uuid_sources is not None and self.config.get('uuid_sources',{}).get('continuous'):
+                self.store.set_capture_routes(allowed)
             catalog = json.loads(Path(self.config['cameras_file']).read_text(encoding='utf-8-sig'))
             if catalog.get('schema_version') != 1:
                 raise ValueError('camera catalog schema_version must be 1')
@@ -186,6 +201,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                             args['main_archive_directory'] = item.get('main_archive_directory')
                             args['motion_admission'] = item.get('motion_admission', {})
                             args['main_photo_enabled'] = item.get('main_photo_enabled', True)
+                            args['motion_video'] = item.get('motion_video', {})
                     signatures[camera] = (encoded([sub, main, args, dynamic]), sub, main, args, dynamic)
                 if dynamic and item.get('continuous') and not self.capture_processes:
                     connection = item.get('capture_connection')
@@ -252,6 +268,8 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                                     ffmpeg=args['ffmpeg'],source_id=args['source_id'],clock=self.capture_clock,
                                     connection=args.get('connection'))
                             else:
+                                if args.pop('motion_video', {}).get('enabled'):
+                                    raise ValueError('motion-video capture requires acquisition_processes')
                                 from face_engine.continuous_capture import ContinuousCamera
                                 reader = ContinuousCamera(sub, main or None, **args,
                                     on_capture=self._continuous_capture, camera_clock=self.capture_clock)
