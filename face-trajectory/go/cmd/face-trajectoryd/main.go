@@ -142,8 +142,17 @@ func main() {
 		log.Fatal(err)
 	}
 	// Validate configuration before starting a worker or opening state.
+	var excludedPushActivities []string
+	if value := os.Getenv("FACE_TRAJECTORY_PUSH_EXCLUDED_ACTIVITIES"); value != "" {
+		if err := json.Unmarshal([]byte(value), &excludedPushActivities); err != nil {
+			log.Fatal("FACE_TRAJECTORY_PUSH_EXCLUDED_ACTIVITIES must be a JSON array of activity IDs")
+		}
+	}
 	sender, err := push.New(nil, *pushURL, os.Getenv("FACE_TRAJECTORY_PUSH_AUTHORIZATION"), clock)
 	if err != nil {
+		log.Fatal(err)
+	}
+	if err := sender.ExcludeActivities(excludedPushActivities); err != nil {
 		log.Fatal(err)
 	}
 	client, err := worker.StartConfiguredRetention(*workerPath, *stateFile, *maxPending, *maxStateMB, *maxTemplates, pushEnabled, *retentionEnabled, p1Paths)
@@ -155,6 +164,9 @@ func main() {
 	fair := worker.NewFair(clocked, *maxPending, 32)
 	defer fair.Close()
 	sender, _ = push.New(fair, *pushURL, os.Getenv("FACE_TRAJECTORY_PUSH_AUTHORIZATION"), clock)
+	if err := sender.ExcludeActivities(excludedPushActivities); err != nil {
+		log.Fatal(err)
+	}
 	retentionManager, err := retention.New(fair, *retentionInterval, *retentionEnabled)
 	if err != nil {
 		log.Fatal(err)

@@ -150,6 +150,36 @@ type scopedQueueWorker struct {
 	acks   []string
 }
 
+func TestExcludedHistoricalActivityStaysQueuedWhileProductionDelivers(t *testing.T) {
+	posts := 0
+	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var event map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&event)
+		if event["activity_id"] != "production" {
+			t.Error("historical event reached production receiver")
+		}
+		posts++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer receiver.Close()
+	old, live := pushEvent("historical"), pushEvent("production")
+	old["event_id"], live["event_id"] = "old", "live"
+	worker := &scopedQueueWorker{queues: map[string][]map[string]any{"historical": {old}, "production": {live}}, order: []string{"historical", "production"}}
+	sender, _ := New(worker, receiver.URL, "", validClock())
+	if err := sender.ExcludeActivities([]string{"historical"}); err != nil {
+		t.Fatal(err)
+	}
+	if sent, err := sender.deliver(context.Background()); err != nil || !sent {
+		t.Fatalf("production delivery: %v %v", sent, err)
+	}
+	if sent, err := sender.deliver(context.Background()); err != nil || sent {
+		t.Fatalf("excluded queue: %v %v", sent, err)
+	}
+	if posts != 1 || len(worker.acks) != 1 || worker.acks[0] != "live" || len(worker.queues["historical"]) != 1 {
+		t.Fatal("excluded evidence was sent, acknowledged or removed")
+	}
+}
+
 func (w *scopedQueueWorker) Request(_ context.Context, raw json.RawMessage) (json.RawMessage, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

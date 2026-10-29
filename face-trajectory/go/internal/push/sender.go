@@ -26,12 +26,35 @@ type Exchanger interface {
 type TrustedClock interface{ Now() (trust.Stamp, error) }
 
 type Sender struct {
-	worker        Exchanger
-	endpoint      string
-	authorization string
-	client        *http.Client
-	wake          chan struct{}
-	clock         TrustedClock
+	worker             Exchanger
+	endpoint           string
+	authorization      string
+	client             *http.Client
+	wake               chan struct{}
+	clock              TrustedClock
+	excludedActivities []string
+}
+
+// ExcludeActivities is operator configuration applied before Run. Excluded
+// queues remain durable and unacknowledged; they are never sent to this receiver.
+func (s *Sender) ExcludeActivities(ids []string) error {
+	if len(ids) > 10000 {
+		return errors.New("too many excluded push activities")
+	}
+	seen := make(map[string]bool)
+	selected := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if strings.TrimSpace(id) == "" || len(id) > 1024 || strings.ContainsAny(id, "\r\n\t") {
+			return errors.New("invalid excluded push activity")
+		}
+		if !seen[id] {
+			seen[id] = true
+			selected = append(selected, id)
+		}
+	}
+	sort.Strings(selected)
+	s.excludedActivities = selected
+	return nil
 }
 
 func New(worker Exchanger, endpoint, authorization string, clocks ...TrustedClock) (*Sender, error) {
@@ -108,6 +131,7 @@ func (s *Sender) deliver(ctx context.Context) (bool, error) {
 // The worker returns an eligible activity's oldest item. A failed activity is
 // excluded during its own backoff so it cannot hold another activity's queue.
 func (s *Sender) deliverSelected(ctx context.Context, excluded []string) (bool, string, error) {
+	excluded = append(append([]string(nil), s.excludedActivities...), excluded...)
 	selection := map[string]any{"op": "push_next"}
 	if len(excluded) > 0 {
 		selection["exclude_activity_ids"] = excluded
