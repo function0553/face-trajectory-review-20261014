@@ -56,23 +56,20 @@ class _FairSlots:
 
 
 _SLOTS=_FairSlots(2)  # Per acquisition process; no unbounded executor/future queue.
-_BUDGET_LOCK=threading.Lock()
-_BUDGET={}
+_FREE_SPACE={}
 _CUDA_LOCK=threading.Lock()
 _CUDA_READERS={}
 
 
 def _spool_room(root, maximum, reserve):
+    # Recording must never wait on a venue-wide file count or a shared scan
+    # lock. max_mb is no longer a recording quota; actual disk reserve remains.
+    # The short per-process statvfs cache does not walk or delete any video.
     now=time.monotonic()
-    with _BUDGET_LOCK:
-        saved=_BUDGET.get(str(root))
-        if saved is None or now-saved[0]>15:
-            used=0
-            for path in root.glob('*/*.mkv'):
-                try:used+=path.stat().st_size
-                except FileNotFoundError:pass
-            saved=(now,used);_BUDGET[str(root)]=saved
-    return saved[1]<maximum and shutil.disk_usage(root).free>reserve
+    key=str(root);saved=_FREE_SPACE.get(key)
+    if saved is None or now-saved[0]>1:
+        saved=(now,shutil.disk_usage(root).free);_FREE_SPACE[key]=saved
+    return saved[1]>reserve
 
 
 class MotionVideoCamera:
@@ -99,6 +96,7 @@ class MotionVideoCamera:
         self.stop_event=threading.Event();self.rotate=threading.Event();self.lock=threading.RLock()
         self.threads=[];self.recorder=None;self.motion_reader=None;self.decoder=None
         self.recording_session=None;self.next_recover=0;self.last_forced_check=0
+        self.last_forced_old_check=0;self.prefer_recent=True
         self.history=deque(maxlen=4096);self.offsets={};self.last_frame_at=None
         self.stats=dict(state='NEW',frames=0,persisted_candidates=0,idle_frames=0,inbox_errors=0,
             capture_errors=0,last_error=None,stream_kind='main',recorded_segments=0,
@@ -331,21 +329,27 @@ class MotionVideoCamera:
                         raise ValueError('persisted video belongs to another source')
                     jobs.append((job['start_unix_ms'],path,job))
                 with self.lock:self.stats['pending_video_segments']=len(jobs)
-                for _,path,job in sorted(jobs,key=lambda x:x[0]):
+                for _,path,job in sorted(jobs,key=lambda x:x[0],reverse=self.prefer_recent):
                     if self.stop_event.is_set():break
                     if job.get('retry_after_unix_ms',0)>int(time.time()*1000):continue
                     end=job['start_unix_ms']+job['duration_ms']
                     if int(time.time()*1000)<end+4000:continue
+                    # A fresh closed segment gets the first turn, then the
+                    # oldest pending segment. Both retain their original IDs,
+                    # server timestamps and committed routes.
+                    recent_turn=self.prefer_recent;self.prefer_recent=not self.prefer_recent
                     if 'active' not in job:
                         job['active'],job['motion_decision']=self._active(job['start_unix_ms'],end);_write(path,job)
                     if not job['active']:
-                        if job['start_unix_ms']-self.last_forced_check>=int(self.settings.get('idle_face_check_seconds',60))*1000:
+                        last_check=self.last_forced_check if recent_turn else self.last_forced_old_check
+                        if job['start_unix_ms']-last_check>=int(self.settings.get('idle_face_check_seconds',60))*1000:
                             job['sample_limit']=1;job['motion_decision']='IDLE_MAX_GAP_FACE_CHECK'
-                            self.last_forced_check=job['start_unix_ms']
+                            if recent_turn:self.last_forced_check=job['start_unix_ms']
+                            else:self.last_forced_old_check=job['start_unix_ms']
                         else:
                             self._retire(path,job,'MOTION_SCREENED_IDLE')
                             with self.lock:self.stats['idle_segments']+=1
-                            continue
+                            break
                     if not _SLOTS.acquire(self.stop_event):break
                     try:self._decode(path,job)
                     except Exception as error:
