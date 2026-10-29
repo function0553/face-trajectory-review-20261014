@@ -240,6 +240,10 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 if not sub and not hik.get('enabled'):
                     missing.append(camera)
                     continue
+                if (dynamic and item.get('continuous') and motion_settings.get('main_only') is True
+                        and not main):
+                    missing.append(camera)
+                    continue
                 live[camera] = [dict(route, source_id=source) for route in routes[camera]]
                 if sub:
                     args = dict(source_id=source, camera_id=camera,
@@ -251,7 +255,8 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                         if item.get('continuous'):
                             args['connection'] = item.get('capture_connection')
                             args['continuous'] = True
-                            args['preferred_stream'] = item.get('preferred_stream', 'main')
+                            args['preferred_stream'] = ('main' if motion_settings.get('main_only') is True
+                                                        else item.get('preferred_stream', 'main'))
                             args['decode_keyframes_only'] = item.get('decode_keyframes_only',False)
                             args['main_archive_directory'] = item.get('main_archive_directory')
                             args['motion_admission'] = item.get('motion_admission', {})

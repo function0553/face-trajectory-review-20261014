@@ -78,6 +78,8 @@ class MotionVideoCamera:
                  camera_clock=None, connection=None, on_live_frame=None, **legacy):
         self.source_id,self.camera_id=source_id,camera_id;self.sub_url=sub_url;self.main_url=main_url
         self.callback=on_capture;self.ffmpeg=ffmpeg;self.settings=dict(motion_video)
+        self.main_only=self.settings.get('main_only',False)
+        if type(self.main_only) is not bool:raise ValueError('main_only must be boolean')
         enabled=self.settings.get('live_camera_ids')
         if enabled is not None and (not isinstance(enabled,list) or any(not isinstance(v,str) for v in enabled)):
             raise ValueError('live_camera_ids must be a camera UUID list')
@@ -86,7 +88,7 @@ class MotionVideoCamera:
         self.live_enabled=enabled is not None and ('*' in enabled or camera_id in enabled)
         self.on_live_frame=on_live_frame;self.live_frame=None;self.live_last_published=0;self.live_consumed_id=None
         self.camera_clock=camera_clock;self.connection=connection
-        self.live_preferred_stream=self.settings.get('live_preferred_stream','main')
+        self.live_preferred_stream='main' if self.main_only else self.settings.get('live_preferred_stream','main')
         if self.live_preferred_stream not in ('main','sub'):raise ValueError('live_preferred_stream must be main or sub')
         self.cuda_reader_capacity=self.settings.get('cuda_readers_per_device_per_process',1)
         if type(self.cuda_reader_capacity) is not int or not 1<=self.cuda_reader_capacity<=16:
@@ -153,8 +155,14 @@ class MotionVideoCamera:
                                    int(self.settings.get('min_free_mb',65536))*1024**2):
                     with self.lock:self.stats.update(state='STORAGE_BACKPRESSURE',last_error='VIDEO_SPOOL_FULL_PENDING_RETAINED')
                     self.stop_event.wait(2);continue
-                kind='main' if self.main_url and attempt%3!=2 else 'sub';url=self.main_url if kind=='main' else self.sub_url
-                if not url:kind='main';url=self.main_url
+                if self.main_only:
+                    kind='main';url=self.main_url
+                    if not url:
+                        with self.lock:self.stats.update(state='MISSING_MAIN_SOURCE',last_error='MAIN_URL_MISSING')
+                        self.stop_event.wait(2);continue
+                else:
+                    kind='main' if self.main_url and attempt%3!=2 else 'sub';url=self.main_url if kind=='main' else self.sub_url
+                    if not url:kind='main';url=self.main_url
                 session=uuid.uuid4().hex;self.rotate.clear()
                 with self.lock:routes=list(self.routes)
                 _write(self.folder/(session+'.session.json'),dict(schema=1,camera_id=self.camera_id,
@@ -182,7 +190,7 @@ class MotionVideoCamera:
                 if seen:attempt=0
                 else:
                     attempt+=1
-                    with self.lock:self.stats.update(state='RECONNECTING',last_error='NO_VIDEO_BYTES_MAIN_SUB_RETRY')
+                    with self.lock:self.stats.update(state='RECONNECTING',last_error='NO_VIDEO_BYTES_MAIN_RETRY' if self.main_only else 'NO_VIDEO_BYTES_MAIN_SUB_RETRY')
             except Exception:
                 attempt+=1
                 with self.lock:self.stats['capture_errors']+=1;self.stats['last_error']='VIDEO_RECORDING_RETRY'
@@ -194,11 +202,14 @@ class MotionVideoCamera:
     def _motion(self):
         if not self.live_enabled:return self._motion_preview()
         reader=None;last=None;gate=SceneMotionGate();cuda_slot=None;device=None
+        if self.main_only and not self.main_url:
+            with self.lock:self.stats.update(state='MISSING_MAIN_SOURCE',last_error='MAIN_URL_MISSING')
+            return
         try:
             if self.cuda_device is not None:
                 with _CUDA_LOCK:slot=_CUDA_READERS.setdefault(self.cuda_device,threading.BoundedSemaphore(self.cuda_reader_capacity))
                 if slot.acquire(blocking=False):cuda_slot=slot;device=self.cuda_device
-            reader=FailoverCamera(self.sub_url,self.main_url,self.source_id,self.camera_id,
+            reader=FailoverCamera(None if self.main_only else self.sub_url,self.main_url,self.source_id,self.camera_id,
                 ffmpeg=self.ffmpeg,sample_fps=self.fps,preferred_stream=self.live_preferred_stream,decode_keyframes_only=False)
             if device is not None:
                 def native_reader(*args,**kwargs):
@@ -237,13 +248,18 @@ class MotionVideoCamera:
             if cuda_slot:cuda_slot.release()
     def _motion_preview(self):
         reader=None;last=None;gate=SceneMotionGate();cuda_slot=None;device=None
+        if self.main_only and not self.main_url:
+            with self.lock:self.stats.update(state='MISSING_MAIN_SOURCE',last_error='MAIN_URL_MISSING')
+            return
         try:
             if self.cuda_device is not None:
                 # A configured context budget per device/process bounds decoder VRAM.
                 # Remaining cameras keep acquiring with the software decoder.
                 with _CUDA_LOCK:slot=_CUDA_READERS.setdefault(self.cuda_device,threading.BoundedSemaphore(self.cuda_reader_capacity))
                 if slot.acquire(blocking=False):cuda_slot=slot;device=self.cuda_device
-            reader=PrivateRTSPReader(self.sub_url or self.main_url,self.source_id,self.camera_id,'sub',
+            preview_url=self.main_url if self.main_only else (self.sub_url or self.main_url)
+            preview_kind='main' if self.main_only or not self.sub_url else 'sub'
+            reader=PrivateRTSPReader(preview_url,self.source_id,self.camera_id,preview_kind,
                 ffmpeg=self.hardware_ffmpeg if device is not None else self.ffmpeg,
                 decode_cuda_device=device,cpu_ffmpeg=self.ffmpeg,motion_preview=True,
                 concat_input_options=self.settings.get('hardware_concat_options',True) if device is not None else True,
@@ -437,6 +453,7 @@ class MotionVideoCamera:
                 result['cuda_decode_device']=getattr(current,'decode_cuda_device',None)
                 result['motion_hardware_fallbacks']=current.metrics().get('hardware_decode_fallbacks',0) if current else 0
             result['live_enabled']=self.live_enabled
+            result['main_only']=self.main_only
             result['live_preferred_stream']=self.live_preferred_stream
             result['cuda_readers_per_device_per_process']=self.cuda_reader_capacity
             result['live_frame_id']=self.live_frame.metadata['frame_id'] if self.live_frame else None

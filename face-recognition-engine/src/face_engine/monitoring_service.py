@@ -364,6 +364,9 @@ class MonitoringRuntime:
 
     def _deliveries(self, observations, stream_kind=None):
         from face_engine.main_photo import photo_is_clear
+        if (stream_kind == 'sub' and self.config.get('uuid_sources', {}).get('motion_video', {}).get('main_only') is True):
+            self.count('sub_observations_not_reported', len(observations))
+            return []
         result = []
         policy = association_policy_for_stream(self.config, stream_kind)
         for observation in observations:
