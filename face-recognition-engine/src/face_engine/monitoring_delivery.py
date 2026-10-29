@@ -165,6 +165,7 @@ class DeliveryStore:
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture_scope ON captures(category,activity_id,created,id) WHERE status='PENDING' AND image IS NOT NULL")
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_capture_source ON captures(category,activity_id,source_id,created,id) WHERE status='PENDING' AND image IS NOT NULL")
             self.db.execute("CREATE INDEX IF NOT EXISTS pending_photo_window ON captures(activity_id,source_id,context,created,id) WHERE status='PENDING' AND image IS NOT NULL")
+            self.db.execute("CREATE INDEX IF NOT EXISTS held_capture_order ON captures(created,id) WHERE status='HELD_ROUTE' AND image IS NOT NULL")
             self.db.execute("CREATE TABLE IF NOT EXISTS inbox_counts(kind TEXT PRIMARY KEY,n INTEGER NOT NULL CHECK(n>=0))")
             # Reconcile once under the exclusive consumer lease. SQL triggers
             # also see C++ retention deletes and roll back with the owning write.
@@ -233,7 +234,10 @@ class DeliveryStore:
         routes=frozenset(tuple(row) for row in routes)
         with self.lock, self.db:
             changed=routes!=self.capture_routes
-            if not changed and self._pending_count('captures')>=self.max_pending:return
+            # Leave active queue space for newly acquired camera evidence.
+            # Restoring historical routes must not refill every free slot.
+            refill_limit=max(1,self.max_pending//2)
+            if not changed and self._pending_count('captures')>=refill_limit:return
             retention_write_guard(self.db)
             self.capture_routes=routes
             self.db.execute('CREATE TEMP TABLE IF NOT EXISTS allowed_capture_routes(a TEXT,n TEXT,s TEXT,c TEXT,r TEXT,PRIMARY KEY(a,n,s,c,r))')
@@ -242,8 +246,12 @@ class DeliveryStore:
                 self.db.executemany('INSERT INTO allowed_capture_routes VALUES(?,?,?,?,?)',routes)
             allowed="EXISTS (SELECT 1 FROM allowed_capture_routes x WHERE x.a=captures.activity_id AND x.n=json_extract(captures.metadata,'$.activity_num') AND x.s=captures.source_id AND x.c=json_extract(captures.metadata,'$.camera_id') AND x.r=json_extract(captures.metadata,'$.route_rule_id'))"
             if changed:self.db.execute("UPDATE captures SET status='HELD_ROUTE' WHERE status='PENDING' AND image IS NOT NULL AND NOT "+allowed)
-            room=max(0,self.max_pending-self._pending_count('captures'))
-            self.db.execute("UPDATE captures SET status='PENDING' WHERE id IN (SELECT id FROM captures WHERE status='HELD_ROUTE' AND image IS NOT NULL AND "+allowed+" ORDER BY created,id LIMIT ?)",(room,))
+            room=min(64,max(0,refill_limit-self._pending_count('captures')))
+            if room:
+                # Seek in recording order and stop at this small batch. Sorting
+                # every held image row here blocked all inference/delivery
+                # threads behind the shared SQLite lock at venue scale.
+                self.db.execute("UPDATE captures SET status='PENDING' WHERE id IN (SELECT id FROM captures INDEXED BY held_capture_order WHERE status='HELD_ROUTE' AND image IS NOT NULL AND "+allowed+" ORDER BY created,id LIMIT ?)",(room,))
 
     def prune_capture_cache(self, max_age_seconds, *, max_rows=256, exclude_keys=()):
         """Never expire an unprocessed image to make room for a newer one."""
@@ -337,7 +345,7 @@ class DeliveryStore:
             return (row[0], row[1], json.loads(row[2])) if row else None
 
     def photo_window(self, seed, *, seconds=6, max_records=24, max_bytes=64*1024*1024, now=None):
-        """Oldest camera-local originals first; no model work or waiting in SQL.
+        """Select the scheduled frame's camera-local time window.
 
         Selection state remains in durable captures until ALL winners commit.
         A delayed/restarted worker therefore cannot lose its low-res fallback.
@@ -345,10 +353,17 @@ class DeliveryStore:
         now = time.time() if now is None else now
         meta = seed[2]
         context = encoded(activity_context(meta))
+        # next_capture alternates old and fresh work. Always reopening the
+        # oldest window here discarded that fairness and stranded live frames
+        # behind all historic pictures from the same camera.
+        received=meta.get('received_at_unix_ms')
+        lower=(received/1000//seconds)*seconds if type(received) is int and received>0 and seconds>0 else None
+        time_filter=' AND created>=? AND created<?' if lower is not None else ''
+        time_params=(lower,lower+seconds) if lower is not None else ()
         with self.lock:
             rows = self.db.execute("SELECT id,metadata,created,length(image) FROM captures "
-                "WHERE status='PENDING' AND image IS NOT NULL AND activity_id=? AND source_id=? AND context=? "
-                "ORDER BY created,id LIMIT 64", (meta['activity_id'], meta['source_id'], context)).fetchall()
+                "WHERE status='PENDING' AND image IS NOT NULL AND activity_id=? AND source_id=? AND context=?"+time_filter+
+                " ORDER BY created,id LIMIT 64", (meta['activity_id'], meta['source_id'], context,*time_params)).fetchall()
             eligible = []
             for key, raw, created, size in rows:
                 record_meta = json.loads(raw)
@@ -356,7 +371,7 @@ class DeliveryStore:
                     eligible.append((key, record_meta, created, size))
             if not eligible:
                 return [seed], 0
-            start = eligible[0][2]
+            start = lower if lower is not None else eligible[0][2]
             if now < start + seconds:
                 return [], start + seconds - now
             chosen, total = [], 0
