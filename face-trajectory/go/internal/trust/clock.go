@@ -123,10 +123,28 @@ func (c *Clock) refresh(now time.Time) (Stamp, error) {
 		if proof.Uncertainty > MaxUTCUncertaintyMS {
 			return Stamp{}, errors.New("trusted UTC proof uncertainty exceeds policy")
 		}
-		if !c.anchor.IsZero() && proof.Now < c.proof.Now+now.Sub(c.anchor).Milliseconds() {
-			return Stamp{}, errors.New("trusted UTC watermark cannot move backwards")
+		anchor := now
+		if !c.anchor.IsZero() {
+			previous := c.proof.Now + now.Sub(c.anchor).Milliseconds()
+			if proof.Now < previous {
+				lag := previous - proof.Now
+				// A renewal was signed before receipt. Its uncertainty already
+				// includes the challenge round trip; a smaller delivery delay on
+				// the previous proof must not make every later renewal regress.
+				// Reconcile only overlapping evidence within that bounded budget.
+				if lag > proof.Uncertainty || lag > MaxUTCUncertaintyMS-proof.Uncertainty {
+					return Stamp{}, errors.New("trusted UTC watermark cannot move backwards")
+				}
+				if lag >= proof.ValidFor {
+					return Stamp{}, errors.New("trusted UTC proof expired")
+				}
+				proof.Uncertainty += lag
+				// Keep signed Now and ValidFor unchanged: backdating the monotonic
+				// anchor preserves the watermark without extending signed expiry.
+				anchor = now.Add(-time.Duration(lag) * time.Millisecond)
+			}
 		}
-		c.proof, c.anchor, c.accepted = proof, now, hash
+		c.proof, c.anchor, c.accepted = proof, anchor, hash
 		if err := c.rotate(now); err != nil {
 			return Stamp{}, err
 		}
