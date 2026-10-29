@@ -385,6 +385,12 @@ class PrivateRTSPReader(LatestFrameReader):
     """Pass the RTSP URL over stdin, keeping credentials out of process argv."""
     def __init__(self, *args, **kwargs):
         self.decode_keyframes_only=kwargs.pop('decode_keyframes_only',False)
+        self.decode_cuda_device=kwargs.pop('decode_cuda_device',None)
+        self.cpu_ffmpeg=kwargs.pop('cpu_ffmpeg',None)
+        self.concat_input_options=kwargs.pop('concat_input_options',True)
+        self.motion_preview=kwargs.pop('motion_preview',False)
+        if self.decode_cuda_device is not None and (type(self.decode_cuda_device) is not int or self.decode_cuda_device<0):
+            raise ValueError('decode_cuda_device must be a nonnegative integer')
         archive=kwargs.pop('main_archive_directory',None)
         if type(self.decode_keyframes_only) is not bool:raise ValueError('decode_keyframes_only must be boolean')
         super().__init__(*args, **kwargs)
@@ -456,6 +462,12 @@ class PrivateRTSPReader(LatestFrameReader):
                 if len(self._jpeg_buffer)>12*1024*1024:raise ValueError('decoder JPEG byte limit exceeded')
                 block=getattr(stream,'read1',stream.read)(65536)
                 if not block:
+                    if self.decode_cuda_device is not None and self.cpu_ffmpeg:
+                        # Codec/device/network failures must not strand a camera
+                        # on a hardware decoder that produces no usable frames.
+                        self.decode_cuda_device=None;self.ffmpeg=self.cpu_ffmpeg
+                        self.concat_input_options=True
+                        with self._lock:self._metrics['hardware_decode_fallbacks']=self._metrics.get('hardware_decode_fallbacks',0)+1
                     if self._jpeg_buffer:raise EOFError('truncated decoder JPEG')
                     return None,{}
                 self._jpeg_buffer.extend(block)
@@ -482,6 +494,13 @@ class PrivateRTSPReader(LatestFrameReader):
             tail[0:0]=['-vf','setpts=N/TB','-fps_mode','passthrough']
         codec=tail.index('-c:v')
         tail[codec+1]='mjpeg';tail[codec+2:codec+2]=['-q:v','2']
+        hardware=[]
+        if self.decode_cuda_device is not None:
+            hardware=['-hwaccel','cuda','-hwaccel_device',str(self.decode_cuda_device),'-hwaccel_output_format','cuda']
+            vf=tail.index('-vf');filters=tail[vf+1].split(',')
+            filters[1:1]=['hwdownload','format=nv12'];tail[vf+1]=','.join(filters)
+        if self.motion_preview:
+            vf=tail.index('-vf');tail[vf+1]+=',scale=320:180'
         archive=[]
         if self.archive_directory:
             self.archive_next_check=0
@@ -492,6 +511,7 @@ class PrivateRTSPReader(LatestFrameReader):
                      str(self.archive_directory/(session+'-%06d.mkv'))]
         return [self.ffmpeg, '-hide_banner', '-loglevel', 'error', '-nostdin',
                 '-threads', '1', '-filter_threads', '1', '-filter_complex_threads', '1',
+                *hardware,
                 *(['-skip_frame','nokey'] if self.decode_keyframes_only else []),
                 *(['-use_wallclock_as_timestamps','1'] if self.archive_directory else []),
                 '-protocol_whitelist', 'pipe,rtsp,rtsps,tcp,tls,udp,rtp',
@@ -504,10 +524,11 @@ class PrivateRTSPReader(LatestFrameReader):
         url = self.url.replace('\\', '\\\\').replace("'", "'\\''")
         if '\n' in url or '\r' in url or not url.lower().startswith(('rtsp://', 'rtsps://')):
             raise ValueError('invalid private RTSP source')
-        playlist = "ffconcat version 1.0\nfile '" + url + "'\noption rtsp_transport tcp\n"
-        playlist += 'option probesize 262144\noption analyzeduration 1000000\n'
+        playlist = "ffconcat version 1.0\nfile '" + url + "'\n"
+        if self.concat_input_options:
+            playlist += 'option rtsp_transport tcp\noption probesize 262144\noption analyzeduration 1000000\n'
         option = _rtsp_timeout_option(self.ffmpeg)
-        if option:
+        if option and self.concat_input_options:
             playlist += 'option ' + option.lstrip('-') + ' ' + str(int(self.stall_timeout*1_000_000)) + '\n'
         with self._lock:
             self._metrics['state'] = 'WAITING_CONNECTION_SLOT'

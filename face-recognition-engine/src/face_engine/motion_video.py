@@ -58,6 +58,8 @@ class _FairSlots:
 _SLOTS=_FairSlots(2)  # Per acquisition process; no unbounded executor/future queue.
 _BUDGET_LOCK=threading.Lock()
 _BUDGET={}
+_CUDA_LOCK=threading.Lock()
+_CUDA_READERS={}
 
 
 def _spool_room(root, maximum, reserve):
@@ -79,6 +81,10 @@ class MotionVideoCamera:
                  camera_clock=None, connection=None, **legacy):
         self.source_id,self.camera_id=source_id,camera_id;self.sub_url=sub_url;self.main_url=main_url
         self.callback=on_capture;self.ffmpeg=ffmpeg;self.settings=dict(motion_video)
+        devices=self.settings.get('cuda_decode_devices',[])
+        if not isinstance(devices,list) or any(type(d) is not int or d<0 for d in devices):raise ValueError('invalid CUDA decode devices')
+        self.cuda_device=devices[int(hashlib.sha256(camera_id.encode()).hexdigest()[:8],16)%len(devices)] if devices else None
+        self.hardware_ffmpeg=self.settings.get('hardware_ffmpeg',ffmpeg)
         self.fps=float(self.settings.get('sample_fps',2));self.segment_seconds=float(self.settings.get('segment_seconds',4))
         if not .5<=self.fps<=5 or not 2<=self.segment_seconds<=10:raise ValueError('invalid motion-video cadence')
         self.root=Path(self.settings['directory'])
@@ -175,10 +181,18 @@ class MotionVideoCamera:
                 with self.lock:self.recorder=None;self.recording_session=None
             self.stop_event.wait(1)
     def _motion(self):
-        reader=None;last=None;gate=SceneMotionGate()
+        reader=None;last=None;gate=SceneMotionGate();cuda_slot=None;device=None
         try:
+            if self.cuda_device is not None:
+                # One persistent context per device/process bounds decoder VRAM.
+                # Remaining cameras keep acquiring with the software decoder.
+                with _CUDA_LOCK:slot=_CUDA_READERS.setdefault(self.cuda_device,threading.BoundedSemaphore(1))
+                if slot.acquire(blocking=False):cuda_slot=slot;device=self.cuda_device
             reader=PrivateRTSPReader(self.sub_url or self.main_url,self.source_id,self.camera_id,'sub',
-                ffmpeg=self.ffmpeg,sample_fps=2,decode_keyframes_only=False,first_frame_timeout_s=20,stall_timeout_s=20)
+                ffmpeg=self.hardware_ffmpeg if device is not None else self.ffmpeg,
+                decode_cuda_device=device,cpu_ffmpeg=self.ffmpeg,motion_preview=True,
+                concat_input_options=self.settings.get('hardware_concat_options',True) if device is not None else True,
+                sample_fps=2,decode_keyframes_only=False,first_frame_timeout_s=20,stall_timeout_s=20)
             with self.lock:self.motion_reader=reader
             reader.start()
             while not self.stop_event.is_set():
@@ -192,6 +206,7 @@ class MotionVideoCamera:
             with self.lock:self.stats['last_error']='MOTION_FEED_UNAVAILABLE_MAIN_VIDEO_RETAINED'
         finally:
             if reader:reader.stop()
+            if cuda_slot:cuda_slot.release()
     def _active(self, start, end):
         # Missing motion history is not evidence of an empty scene.
         with self.lock:history=list(self.history)
@@ -349,6 +364,9 @@ class MotionVideoCamera:
     def metrics(self):
         with self.lock:
             result=dict(self.stats,continuous=True,motion_video=True,main_photo_enabled=True)
+            if self.motion_reader:
+                result['cuda_decode_device']=self.motion_reader.decode_cuda_device
+                result['motion_hardware_fallbacks']=self.motion_reader.metrics().get('hardware_decode_fallbacks',0)
             if self.last_frame_at is not None:result['frame_age_seconds']=round(time.monotonic()-self.last_frame_at,3)
             return result
     def stop(self):
