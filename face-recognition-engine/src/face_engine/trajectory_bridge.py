@@ -13,8 +13,10 @@ import os
 import sqlite3
 import sys
 import time
+import threading
 import urllib.error
 import urllib.request
+from collections import OrderedDict
 from contextlib import redirect_stdout, contextmanager
 from pathlib import Path
 
@@ -193,6 +195,7 @@ class TrajectoryExtractor:
         self.detector, self.recognizer = detector, recognizer
         self.feature_space = feature_space
         self.quality_policy = QualityPolicy.from_config(quality_policy)
+        self._native_history = threading.local()
 
     @classmethod
     def from_config(cls, config):
@@ -228,7 +231,10 @@ class TrajectoryExtractor:
         """
         from face_engine.quality import evaluate_face_quality, alignment_rejection
         outputs, aligned, targets = [], [], []
-        native_previous={}
+        native_previous = getattr(self._native_history, 'frames', None)
+        if native_previous is None:
+            native_previous = OrderedDict()
+            self._native_history.frames = native_previous
         for image, meta in frames:
             if not isinstance(meta, dict):
                 raise ValueError("acquisition metadata must be a dictionary")
@@ -261,9 +267,19 @@ class TrajectoryExtractor:
             faces = self.detector.detect_faces(image)
             if meta.get('stream_kind')=='main' and meta.get('detection_native_tiles') is True:
                 from face_engine.native_tiles import motion_region_faces
-                key=(meta['source_id'],meta['camera_id'],image.shape[:2])
-                if not faces:faces=motion_region_faces(self.detector,image,native_previous.get(key))
-                native_previous[key]=cv2.cvtColor(cv2.resize(image,(320,180)),cv2.COLOR_BGR2GRAY)
+                key=(context['activity_id'],meta['source_id'],meta['camera_id'],image.shape[:2])
+                stamp=meta.get('received_at_unix_ms')
+                previous=native_previous.pop(key,None)
+                gray = None
+                if (previous is not None and type(stamp) is int and type(previous[0]) is int
+                        and 0 < stamp-previous[0] <= 120000):
+                    gray=previous[1]
+                if not faces:faces=motion_region_faces(self.detector,image,gray)
+                # Keep small motion references across mixed-camera windows.
+                # Resetting at every batch repeated six native tile passes on
+                # almost every empty camera frame. Full originals stay intact.
+                native_previous[key]=(stamp,cv2.cvtColor(cv2.resize(image,(320,180)),cv2.COLOR_BGR2GRAY))
+                while len(native_previous)>1024:native_previous.popitem(last=False)
             if not faces and meta.get("stream_kind") not in ("sub", "main"):
                 # Still photos and camera face captures may be tight high-resolution
                 # close-ups that the standard input misses. Continuous video frames

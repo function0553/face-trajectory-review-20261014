@@ -1309,7 +1309,12 @@ def main():
                 print(encoded(store.status()))
             return
         model_config = load_config(config['model_config'])
-        extractor = TrajectoryExtractor.from_config(model_config)
+        if 'inference_devices' in config:
+            from face_engine.worker_extractors import WorkerExtractors
+            extractor = WorkerExtractors(model_config, config['inference_devices'],
+                config.get('scheduling', {}).get('inference_workers', 1))
+        else:
+            extractor = TrajectoryExtractor.from_config(model_config)
         # Treat explicit cuda:<id> exactly like cuda for the fail-fast
         # production guard; otherwise a failed CUDA initialization could be
         # accepted silently when a worker is pinned to the second GPU.
