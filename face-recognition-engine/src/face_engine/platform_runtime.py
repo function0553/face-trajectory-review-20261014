@@ -17,7 +17,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from face_engine.monitoring_service import MonitoringRuntime, runtime_operation
-from face_engine.scheduling import FrameJob
+from face_engine.scheduling import FrameJob, EncodedFrame
 from face_engine.trajectory_bridge import ActivityContextError, MaintenancePaused, activity_context, encoded
 
 
@@ -655,7 +655,8 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         candidates, now = [], time.monotonic()
         with self.platform_lock:
             for camera_id, camera in list(self.cameras.items()):
-                frame = camera.latest(max_age_s=self.queue.max_age_seconds)
+                latest = getattr(camera, 'latest_encoded', camera.latest)
+                frame = latest(max_age_s=self.queue.max_age_seconds)
                 if frame is None:
                     continue
                 for routed in self._routed_frames(frame):
@@ -665,7 +666,9 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                     if (now-self.last_sample.get(key, 0) < 1/self.fps[category]
                             or self.last_frame.get(key) == meta['frame_id']):
                         continue
-                    candidates.append(FrameJob(key, routed.image_bgr, meta, category, routed.received_monotonic))
+                    image = (EncodedFrame(routed.encoded_image) if routed.image_bgr is None
+                             and routed.encoded_image is not None else routed.image_bgr)
+                    candidates.append(FrameJob(key, image, meta, category, routed.received_monotonic))
         for job in self.admission.admit(self.queue, candidates):
             with self.platform_lock:
                 self.last_sample[job.key] = now

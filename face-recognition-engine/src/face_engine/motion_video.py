@@ -39,18 +39,38 @@ def _write(path, value):
         finally:os.close(fd)
 
 
+class _SegmentDecodeFailure(RuntimeError):
+    def __init__(self, reason, frames_consumed=0):
+        super().__init__(reason)
+        # Number of original frame indices already committed or excluded by
+        # the route start. CPU retry must not replace their encoded bytes.
+        self.frames_consumed=frames_consumed
+
+
+class _HardwareDecodeFailure(_SegmentDecodeFailure):
+    pass
+
+
 class _FairSlots:
     def __init__(self, count):
         self.count=count;self.active=0;self.waiting=deque();self.condition=threading.Condition()
-    def acquire(self, stop):
-        ticket=object()
-        with self.condition:
-            self.waiting.append(ticket)
+    def acquire(self, stop, maintenance=None):
+        ticket=object();next_maintenance=time.monotonic()+1
+        with self.condition:self.waiting.append(ticket)
+        try:
             while not stop.is_set():
-                if self.waiting[0] is ticket and self.active<self.count:
-                    self.waiting.popleft();self.active+=1;self.condition.notify_all();return True
-                self.condition.wait(.2)
-            self.waiting.remove(ticket);self.condition.notify_all();return False
+                with self.condition:
+                    if self.waiting[0] is ticket and self.active<self.count:
+                        self.waiting.popleft();self.active+=1;self.condition.notify_all();return True
+                    self.condition.wait(.2)
+                # Keep the FIFO ticket while discovering new closed files.
+                # Disk IO never holds the shared decode-slot condition lock.
+                if maintenance is not None and time.monotonic()>=next_maintenance:
+                    maintenance();next_maintenance=time.monotonic()+1
+            return False
+        finally:
+            with self.condition:
+                if ticket in self.waiting:self.waiting.remove(ticket);self.condition.notify_all()
     def release(self):
         with self.condition:self.active-=1;self.condition.notify_all()
 
@@ -95,7 +115,7 @@ class MotionVideoCamera:
             raise ValueError('cuda_readers_per_device_per_process must be 1..16')
         devices=self.settings.get('cuda_decode_devices',[])
         if not isinstance(devices,list) or any(type(d) is not int or d<0 for d in devices):raise ValueError('invalid CUDA decode devices')
-        self.cuda_device=devices[int(hashlib.sha256(camera_id.encode()).hexdigest()[:8],16)%len(devices)] if devices else None
+        self.cuda_device=devices[int(hashlib.sha256(camera_id.encode()).hexdigest()[-8:],16)%len(devices)] if devices else None
         self.hardware_ffmpeg=self.settings.get('hardware_ffmpeg',ffmpeg)
         self.fps=float(self.settings.get('sample_fps',2));self.segment_seconds=float(self.settings.get('segment_seconds',4))
         if not .5<=self.fps<=5 or not 2<=self.segment_seconds<=10:raise ValueError('invalid motion-video cadence')
@@ -113,6 +133,7 @@ class MotionVideoCamera:
         self.recording_session=None;self.next_recover=0;self.last_forced_check=0
         self.last_forced_old_check=0;self.prefer_recent=True
         self.history=deque(maxlen=4096);self.offsets={};self.last_frame_at=None
+        self.discovery_cursor=0;self.recovery_scan=None
         self.stats=dict(state='NEW',frames=0,persisted_candidates=0,idle_frames=0,inbox_errors=0,
             capture_errors=0,last_error=None,stream_kind='main',recorded_segments=0,
             motion_segments=0,idle_segments=0,decoded_segments=0,decoded_frames=0,
@@ -287,27 +308,49 @@ class MotionVideoCamera:
         if any(b[0]-a[0]>1500 for a,b in zip(selected,selected[1:])):return True,'MOTION_FEED_GAP'
         return any(active and lower<=at<=upper for at,active in selected),'MOTION_SCREENED'
     def _discover(self):
-        for listing in self.folder.glob('*.csv'):
-            session=listing.stem;session_path=self.folder/(session+'.session.json')
+        # A large old CSV must not hide today's closed video. Give the active
+        # session a bounded turn, then rotate through historical sessions.
+        with self.lock:active=self.recording_session
+        listings=list(self.folder.glob('*.csv'))
+        current=self.folder/(active+'.csv') if active else None
+        history=sorted(listings,key=lambda p:p.name)
+        selected=[(current,True)] if current is not None and current.exists() else []
+        if history:
+            self.discovery_cursor%=len(history)
+            selected.append((history[self.discovery_cursor],False));self.discovery_cursor+=1
+        deadline=time.monotonic()+.25
+        for listing,tail in selected:
+            session_path=listing.with_suffix('.session.json')
             if not session_path.exists():continue
+            data=json.loads(session_path.read_text())
             position=self.offsets.get(str(listing),0)
-            with listing.open() as stream:
-                stream.seek(position)
-                while True:
-                    before=stream.tell();line=stream.readline()
-                    if not line or not line.endswith('\n'):break
-                    fields=next(csv.reader([line]));video=Path(fields[0]);video=video if video.is_absolute() else self.folder/video
-                    if video.parent.resolve()!=self.folder.resolve() or video.is_symlink():raise ValueError('segment escaped source folder')
+            with listing.open('rb') as stream:
+                if tail:
+                    # Register the newest closed rows immediately while the
+                    # normal cursor still retains every older row for catchup.
+                    offset=max(0,listing.stat().st_size-32768);stream.seek(offset)
+                    if offset:stream.readline()
+                    lines=iter([line for line in stream.readlines() if line.endswith(b'\n')][-16:])
+                else:stream.seek(position)
+                for index in range(16):
+                    # Always allow each selected session one row so old work
+                    # advances even when disk sync takes the entire budget.
+                    if index and time.monotonic()>=deadline:break
+                    line=next(lines,b'') if tail else stream.readline()
+                    if not line or not line.endswith(b'\n'):break
+                    fields=next(csv.reader([line.decode('utf-8')]));video=Path(fields[0]);video=video if video.is_absolute() else self.folder/video
+                    if video.parent!=self.folder or video.is_symlink():raise ValueError('segment escaped source folder')
                     if video.exists():
                         job=video.with_suffix('.job.json')
                         if not job.exists() and not video.with_suffix('.done.json').exists():
                             duration=max(0,float(fields[2])-float(fields[1]));epoch=int(video.stem.rsplit('-',1)[1])*1000
                             with video.open('rb') as original:os.fsync(original.fileno())
-                            stat=video.stat();data=json.loads(session_path.read_text())
+                            stat=video.stat()
                             _write(job,dict(data,video=video.name,start_unix_ms=max(epoch,data.get('started_unix_ms',epoch)),
-                                duration_ms=int(duration*1000),size=stat.st_size,mtime_ns=stat.st_mtime_ns,status='PENDING'))
+                                duration_ms=int(duration*1000),size=stat.st_size,mtime_ns=stat.st_mtime_ns,status='PENDING',decode_backend='pending'))
                             with self.lock:self.stats['recorded_segments']+=1
-                    position=stream.tell();self.offsets[str(listing)]=position
+                    if not tail:self.offsets[str(listing)]=stream.tell()
+        with self.lock:self.stats['discovery_at_unix_ms']=int(time.time()*1000)
     def _retire(self, path, job, state, frames=0):
         video=self.folder/job['video'];stat=video.stat()
         if stat.st_size!=job['size'] or stat.st_mtime_ns!=job['mtime_ns']:raise ValueError('closed segment changed')
@@ -333,9 +376,16 @@ class MotionVideoCamera:
         if time.monotonic()<self.next_recover:return
         self.next_recover=time.monotonic()+30
         with self.lock:active=self.recording_session
-        for video in self.folder.glob('*.mkv'):
+        if self.recovery_scan is None:self.recovery_scan=iter(self.folder.glob('*.mkv'))
+        # One probe per turn; resume the directory walk next time rather than
+        # blocking closed-segment dispatch on every orphan in the archive.
+        for _ in range(64):
+            video=next(self.recovery_scan,None)
+            if video is None:self.recovery_scan=None;break
             session=video.stem.split('-',1)[0]
-            if session==active or time.time()-video.stat().st_mtime<30:continue
+            try:modified=video.stat().st_mtime
+            except FileNotFoundError:continue  # A resumed scan may pass a committed, retired file.
+            if session==active or time.time()-modified<30:continue
             path=video.with_suffix('.job.json')
             if path.exists() or video.with_suffix('.done.json').exists():continue
             session_path=self.folder/(session+'.session.json')
@@ -345,27 +395,99 @@ class MotionVideoCamera:
             if not probe_binary:continue  # Preserve the orphan; ordinary closed clips still progress.
             probe=subprocess.run([probe_binary,'-v','error',
                 '-show_entries','format=duration','-of','json',str(video)],capture_output=True,text=True,timeout=8)
-            if probe.returncode:continue
+            if probe.returncode:break
             duration=float(json.loads(probe.stdout).get('format',{}).get('duration',0))
-            if not math.isfinite(duration) or duration<=0:continue
+            if not math.isfinite(duration) or duration<=0:break
             data=json.loads(session_path.read_text());stat=video.stat();epoch=int(video.stem.rsplit('-',1)[1])*1000
             _write(path,dict(data,video=video.name,start_unix_ms=max(epoch,data.get('started_unix_ms',epoch)),
-                duration_ms=int(duration*1000),size=stat.st_size,mtime_ns=stat.st_mtime_ns,status='PENDING',
+                duration_ms=int(duration*1000),size=stat.st_size,mtime_ns=stat.st_mtime_ns,status='PENDING',decode_backend='pending',
                 active=True,motion_decision='RECOVERED_VIDEO_MOTION_UNKNOWN'))
+            break
     def _decode(self, path, job):
-        video=self.folder/job['video'];command=[self.ffmpeg,'-hide_banner','-loglevel','error','-nostdin',
-            '-threads','1','-filter_threads','1','-i',str(video),'-map','0:v:0','-an','-sn','-dn',
-            '-vf','fps='+str(self.fps),'-threads','1','-c:v','mjpeg','-q:v','2','-f','image2pipe','pipe:1']
+        cuda_slot=None;device=None
+        # Legacy jobs may already contain CPU-encoded committed frames.
+        # New jobs explicitly opt into selecting their first decode backend.
+        backend=job.get('decode_backend','cpu')
+        resume_frame=int(job.get('resume_frame',0))
+        wanted=job.get('decode_cuda_device') if backend=='cuda' else self.cuda_device
+        try:
+            if backend=='cuda' or (backend=='pending' and job.get('stream_kind')=='main' and wanted is not None):
+                with _CUDA_LOCK:
+                    slot=_CUDA_READERS.setdefault(wanted,threading.BoundedSemaphore(self.cuda_reader_capacity))
+                if slot.acquire(blocking=False):cuda_slot=slot;device=wanted
+                elif backend=='cuda':
+                    # A persisted CUDA prefix must never silently become CPU
+                    # output under the same frame IDs after a restart.
+                    with self.lock:self.stats['hardware_durable_slot_waits']=self.stats.get('hardware_durable_slot_waits',0)+1
+                    return
+                else:
+                    with self.lock:self.stats['hardware_durable_capacity_fallbacks']=self.stats.get('hardware_durable_capacity_fallbacks',0)+1
+            selected='cuda' if device is not None else 'cpu'
+            if backend=='pending' or 'decode_backend' not in job:
+                job.update(decode_backend=selected,decode_cuda_device=device,resume_frame=resume_frame)
+                _write(path,job)
+            if device is not None:
+                with self.lock:self.stats['hardware_durable_attempts']=self.stats.get('hardware_durable_attempts',0)+1
+                try:
+                    completed=self._decode_segment(path,job,device,start_frame=resume_frame)
+                    if completed:
+                        with self.lock:self.stats['hardware_durable_decoded_segments']=self.stats.get('hardware_durable_decoded_segments',0)+1
+                    return
+                except _HardwareDecodeFailure as error:
+                    if backend=='cuda':
+                        # A prior attempt may have committed farther than its
+                        # last checkpoint before process termination. Keep that
+                        # attempt's encoder rather than overwrite an unknown
+                        # committed prefix with different CPU-encoded bytes.
+                        with self.lock:
+                            self.stats['hardware_durable_failures']=self.stats.get('hardware_durable_failures',0)+1
+                            self.stats['hardware_durable_last_error']=str(error)
+                        raise
+                    # Persist the backend switch and committed prefix before
+                    # CPU can emit anything, including across process restarts.
+                    resume_frame=max(resume_frame,error.frames_consumed)
+                    job.update(decode_backend='cpu',decode_cuda_device=None,resume_frame=resume_frame)
+                    _write(path,job)
+                    with self.lock:
+                        self.stats['hardware_durable_failures']=self.stats.get('hardware_durable_failures',0)+1
+                        self.stats['hardware_durable_last_error']=str(error)
+                        self.stats['hardware_durable_last_error_at_unix_ms']=int(time.time()*1000)
+                    cuda_slot.release();cuda_slot=None
+                    if self.stop_event.is_set():return
+            with self.lock:self.stats['software_durable_attempts']=self.stats.get('software_durable_attempts',0)+1
+            self._decode_segment(path,job,None,start_frame=resume_frame)
+        except _SegmentDecodeFailure as error:
+            job['resume_frame']=max(resume_frame,error.frames_consumed)
+            _write(path,job)
+            raise
+        finally:
+            if cuda_slot:cuda_slot.release()
+    def _decode_segment(self, path, job, device, start_frame=0):
+        video=self.folder/job['video']
+        binary=self.hardware_ffmpeg if device is not None else self.ffmpeg
+        command=[binary,'-hide_banner','-loglevel','error','-nostdin','-threads','1','-filter_threads','1']
+        if device is not None:command+=['-hwaccel','cuda','-hwaccel_device',str(device),'-hwaccel_output_format','cuda']
+        command+=['-i',str(video),'-map','0:v:0','-an','-sn','-dn',
+            '-vf','fps='+str(self.fps)+(',hwdownload,format=nv12' if device is not None else ''),
+            '-threads','1','-c:v','mjpeg','-q:v','2','-f','image2pipe','pipe:1']
         if job.get('sample_limit'):
             command[-1:-1]=['-frames:v',str(job['sample_limit'])]
-        process=subprocess.Popen(command,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+        try:process=subprocess.Popen(command,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+        except OSError as error:
+            if device is not None:raise _HardwareDecodeFailure('NVDEC_START_'+type(error).__name__) from error
+            raise
         parser=PrivateRTSPReader('rtsp://127.0.0.1:1/unused',self.source_id,self.camera_id,job['stream_kind'])
-        with self.lock:self.decoder=process
+        with self.lock:self.decoder=process;self.stats['durable_decode_device']=device
         frames=0
         try:
             while not self.stop_event.is_set():
-                image,extra=parser._read_output(process.stdout)
+                try:image,extra=parser._read_output(process.stdout)
+                except (OSError,ValueError) as error:
+                    if device is not None:raise _HardwareDecodeFailure('NVDEC_READ_'+type(error).__name__,frames) from error
+                    raise
                 if image is None:break
+                if frames<start_frame:
+                    frames+=1;continue
                 at=job['start_unix_ms']+round(frames*1000/self.fps)
                 if not any(at>=route['since_unix_ms'] for route in job['routes']):
                     frames+=1;continue
@@ -384,25 +506,39 @@ class MotionVideoCamera:
                         self.stop_event.wait(.25)
                 if self.stop_event.is_set():return
                 frames+=1
-                with self.lock:self.stats['persisted_candidates']+=1;self.stats['decoded_frames']+=1
-            code=process.wait(timeout=5)
-            if code or not frames:raise ValueError('segment decode incomplete; original retained')
+                with self.lock:
+                    self.stats['persisted_candidates']+=1;self.stats['decoded_frames']+=1
+                    if device is not None:self.stats['hardware_durable_frames']=self.stats.get('hardware_durable_frames',0)+1
+            try:code=process.wait(timeout=5)
+            except subprocess.TimeoutExpired as error:
+                if device is not None:raise _HardwareDecodeFailure('NVDEC_EXIT_TIMEOUT',frames) from error
+                raise
+            if code or not frames or frames<start_frame:
+                if device is not None:raise _HardwareDecodeFailure('NVDEC_EXIT_'+str(code)+'_FRAMES_'+str(frames),frames)
+                raise ValueError('segment decode incomplete; original retained')
             self._retire(path,job,'DURABLE_FRAME_INGRESS_COMMITTED',frames)
             with self.lock:self.stats['decoded_segments']+=1
+            return True
+        except _SegmentDecodeFailure:
+            raise
+        except Exception as error:
+            raise _SegmentDecodeFailure('SEGMENT_'+type(error).__name__,frames) from error
         finally:
             self._terminate(process)
-            with self.lock:self.decoder=None
+            with self.lock:self.decoder=None;self.stats['durable_decode_device']=None
     def _manage(self):
         while not self.stop_event.is_set():
             try:
-                self._recover_commits();self._discover();self._recover_unlisted();jobs=[]
-                for path in self.folder.glob('*.job.json'):
+                self._recover_commits();self._discover()
+                # File names carry the immutable recording server epoch. Sort
+                # paths first, and load only candidates needed for this turn.
+                # Parsing thousands of old JSON jobs delayed fresh discovery.
+                jobs=list(self.folder.glob('*.job.json'))
+                with self.lock:self.stats.update(pending_video_segments=len(jobs),manager_stage='SELECTING',manager_at_unix_ms=int(time.time()*1000))
+                for path in sorted(jobs,key=lambda p:int(p.name.removesuffix('.job.json').rsplit('-',1)[1]),reverse=self.prefer_recent):
                     job=json.loads(path.read_text())
                     if job.get('camera_id')!=self.camera_id or job.get('source_id')!=self.source_id:
                         raise ValueError('persisted video belongs to another source')
-                    jobs.append((job['start_unix_ms'],path,job))
-                with self.lock:self.stats['pending_video_segments']=len(jobs)
-                for _,path,job in sorted(jobs,key=lambda x:x[0],reverse=self.prefer_recent):
                     if self.stop_event.is_set():break
                     if job.get('retry_after_unix_ms',0)>int(time.time()*1000):continue
                     end=job['start_unix_ms']+job['duration_ms']
@@ -423,7 +559,9 @@ class MotionVideoCamera:
                             self._retire(path,job,'MOTION_SCREENED_IDLE')
                             with self.lock:self.stats['idle_segments']+=1
                             break
-                    if not _SLOTS.acquire(self.stop_event):break
+                    with self.lock:self.stats['manager_stage']='WAITING_DECODE_SLOT'
+                    if not _SLOTS.acquire(self.stop_event,self._discover):break
+                    with self.lock:self.stats['manager_stage']='DECODING'
                     try:self._decode(path,job)
                     except Exception as error:
                         job['retry_after_unix_ms']=int(time.time()*1000)+5000;job['last_error']='DECODE_OR_DURABLE_COMMIT_RETRY_ORIGINAL_RETAINED';_write(path,job)
@@ -431,6 +569,8 @@ class MotionVideoCamera:
                         with self.lock:self.stats['capture_errors']+=1;self.stats.update(last_error=job['last_error'],last_error_type=type(error).__name__,last_error_function=location.name,last_error_line=location.lineno)
                     finally:_SLOTS.release()
                     break  # One closed segment per fair scheduling turn.
+                with self.lock:self.stats['manager_stage']='RECOVERING_ORPHAN'
+                self._recover_unlisted()
             except Exception as error:
                 location=traceback.extract_tb(error.__traceback__)[-1]
                 with self.lock:self.stats['capture_errors']+=1;self.stats.update(last_error='PENDING_VIDEO_RETAINED_FOR_RETRY',last_error_type=type(error).__name__,last_error_function=location.name,last_error_line=location.lineno)

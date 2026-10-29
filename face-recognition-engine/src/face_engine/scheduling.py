@@ -13,6 +13,13 @@ import time
 CATEGORIES = ("PRIORITY", "NORMAL", "UNREGISTERED")
 
 
+class EncodedFrame(bytes):
+    """Original compressed pixels; only a selected inference job decodes them."""
+    @property
+    def nbytes(self):
+        return len(self)
+
+
 @dataclass
 class FrameJob:
     key: str

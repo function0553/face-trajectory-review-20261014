@@ -415,6 +415,60 @@ class PrivateRTSPReader(LatestFrameReader):
         self._jpeg_buffer=bytearray()
         self._connect_lock = threading.Lock()
         self._connect_held = False
+        self._preferred_cuda_device=self.decode_cuda_device
+        self._hardware_ffmpeg=self.ffmpeg
+        self._hardware_concat_options=self.concat_input_options
+        self._hardware_retry_at=0.0
+        self._hardware_error=None
+        self._hardware_stderr_thread=None
+
+    def _drain_hardware_errors(self, process):
+        """Drain stderr without retaining or exposing private RTSP diagnostics."""
+        tail=b''
+        try:
+            while True:
+                block=getattr(process.stderr,'read1',process.stderr.read)(4096)
+                if not block:return
+                text=(tail+block).lower();tail=text[-256:]
+                category=None
+                if any(x in text for x in (b'out of memory',b'cuda_error_out_of_memory')):
+                    category='CUDA_OUT_OF_MEMORY'
+                elif any(x in text for x in (b'cannot load libcuda',b'cannot load libnvcuvid',
+                                             b'cuda_error_no_device',b'failed to initialise cuda',
+                                             b'failed setup for format cuda',b'no device available for decoder')):
+                    category='CUDA_INITIALIZATION_FAILED'
+                elif any(x in text for x in (b'unsupported codec',b'cuda_error_not_supported')):
+                    category='CUDA_DECODE_UNSUPPORTED'
+                elif any(x in text for x in (b'invalid output format for hwframe download',
+                                             b'failed to download frame',b'function not implemented')):
+                    category='CUDA_FILTER_FAILED'
+                elif b'option' in text and any(x in text for x in (b'not found',b'not allowed',b'unknown keyword')):
+                    category='HARDWARE_INPUT_OPTION_UNSUPPORTED'
+                if category:
+                    with self._lock:
+                        self._hardware_error=category
+                        self._metrics['hardware_last_error']=category
+        except (OSError,ValueError):
+            pass
+        finally:
+            process.stderr.close()
+
+    def _hardware_eof(self):
+        if self._hardware_stderr_thread:self._hardware_stderr_thread.join(.2)
+        with self._lock:
+            error=self._hardware_error
+            reason=error or ('FRAME_TIMEOUT' if self._metrics.get('last_error')=='FRAME_TIMEOUT'
+                            else 'END_OF_STREAM_OR_TRANSPORT')
+            self._metrics['hardware_last_error']=reason
+            self._metrics['hardware_decode_reconnects']=self._metrics.get('hardware_decode_reconnects',0)+1
+        # A network interruption is not proof that NVDEC failed. Reconnect the
+        # same GPU decoder; only explicit hardware/input failures use CPU briefly.
+        if error and self.cpu_ffmpeg:
+            self.decode_cuda_device=None;self.ffmpeg=self.cpu_ffmpeg
+            self.concat_input_options=True
+            self._hardware_retry_at=time.monotonic()+60+int(hashlib.sha256(self.camera_id.encode()).hexdigest()[:4],16)%16
+            with self._lock:
+                self._metrics['hardware_decode_fallbacks']=self._metrics.get('hardware_decode_fallbacks',0)+1
 
     def _release_connect(self):
         with self._connect_lock:
@@ -425,6 +479,11 @@ class PrivateRTSPReader(LatestFrameReader):
     def _read_output(self, stream):
         try:
             while True:
+                if (self._preferred_cuda_device is not None and self.decode_cuda_device is None
+                        and self._hardware_retry_at and time.monotonic()>=self._hardware_retry_at):
+                    # End the temporary CPU session so the normal reconnect loop
+                    # can retry NVDEC, even when that CPU stream keeps producing.
+                    return None,{}
                 if self.archive_directory and time.monotonic()>=self.archive_next_check:
                     self.archive_next_check=time.monotonic()+30
                     self._prune_archive()
@@ -463,12 +522,7 @@ class PrivateRTSPReader(LatestFrameReader):
                 if len(self._jpeg_buffer)>12*1024*1024:raise ValueError('decoder JPEG byte limit exceeded')
                 block=getattr(stream,'read1',stream.read)(65536)
                 if not block:
-                    if self.decode_cuda_device is not None and self.cpu_ffmpeg:
-                        # Codec/device/network failures must not strand a camera
-                        # on a hardware decoder that produces no usable frames.
-                        self.decode_cuda_device=None;self.ffmpeg=self.cpu_ffmpeg
-                        self.concat_input_options=True
-                        with self._lock:self._metrics['hardware_decode_fallbacks']=self._metrics.get('hardware_decode_fallbacks',0)+1
+                    if self.decode_cuda_device is not None and not self._stop.is_set():self._hardware_eof()
                     if self._jpeg_buffer:raise EOFError('truncated decoder JPEG')
                     return None,{}
                 self._jpeg_buffer.extend(block)
@@ -482,9 +536,16 @@ class PrivateRTSPReader(LatestFrameReader):
 
     def stop(self, *args, **kwargs):
         self._release_connect()
-        return super().stop(*args, **kwargs)
+        try:return super().stop(*args, **kwargs)
+        finally:
+            if self._hardware_stderr_thread:self._hardware_stderr_thread.join(1)
 
     def _command(self):
+        if (self._preferred_cuda_device is not None and self.decode_cuda_device is None
+                and self._hardware_retry_at and time.monotonic()>=self._hardware_retry_at):
+            self.decode_cuda_device=self._preferred_cuda_device;self.ffmpeg=self._hardware_ffmpeg
+            self.concat_input_options=self._hardware_concat_options;self._hardware_retry_at=0.0
+            with self._lock:self._metrics['hardware_decode_retries']=self._metrics.get('hardware_decode_retries',0)+1
         command = super()._command()
         index = command.index('-i')
         tail=command[index+2:]
@@ -541,11 +602,27 @@ class PrivateRTSPReader(LatestFrameReader):
         if self._stop.is_set():
             self._release_connect()
             raise OSError('RTSP connection cancelled')
+        process=None
         try:
+            if self._hardware_stderr_thread:self._hardware_stderr_thread.join(1)
+            self._hardware_error=None
+            hardware=self.decode_cuda_device is not None
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                       stderr=subprocess.DEVNULL, creationflags=_CREATE_FLAGS)
+                                       stderr=subprocess.PIPE if hardware else subprocess.DEVNULL,
+                                       creationflags=_CREATE_FLAGS)
+            if hardware:
+                self._hardware_stderr_thread=threading.Thread(target=self._drain_hardware_errors,
+                    args=(process,),name='private-hardware-errors',daemon=True)
+                self._hardware_stderr_thread.start()
         except BaseException:
             self._release_connect()
+            if process is not None:
+                if process.poll() is None:process.kill()
+                process.wait(timeout=3)
+                for stream in (process.stdin,process.stdout,process.stderr):
+                    if stream:stream.close()
+            if self._hardware_stderr_thread and self._hardware_stderr_thread.ident is None:
+                self._hardware_stderr_thread=None
             raise
         try:
             process.stdin.write(playlist.encode('utf-8'))
@@ -554,6 +631,7 @@ class PrivateRTSPReader(LatestFrameReader):
             self._release_connect()
             process.kill()
             process.wait(timeout=3)
+            process.stdin.close()
             process.stdout.close()
             raise
         return process

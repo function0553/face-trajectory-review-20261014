@@ -87,8 +87,14 @@ class ArcFaceRecognizer(FaceRecognizer):
         chunks = []
         # 按 batch_size 切块推理。50 张脸 + batch_size 32 → 切成 [32, 18] 两批。
         for start in range(0, len(faces), self.batch_size):
-            input_data = prepare_arcface_input(faces[start:start + self.batch_size])
-            embeddings = np.asarray(self.session.run(None, {self.input_name: input_data})[0], dtype=np.float32)
+            cuda_input = getattr(self, 'cuda_input', None)
+            if cuda_input is None:
+                input_data = prepare_arcface_input(faces[start:start + self.batch_size])
+                outputs = self.session.run(None, {self.input_name: input_data})
+            else:
+                input_data = cuda_input.arcface(faces[start:start + self.batch_size])
+                outputs = cuda_input.run(self.input_name, input_data)
+            embeddings = np.asarray(outputs[0], dtype=np.float32)
             if embeddings.shape != (len(input_data), EMBEDDING_DIM):
                 raise ValueError(f"ArcFace output must be [{len(input_data)}, 512]")
             norms = np.linalg.norm(embeddings, axis=1, keepdims=True)

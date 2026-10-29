@@ -1315,6 +1315,8 @@ def main():
                 config.get('scheduling', {}).get('inference_workers', 1))
         else:
             extractor = TrajectoryExtractor.from_config(model_config)
+        from face_engine.cuda_preprocessing import configure_gpu_preprocessing
+        configure_gpu_preprocessing(extractor, config.get('inference_gpu_preprocessing', False))
         # Treat explicit cuda:<id> exactly like cuda for the fail-fast
         # production guard; otherwise a failed CUDA initialization could be
         # accepted silently when a worker is pinned to the second GPU.

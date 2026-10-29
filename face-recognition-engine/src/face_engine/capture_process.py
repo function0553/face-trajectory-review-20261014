@@ -199,14 +199,20 @@ class CaptureProcesses:
     def latest(self,camera,after_frame_id=None,max_age_s=2):
         from face_engine.acquisition import Frame
         from face_engine.monitoring_service import decode_image
-        # Decode only when consumed; hundreds of cameras retain JPEGs, not BGR copies.
+        frame=self.latest_encoded(camera,after_frame_id,max_age_s)
+        if frame is None:return None
+        return Frame(decode_image(frame.encoded_image),frame.metadata,frame.received_monotonic,frame.encoded_image)
+    def latest_encoded(self,camera,after_frame_id=None,max_age_s=2):
+        from face_engine.acquisition import Frame
+        # Admission and replacement use compressed originals, not a full BGR
+        # decode of every camera before the GPU can claim a processing turn.
         with self.live_lock:
             value=self.live_frames.pop(camera,None)
             if value:self.live_bytes-=len(value[0])
         if value is None:return None
         body,metadata,received=value
         if metadata.get('frame_id')==after_frame_id or time.monotonic()-received>max_age_s:return None
-        return Frame(decode_image(body),metadata,received,body)
+        return Frame(None,metadata,received,body)
     def configure(self, rows):
         with self.config_lock:
             rows=dict(rows)
@@ -328,6 +334,10 @@ class ProcessCamera:
     def start(self):return self
     def latest(self,after_frame_id=None,max_age_s=2):
         frame=self.manager.latest(self.camera_id,after_frame_id or self.live_last_id,max_age_s)
+        if frame is not None:self.live_last_id=frame.metadata['frame_id']
+        return frame
+    def latest_encoded(self,after_frame_id=None,max_age_s=2):
+        frame=self.manager.latest_encoded(self.camera_id,after_frame_id or self.live_last_id,max_age_s)
         if frame is not None:self.live_last_id=frame.metadata['frame_id']
         return frame
     def metrics(self):return self.manager.metrics(self.camera_id)

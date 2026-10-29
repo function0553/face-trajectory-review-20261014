@@ -129,8 +129,13 @@ class SCRFDDetector(FaceDetector):
             return []  # 空帧视为 0 张脸，不报错。
         input_w, input_h = self.input_size
 
-        blob, scale = prepare_scrfd_input(image, self.input_size)
-        outputs = self.session.run(None, {self.input_name: blob})
+        cuda_input = getattr(self, 'cuda_input', None)
+        if cuda_input is None:
+            blob, scale = prepare_scrfd_input(image, self.input_size)
+            outputs = self.session.run(None, {self.input_name: blob})
+        else:
+            blob, scale = cuda_input.scrfd(image, self.input_size)
+            outputs = cuda_input.run(self.input_name, blob)
         count = len(self.strides)
         if len(outputs) != count * 3:
             raise ValueError("SCRFD runtime output count conflicts with model heads")
