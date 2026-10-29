@@ -86,6 +86,11 @@ class MotionVideoCamera:
         self.live_enabled=enabled is not None and ('*' in enabled or camera_id in enabled)
         self.on_live_frame=on_live_frame;self.live_frame=None;self.live_last_published=0;self.live_consumed_id=None
         self.camera_clock=camera_clock;self.connection=connection
+        self.live_preferred_stream=self.settings.get('live_preferred_stream','main')
+        if self.live_preferred_stream not in ('main','sub'):raise ValueError('live_preferred_stream must be main or sub')
+        self.cuda_reader_capacity=self.settings.get('cuda_readers_per_device_per_process',1)
+        if type(self.cuda_reader_capacity) is not int or not 1<=self.cuda_reader_capacity<=16:
+            raise ValueError('cuda_readers_per_device_per_process must be 1..16')
         devices=self.settings.get('cuda_decode_devices',[])
         if not isinstance(devices,list) or any(type(d) is not int or d<0 for d in devices):raise ValueError('invalid CUDA decode devices')
         self.cuda_device=devices[int(hashlib.sha256(camera_id.encode()).hexdigest()[:8],16)%len(devices)] if devices else None
@@ -191,10 +196,10 @@ class MotionVideoCamera:
         reader=None;last=None;gate=SceneMotionGate();cuda_slot=None;device=None
         try:
             if self.cuda_device is not None:
-                with _CUDA_LOCK:slot=_CUDA_READERS.setdefault(self.cuda_device,threading.BoundedSemaphore(1))
+                with _CUDA_LOCK:slot=_CUDA_READERS.setdefault(self.cuda_device,threading.BoundedSemaphore(self.cuda_reader_capacity))
                 if slot.acquire(blocking=False):cuda_slot=slot;device=self.cuda_device
             reader=FailoverCamera(self.sub_url,self.main_url,self.source_id,self.camera_id,
-                ffmpeg=self.ffmpeg,sample_fps=self.fps,preferred_stream='main',decode_keyframes_only=False)
+                ffmpeg=self.ffmpeg,sample_fps=self.fps,preferred_stream=self.live_preferred_stream,decode_keyframes_only=False)
             if device is not None:
                 def native_reader(*args,**kwargs):
                     kwargs.update(ffmpeg=self.hardware_ffmpeg,decode_cuda_device=device,cpu_ffmpeg=self.ffmpeg,
@@ -234,9 +239,9 @@ class MotionVideoCamera:
         reader=None;last=None;gate=SceneMotionGate();cuda_slot=None;device=None
         try:
             if self.cuda_device is not None:
-                # One persistent context per device/process bounds decoder VRAM.
+                # A configured context budget per device/process bounds decoder VRAM.
                 # Remaining cameras keep acquiring with the software decoder.
-                with _CUDA_LOCK:slot=_CUDA_READERS.setdefault(self.cuda_device,threading.BoundedSemaphore(1))
+                with _CUDA_LOCK:slot=_CUDA_READERS.setdefault(self.cuda_device,threading.BoundedSemaphore(self.cuda_reader_capacity))
                 if slot.acquire(blocking=False):cuda_slot=slot;device=self.cuda_device
             reader=PrivateRTSPReader(self.sub_url or self.main_url,self.source_id,self.camera_id,'sub',
                 ffmpeg=self.hardware_ffmpeg if device is not None else self.ffmpeg,
@@ -432,7 +437,10 @@ class MotionVideoCamera:
                 result['cuda_decode_device']=getattr(current,'decode_cuda_device',None)
                 result['motion_hardware_fallbacks']=current.metrics().get('hardware_decode_fallbacks',0) if current else 0
             result['live_enabled']=self.live_enabled
+            result['live_preferred_stream']=self.live_preferred_stream
+            result['cuda_readers_per_device_per_process']=self.cuda_reader_capacity
             result['live_frame_id']=self.live_frame.metadata['frame_id'] if self.live_frame else None
+            result['live_stream_kind']=self.live_frame.metadata.get('stream_kind') if self.live_frame else None
             if self.last_frame_at is not None:result['frame_age_seconds']=round(time.monotonic()-self.last_frame_at,3)
             return result
     def stop(self):

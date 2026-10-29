@@ -188,7 +188,14 @@ class MonitoringRuntime:
         self.inference_workers = scheduling.get('inference_workers', 1)
         if type(self.inference_workers) is not int or not 1 <= self.inference_workers <= 16:
             raise ValueError('inference_workers must be 1..16')
-        self.main_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='main-frame')
+        self.live_inference_workers = scheduling.get('live_inference_workers', 1)
+        if (type(self.live_inference_workers) is not int
+                or not 1 <= self.live_inference_workers <= self.inference_workers):
+            raise ValueError('live_inference_workers must be 1..inference_workers')
+        self.main_frame_workers = scheduling.get('main_frame_workers', 2)
+        if type(self.main_frame_workers) is not int or not 1 <= self.main_frame_workers <= 32:
+            raise ValueError('main_frame_workers must be 1..32')
+        self.main_pool = ThreadPoolExecutor(max_workers=self.main_frame_workers, thread_name_prefix='main-frame')
         self.threads = []
         self.consumer_lease = None
         self.maintenance_condition = threading.Condition(threading.RLock())
@@ -311,7 +318,7 @@ class MonitoringRuntime:
         metadata = self._configured_metadata(frame)
         self.store.capture(body.tobytes(), metadata, self.priority.category(metadata['camera_id'], activity_id=metadata['activity_id']))
 
-    def _request_main(self, metadata):
+    def _request_main(self, metadata, *, fallback_frame=None):
         if self.stop_event.is_set():
             return
         camera_id = metadata['camera_id']
@@ -325,7 +332,7 @@ class MonitoringRuntime:
         with self.main_lock:
             if self.stop_event.is_set():
                 return
-            if camera_id in self.main_pending or len(self.main_pending) >= 2:
+            if camera_id in self.main_pending or len(self.main_pending) >= self.main_frame_workers:
                 self.count('main_request_busy')
                 return
             self.main_pending.add(camera_id)
@@ -356,9 +363,13 @@ class MonitoringRuntime:
                 raise
 
     def _deliveries(self, observations, stream_kind=None):
+        from face_engine.main_photo import photo_is_clear
         result = []
         policy = association_policy_for_stream(self.config, stream_kind)
         for observation in observations:
+            if not photo_is_clear(observation):
+                self.count('unclear_photos_not_reported')
+                continue
             context = activity_context(observation)
             # P2 normalizes raw camera time and ignores legacy qualification claims.
             payload = dict(observation=observation,
@@ -498,7 +509,35 @@ class MonitoringRuntime:
         results = extract((original(raw), meta) for raw, meta in records)
         if len(results) != len(records):
             raise ValueError('photo-window extractor returned a different frame count')
+        waiting_main = set()
+        for fi, ((raw, meta), result) in enumerate(zip(records, results)):
+            if (meta.get('capture_origin') != 'LIVE_MOTION_VIDEO'
+                    or meta.get('stream_kind') != 'sub' or meta.get('hd_upgrade_managed')):
+                continue
+            camera = self.cameras.get(meta['camera_id'])
+            if not getattr(camera, 'main_url', None):
+                continue
+            # Sub video locates a face. When main exists, its own frame must
+            # support the identity before this sub observation can be sent.
+            waiting_main.add(fi)
+            if not result.get('detected_faces') and not result.get('needs_high_resolution'):
+                continue
+            scope = encoded([meta['activity_id'], meta['source_id'], meta['camera_id']])
+            now = time.monotonic()
+            if now - self.last_main_probe.get(scope, 0) < 5:
+                continue
+            from face_engine.acquisition import Frame
+            from face_engine.main_photo import photo_is_clear
+            fallback = None
+            if any(photo_is_clear(o) for o in result['observations']):
+                received = meta.get('_live_received_monotonic', now)
+                fallback = Frame(original(raw), dict(meta), received)
+            if self._request_main(meta, fallback_frame=fallback):
+                self.last_main_probe[scope] = now
+                self.count('live_main_upgrades_requested')
         selected = select_window(results)
+        selected = [(fi, observation) for fi, observation in selected if fi not in waiting_main]
+        self.count('live_frames_waiting_main', len(waiting_main))
         deliveries, clocks = [], {}
         capture_clock = getattr(self, 'capture_clock', None)
         for fi, observation in selected:
@@ -574,7 +613,8 @@ class MonitoringRuntime:
             if activity_id not in accepted:
                 accepted[activity_id] = self.store.accepts(activity_id)
             if accepted[activity_id]:
-                captures.append((None, job.image, job.metadata))
+                captures.append((None, job.image, dict(job.metadata,
+                    _live_received_monotonic=job.received_monotonic)))
             else:
                 self.count('inference_or_capacity_errors')
         if captures:
@@ -870,9 +910,10 @@ class MonitoringRuntime:
             for reader in self.hikvision:
                 reader.start()
             if self.inference_workers > 1:
-                operations = [('infer', self._live_infer_loop)]
+                operations = [('infer' if i == 0 else 'infer-'+str(i), self._live_infer_loop)
+                    for i in range(self.live_inference_workers)]
                 operations += [('infer-'+str(i), lambda: self._infer_loop(history_only=True))
-                    for i in range(1, self.inference_workers)]
+                    for i in range(self.live_inference_workers, self.inference_workers)]
             else:
                 operations = [('infer', self._infer_loop)]
             operations += [('deliver', self._send_loop), ('sample', self._poll_loop)]
@@ -970,7 +1011,7 @@ class MonitoringRuntime:
         self.consumer_lease = lease
         try:
             self.store.reopen()
-            self.main_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='main-frame')
+            self.main_pool = ThreadPoolExecutor(max_workers=self.main_frame_workers, thread_name_prefix='main-frame')
             self.configure_cameras()
             self.camera_names.start()
             for camera in self.cameras.values():

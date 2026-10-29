@@ -278,24 +278,25 @@ class FailoverCamera:
 
     def _monitor(self):
         while not self.stop_event.wait(.25):
-            # Probe recovered main video while the existing sub reader keeps
-            # running; a failed probe must not open a blind polling interval.
-            if self.preferred_stream=='main' and self.kind=='sub' and self.urls.get('main') and time.monotonic()>=self.next_main_probe:
+            # Recover the preferred stream while the fallback keeps running.
+            # This also returns a low-cost sub reader after a temporary outage.
+            preferred=self.preferred_stream
+            if self.kind!=preferred and self.urls.get(preferred) and time.monotonic()>=self.next_main_probe:
                 self.next_main_probe=time.monotonic()+60
-                probe=self._new('main')
+                probe=self._new(preferred)
                 with self.lock:self.probe_reader=probe
                 promoted=False
                 try:
                     probe.start()
                     if probe.wait_latest(20) is not None and not self.stop_event.is_set():
                         with self.lock:
-                            old=self.reader;self.reader=probe;self.kind='main'
+                            old=self.reader;self.reader=probe;self.kind=preferred
                             self.last_frame_at=time.monotonic();self.last_frame_id=None;self.switches+=1
                             if old:self.retired_frames+=old.metrics()['frames']
                         promoted=True
                         if old:old.stop()
                 except (OSError,ValueError,TimeoutError):
-                    self.stop_error='PREFERRED_MAIN_PROBE_FAILED'
+                    self.stop_error='PREFERRED_'+preferred.upper()+'_PROBE_FAILED'
                 finally:
                     if not promoted:probe.stop()
                     with self.lock:self.probe_reader=None

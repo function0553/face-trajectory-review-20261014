@@ -73,6 +73,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
         self.next_binding_poll = 0
         self.uuid_sources = None
         self.uuid_cached_entries = {}
+        self.live_camera_rollout = None
         if config.get('uuid_sources'):
             from face_engine.uuid_sources import UUIDSources
             self.uuid_sources = UUIDSources(config['uuid_sources'])
@@ -125,6 +126,26 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 except MaintenancePaused:pass
             self.stop_event.wait(.1)
 
+    def _motion_video_settings(self):
+        settings=dict(self.config.get('uuid_sources',{}).get('motion_video',{}))
+        filename=settings.pop('live_camera_ids_file',None)
+        error=None
+        if filename is not None:
+            try:
+                if not isinstance(filename,str) or not Path(filename).is_absolute():
+                    raise ValueError('live_camera_ids_file must be an absolute path')
+                selected=json.loads(Path(filename).read_text(encoding='utf-8-sig'))
+                if not isinstance(selected,list) or any(not isinstance(v,str) or not v for v in selected):
+                    raise ValueError('live camera rollout must be a JSON string array')
+                settings['live_camera_ids']=list(selected)
+            except (OSError,ValueError,TypeError) as exc:
+                # Keep the last applied selection. A missing first rollout must
+                # not inherit a wildcard from an old cached connection.
+                error=type(exc).__name__
+                self.count('platform_binding_rollout_errors')
+                settings['live_camera_ids']=list(self.live_camera_rollout or [])
+        return settings,error
+
     def _refresh_bindings(self, *, start_readers):
         from face_engine.acquisition import CameraAcquisition, HikvisionEventReader
         if self.cleanup_pending:
@@ -133,6 +154,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 return
             self.cleanup_pending = False
         try:
+            motion_settings,rollout_error=self._motion_video_settings()
             routes = binding_snapshot(self.binding_state, int(time.time()*1000))
             # Revoke paused/removed/revised routes before any remote source lookup.
             # Newly added routes still wait for their own resolved reader below.
@@ -229,7 +251,18 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                             args['main_archive_directory'] = item.get('main_archive_directory')
                             args['motion_admission'] = item.get('motion_admission', {})
                             args['main_photo_enabled'] = item.get('main_photo_enabled', True)
-                            args['motion_video'] = item.get('motion_video', {})
+                            # Source-cache entries describe a connection, not the
+                            # current fleet rollout. Runtime settings must also
+                            # reach cameras restored from the registry cache.
+                            args['motion_video'] = dict(item.get('motion_video', {}))
+                            args['motion_video'].update(motion_settings)
+                            selected=args['motion_video'].get('live_camera_ids',[])
+                            if not isinstance(selected,list) or any(not isinstance(v,str) or not v for v in selected):
+                                raise ValueError('live_camera_ids must be a camera UUID list')
+                            # Only this camera's enabled bit belongs in its
+                            # connection signature, not the changing fleet list.
+                            args['motion_video']['live_camera_ids']=[camera] if '*' in selected or camera in selected else []
+                            args['motion_video'].pop('live_camera_ids_file',None)
                     signatures[camera] = (encoded([sub, main, args, dynamic]), sub, main, args, dynamic)
                 if dynamic and item.get('continuous') and not self.capture_processes:
                     connection = item.get('capture_connection')
@@ -338,6 +371,10 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             self.binding_status = dict(status='MISSING_VIDEO_SOURCE' if missing else ('BOUND' if routes else 'IDLE'),
                 bound_camera_count=len(routes), active_input_count=len(live),
                 activity_route_count=sum(map(len, live.values())), missing_camera_ids=sorted(missing))
+            if rollout_error:
+                self.binding_status['live_rollout']=dict(status='READ_FAILED_SELECTION_RETAINED',error_type=rollout_error)
+            elif self.config.get('uuid_sources',{}).get('motion_video',{}).get('live_camera_ids_file') is not None:
+                self.live_camera_rollout=list(motion_settings['live_camera_ids'])
             if self.uuid_sources is not None:
                 self.binding_status['uuid_sources'] = copy.deepcopy(self.uuid_sources.status)
             self.count('platform_binding_refreshes')
@@ -487,24 +524,52 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             raise RuntimeError('platform camera route is paused or revoked; retain original captures')
         return super().process_photo_window(captures)
 
-    def _request_main(self, metadata):
-        camera_id = metadata['camera_id']
+    def _request_main(self, metadata, fallback_frame=None):
+        camera_id = metadata.get('camera_id')
+        live=metadata.get('capture_origin')=='LIVE_MOTION_VIDEO'
+        if live and fallback_frame is not None:
+            try:
+                if (fallback_frame.metadata.get('camera_id')!=camera_id
+                        or fallback_frame.metadata.get('source_id')!=metadata.get('source_id')
+                        or fallback_frame.metadata.get('stream_kind')!='sub'
+                        or fallback_frame.metadata.get('frame_id')!=metadata.get('frame_id')
+                        or activity_context(fallback_frame.metadata)!=activity_context(metadata)):
+                    return False
+            except (ValueError,KeyError,TypeError):return False
         with self.platform_lock:
             if not self._route_current(metadata):
-                return
+                return False
             camera = self.cameras.get(camera_id)
         if camera is None or self.stop_event.is_set():
-            return
+            return False
         with self.main_lock:
-            if camera_id in self.main_pending or len(self.main_pending) >= 2:
-                return
+            if camera_id in self.main_pending or len(self.main_pending) >= self.main_frame_workers:
+                return False
             self.main_pending.add(camera_id)
         def fetch():
+            upgrade_failed=False
             try:
                 with self.operation():
-                    frame = camera.request_main(reason='insufficient_face_quality')
+                    try:frame = camera.request_main(reason='insufficient_face_quality')
+                    except Exception:
+                        upgrade_failed=True
+                        raise
+                    if frame is None:upgrade_failed=True
                     if frame is not None:
-                        if getattr(camera, 'callback', None) is not None:
+                        if live:
+                            if (frame.metadata.get('camera_id')!=camera_id
+                                    or frame.metadata.get('source_id')!=metadata.get('source_id')
+                                    or frame.metadata.get('stream_kind')!='main'):
+                                raise ValueError('live main frame source differs from trigger')
+                            # A new main frame owns its own receipt time and pixels.
+                            # Do not send it back through the historical disk queue.
+                            frame=replace(frame,metadata=dict(frame.metadata,capture_origin='LIVE_MOTION_VIDEO',
+                                hd_upgrade_managed=True,hd_trigger_frame_id=metadata.get('frame_id'),
+                                detection_native_tiles=True))
+                            for routed in self._routed_frames(frame):
+                                if activity_context(routed.metadata)==activity_context(metadata):
+                                    if self.submit_frame(routed):self.count('live_main_frames_received')
+                        elif getattr(camera, 'callback', None) is not None:
                             body=frame.encoded_image
                             if body is None:
                                 import cv2
@@ -517,15 +582,29 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                                 self.submit_frame(routed)
             except Exception:
                 self.count('main_request_errors')
+            finally:
+                # A usable main image must never be replaced by a sub guess.
+                # Only acquisition failure may return the original low-res input.
+                if live and upgrade_failed and fallback_frame is not None:
+                    try:
+                        with self.operation():
+                            fallback=replace(fallback_frame,metadata=dict(fallback_frame.metadata,
+                                hd_upgrade_managed=True,main_upgrade_failed=True))
+                            for routed in self._routed_frames(fallback):
+                                if activity_context(routed.metadata)==activity_context(metadata):
+                                    if self.submit_frame(routed):self.count('live_main_fallback_frames')
+                    except Exception:self.count('live_main_fallback_errors')
         try:
             future = self.main_pool.submit(fetch)
             def done(_):
                 with self.main_lock:
                     self.main_pending.discard(camera_id)
             future.add_done_callback(done)
+            return True
         except RuntimeError:
             with self.main_lock:
                 self.main_pending.discard(camera_id)
+            return False
 
     @runtime_operation
     def _poll_cycle(self):

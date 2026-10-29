@@ -92,14 +92,15 @@ def photo_score(observation):
     return size * math.sqrt(min(sharp, 400) / 400) * pose * observation.get('detection_score', 0)
 
 
-def photo_rank(observation):
+def photo_is_clear(observation):
+    """Delivery quality only; detection and enrollment policy stay unchanged."""
     q = observation.get('quality', {}).get('metrics', {})
-    # Prefer an actually usable original over a sharper-looking tiny face.
-    # This ranks candidates; it does not raise the accepted-face threshold or
-    # discard a passage when all available faces are small.
-    clear = (q.get('face_size_px', 0) >= 48 and q.get('laplacian_variance', 0) >= 40
-             and q.get('yaw_proxy', 0) <= .6 and q.get('clipped_fraction', 0) <= .08)
-    return (clear, photo_score(observation), observation['observation_id'])
+    return (q.get('face_size_px', 0) >= 48 and q.get('laplacian_variance', 0) >= 40
+            and q.get('yaw_proxy', 0) <= .6 and q.get('clipped_fraction', 0) <= .08)
+
+
+def photo_rank(observation):
+    return (photo_is_clear(observation), photo_score(observation), observation['observation_id'])
 
 
 def select_best(results):
@@ -133,4 +134,5 @@ def select_best(results):
             if sum(x == oi for x, _ in edges) == 1 and sum(y == ti for _, y in edges) == 1:
                 tracks[ti].append((fi, observations[oi])); assigned.add(oi)
         tracks.extend([[(fi, o)] for oi, o in enumerate(observations) if oi not in assigned])
-    return [max(track, key=lambda item: photo_rank(item[1])) for track in tracks]
+    winners = [max(track, key=lambda item: photo_rank(item[1])) for track in tracks]
+    return [item for item in winners if photo_is_clear(item[1])]

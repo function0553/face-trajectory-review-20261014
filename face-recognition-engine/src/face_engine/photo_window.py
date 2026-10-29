@@ -5,7 +5,7 @@ assigns a registered identity or copies an embedding onto a different photo.
 """
 import numpy as np
 import cv2
-from face_engine.main_photo import _iou, photo_rank
+from face_engine.main_photo import _iou, photo_rank, photo_is_clear
 
 
 def recognition_candidates(results, aligned, targets):
@@ -97,9 +97,15 @@ def select_window(results):
             # Propagate the paired main requirement along this low-res track;
             # don't let an earlier low-res member evade a later contradiction.
             track = [e for e in track if results[e['fi']].get('frame_info', {}).get('stream_kind') == 'main']
+        track = [e for e in track if photo_is_clear(e['observation'])]
         if track:
+            # Within an unambiguous same-face track prefer a qualified main
+            # original. A sub-stream cannot replace contradictory main evidence.
+            mains = [e for e in track if results[e['fi']].get('frame_info', {}).get('stream_kind') == 'main']
+            if mains:
+                track = mains
             selected.append(max(track, key=lambda e: photo_rank(e['observation'])))
-    # P2 retains first-valid 5s dedup. Put the best actual original into its
+    # P2 retains one person/camera report per activity. Put the best original into its
     # outbox first, before lower quality independent observations can win it.
     selected.sort(key=lambda e: photo_rank(e['observation']), reverse=True)
     return [(e['fi'], e['observation']) for e in selected]

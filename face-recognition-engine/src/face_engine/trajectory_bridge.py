@@ -278,6 +278,7 @@ class TrajectoryExtractor:
                 dimensions=[image.shape[1], image.shape[0]], stream_kind=meta.get('stream_kind'),
                 received_at_unix_ms=meta.get('received_at_unix_ms'))
             outputs.append(output)
+            full_frame_photo = None
             for index, face in enumerate(faces):
                 quality = evaluate_face_quality(image, face, self.quality_policy, metadata=meta)
                 crop = None
@@ -320,7 +321,15 @@ class TrajectoryExtractor:
                     raise ValueError("local track ID and track session must be supplied together")
                 if meta.get('purpose') != 'GALLERY_ENROLLMENT':
                     from face_engine.platform_photos import capture_base64
-                    observation['capture_photo_base64'] = capture_base64(image, face['bbox'])
+                    from face_engine.main_photo import photo_is_clear
+                    if photo_is_clear(observation):
+                        if full_frame_photo is None:
+                            full_frame_photo = capture_base64(image)
+                        observation['capture_photo_base64'] = full_frame_photo
+                    else:
+                        output.setdefault('report_photo_rejected', []).append(dict(
+                            observation_id=oid, reason='REPORT_PHOTO_NOT_CLEAR',
+                            metrics=quality['metrics']))
                     # Internal burst selector only; never add these boxes to the
                     # public observation or use sub coordinates on main video.
                     output.setdefault('observation_boxes', {})[oid] = np.asarray(face['bbox']).tolist()

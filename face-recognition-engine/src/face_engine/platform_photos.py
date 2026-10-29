@@ -260,32 +260,15 @@ def prepare_people(people, extractor, decoder, photo_reader=read_photo):
     return results
 
 
-def capture_base64(image, face_bbox):
-    """Encode this observation's face from the original camera frame.
+def capture_base64(image, face_bbox=None):
+    """Encode the complete original frame used for this observation.
 
-    The detection box belongs to the same face used to compute the embedding.
-    Invalid boxes fail rather than substituting another face or a full frame.
+    Keep the original dimensions and field of view. The optional box remains
+    accepted for existing callers but never crops, resizes or annotates pixels.
     """
     import cv2
-    try:
-        x1, y1, x2, y2 = [float(value) for value in face_bbox]
-    except (TypeError, ValueError):
-        raise ValueError('抓拍人脸边界无效') from None
-    if not all(math.isfinite(v) for v in (x1, y1, x2, y2)) or x2 <= x1 or y2 <= y1:
-        raise ValueError('抓拍人脸边界无效')
-    height, width = image.shape[:2]
-    left, top = max(0, min(width, math.floor(x1))), max(0, min(height, math.floor(y1)))
-    right, bottom = max(0, min(width, math.ceil(x2))), max(0, min(height, math.ceil(y2)))
-    if right <= left or bottom <= top:
-        raise ValueError('抓拍人脸区域为空')
-    frame = image[top:bottom, left:right]
-    for _ in range(6):
-        for quality in (90, 75, 55):
-            ok, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
-            if ok and len(encoded) <= MAX_PHOTO_BYTES:
-                return base64.b64encode(encoded.tobytes()).decode('ascii')
-        height, width = frame.shape[:2]
-        if min(height, width) < 64:
-            break
-        frame = cv2.resize(frame, (max(1, width * 3 // 4), max(1, height * 3 // 4)))
+    for quality in (90, 75, 55):
+        ok, encoded = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, quality])
+        if ok and len(encoded) <= MAX_PHOTO_BYTES:
+            return base64.b64encode(encoded.tobytes()).decode('ascii')
     raise ValueError('抓拍照片编码失败或超过5MiB')

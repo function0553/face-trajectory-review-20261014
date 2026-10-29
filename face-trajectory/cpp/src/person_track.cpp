@@ -7,38 +7,41 @@
 namespace face_trajectory {
 using nlohmann::json;
 namespace {
-constexpr std::int64_t WindowMs=5000;
-std::string Bucket(const json& person,std::int64_t bucket) {
-    return json::array({person,bucket}).dump();
+std::string PersonCamera(const json& event) {
+    const auto camera=event.value("device_id",event.value("camera_id",event.value("source_id",std::string{})));
+    if(camera.empty())throw std::invalid_argument("person track camera ID is required");
+    return json::array({event.at("person_id"),camera}).dump();
 }
 void EnsureIndex(State& scope) {
-    if(scope.Get("person_track_meta","dedup_v1"))return;
+    if(scope.Get("person_track_meta","dedup_person_camera_v2"))return;
     std::vector<std::pair<std::string,json>> old;
     scope.Scan("person_track_state",[&](const auto& key,const auto& value){old.emplace_back(key,json::parse(value));});
     for(const auto& [key,event]:old) {
         const auto person=event.at("person_id");
-        scope.Put("person_track_state",key,event.dump(),person.is_null()?std::string{}:
-            Bucket(person,event.at("captured_at_unix_ms").get<std::int64_t>()/WindowMs));
+        // Upgrade the lookup only: old event IDs, photos and historical points
+        // remain intact and are not replayed to the backend.
+        scope.Put("person_track_state",key,event.dump(),person.is_null()?std::string{}:PersonCamera(event));
         auto candidate=event;
         candidate.erase("event_id");candidate.erase("event_type");candidate.erase("revision");
         candidate["representative"]=person.is_null()?std::string{}:key;
-        scope.Put("person_track_candidate",key,candidate.dump(),person.is_null()?std::string{}:key);
+        if(!scope.Get("person_track_candidate",key))
+            scope.Put("person_track_candidate",key,candidate.dump(),person.is_null()?std::string{}:key);
     }
-    scope.Put("person_track_meta","dedup_v1","1");
+    scope.Put("person_track_meta","dedup_person_camera_v2","1");
 }
-// State is activity-scoped. Only active representatives are indexed;
+// State is activity-scoped. A person's camera reports once for this activity,
+// regardless of elapsed time. Different people/cameras have distinct keys.
+// Only active representatives are indexed;
 // suppressed observations retain independent identity/correction evidence.
 std::string Representative(State& scope,const std::string& id,const json& candidate) {
-    const auto time=candidate.at("captured_at_unix_ms").get<std::int64_t>();
-    const auto bucket=time/WindowMs;
     std::vector<std::pair<std::int64_t,std::string>> matches;
-    for(auto b=bucket-1;b<=bucket+1;++b)scope.Scan("person_track_state",[&](const auto& key,const auto& value){
+    scope.Scan("person_track_state",[&](const auto& key,const auto& value){
         if(key==id)return;
         const json e=json::parse(value);
         const auto t=e.at("captured_at_unix_ms").get<std::int64_t>();
-        if(e.at("person_id")==candidate.at("person_id") &&
-           (time>=t?time-t:t-time)<=WindowMs)matches.emplace_back(t,key);
-    },Bucket(candidate.at("person_id"),b));
+        if(e.at("person_id")==candidate.at("person_id") && PersonCamera(e)==PersonCamera(candidate))
+            matches.emplace_back(t,key);
+    },PersonCamera(candidate));
     if(matches.empty())return id;
     return std::min_element(matches.begin(),matches.end())->second;
 }
@@ -53,7 +56,7 @@ void Emit(State& scope,const std::string& id,const json& candidate,const json& p
     event["revision"]=revision+1;event["person_id"]=person;event["event_type"]=person.is_null()?"RETRACT":"UPSERT";
     if(event.contains("device_id"))for(const auto* field:{"person_name","person_id_num"})event[field]=person.is_null()?json(nullptr):candidate.at(field);
     event["event_id"]="pt:"+ActivityStore::Digest(json::array({event.at("activity_id"),event.value("device_id",event.value("source_id",std::string{})),event.at("observation_id"),revision+1}).dump());
-    const auto ref=person.is_null()?std::string{}:Bucket(person,event.at("captured_at_unix_ms").get<std::int64_t>()/WindowMs);
+    const auto ref=person.is_null()?std::string{}:PersonCamera(event);
     scope.Put("person_track_state",id,event.dump(),ref);
     events.push_back(event);
 }
