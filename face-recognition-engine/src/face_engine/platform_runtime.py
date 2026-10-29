@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from face_engine.monitoring_service import MonitoringRuntime, runtime_operation
 from face_engine.scheduling import FrameJob
-from face_engine.trajectory_bridge import ActivityContextError, activity_context, encoded
+from face_engine.trajectory_bridge import ActivityContextError, MaintenancePaused, activity_context, encoded
 
 
 def binding_snapshot(path, now_ms):
@@ -107,6 +107,24 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             if not self.stop_event.is_set():
                 self._refresh_bindings(start_readers=start_readers)
 
+    def start(self):
+        super().start()
+        thread=threading.Thread(target=self._binding_refresh_loop,name='monitoring-bindings',daemon=True)
+        self.threads.append(thread)
+        try:thread.start()
+        except BaseException:
+            self.stop()
+            raise
+
+    def _binding_refresh_loop(self):
+        # Exactly one owner performs runtime discovery. Network delays cannot
+        # suspend polling of readers whose activity routes are already committed.
+        while not self.stop_event.is_set():
+            if time.monotonic()>=self.next_binding_poll:
+                try:self.refresh_bindings()
+                except MaintenancePaused:pass
+            self.stop_event.wait(.1)
+
     def _refresh_bindings(self, *, start_readers):
         from face_engine.acquisition import CameraAcquisition, HikvisionEventReader
         if self.cleanup_pending:
@@ -116,6 +134,16 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             self.cleanup_pending = False
         try:
             routes = binding_snapshot(self.binding_state, int(time.time()*1000))
+            # Revoke paused/removed/revised routes before any remote source lookup.
+            # Newly added routes still wait for their own resolved reader below.
+            with self.platform_lock:
+                retained={camera:[context for context in contexts if any(
+                    all(context.get(key)==value for key,value in route.items()) for route in routes.get(camera,()))]
+                    for camera,contexts in self.platform_routes.items()}
+                self.platform_routes={camera:contexts for camera,contexts in retained.items() if contexts}
+                retained_keys={encoded([camera,context]) for camera,contexts in self.platform_routes.items()
+                    for context in contexts}
+                self.route_since={key:value for key,value in self.route_since.items() if key in retained_keys}
             # Delayed images keep their original route. Revoked routes wait on
             # disk outside the active inference budget, without deleting bytes.
             uri=Path(self.binding_state).resolve().as_uri()+'?mode=ro'
@@ -316,8 +344,9 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             # Changing activities must not accumulate unbounded scheduler keys.
             keys = {encoded([route['activity_id'], route['source_id'], camera, kind])
                     for camera, contexts in live.items() for route in contexts for kind in ('sub', 'main')}
-            self.last_sample = {key: value for key, value in self.last_sample.items() if key in keys}
-            self.last_frame = {key: value for key, value in self.last_frame.items() if key in keys}
+            with self.platform_lock:
+                self.last_sample = {key: value for key, value in self.last_sample.items() if key in keys}
+                self.last_frame = {key: value for key, value in self.last_frame.items() if key in keys}
             self.admission.retain_keys(keys)
         except Exception as exc:
             self.binding_status = dict(status='BINDING_SOURCE_UNAVAILABLE', missing_camera_ids=[],
@@ -500,11 +529,9 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
 
     @runtime_operation
     def _poll_cycle(self):
-        if time.monotonic() >= self.next_binding_poll:
-            self.refresh_bindings()
         candidates, now = [], time.monotonic()
         with self.platform_lock:
-            for camera_id, camera in self.cameras.items():
+            for camera_id, camera in list(self.cameras.items()):
                 frame = camera.latest(max_age_s=self.queue.max_age_seconds)
                 if frame is None:
                     continue
@@ -517,8 +544,9 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                         continue
                     candidates.append(FrameJob(key, routed.image_bgr, meta, category, routed.received_monotonic))
         for job in self.admission.admit(self.queue, candidates):
-            self.last_sample[job.key] = now
-            self.last_frame[job.key] = job.metadata['frame_id']
+            with self.platform_lock:
+                self.last_sample[job.key] = now
+                self.last_frame[job.key] = job.metadata['frame_id']
         self.stop_event.wait(.02)
 
     def _drop_acquisition(self):

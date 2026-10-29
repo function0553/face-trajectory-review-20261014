@@ -81,7 +81,9 @@ class MotionVideoCamera:
         enabled=self.settings.get('live_camera_ids')
         if enabled is not None and (not isinstance(enabled,list) or any(not isinstance(v,str) for v in enabled)):
             raise ValueError('live_camera_ids must be a camera UUID list')
-        self.live_enabled=enabled is None or camera_id in enabled
+        # Cached source records may predate rollout settings. Only an explicit
+        # selection enables native live decoding; '*' expands to all cameras.
+        self.live_enabled=enabled is not None and ('*' in enabled or camera_id in enabled)
         self.on_live_frame=on_live_frame;self.live_frame=None;self.live_last_published=0;self.live_consumed_id=None
         self.camera_clock=camera_clock;self.connection=connection
         devices=self.settings.get('cuda_decode_devices',[])
