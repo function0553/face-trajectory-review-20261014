@@ -159,6 +159,8 @@ class CaptureProcesses:
         if type(count) is not int or not 2<=count<=64:raise ValueError('acquisition_processes must be 2..64')
         self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True,mode=0o700)
         self.ingress=ingress;self.count=count;self.lock=threading.RLock()
+        # Serialize control changes without blocking the live JPEG receiver on disk I/O.
+        self.config_lock=threading.RLock()
         self.entries={};self.processes={};self.configs={};self.last={};self.cached_metrics={};self.next_metrics=0
         self.live_lock=threading.Lock();self.live_frames=OrderedDict();self.live_bytes=0
         self.live_max_bytes=128*1024*1024;self.live_threads={}
@@ -184,12 +186,12 @@ class CaptureProcesses:
                     entry=self.entries.get(camera)
                     if self.processes.get(index) is not process or not entry:continue
                     if metadata.get('source_id')!=entry['connection']['source_id']:continue
-                with self.live_lock:
-                    old=self.live_frames.pop(camera,None)
-                    if old:self.live_bytes-=len(old[0])
-                    self.live_frames[camera]=(body,metadata,received);self.live_bytes+=len(body)
-                    while self.live_bytes>self.live_max_bytes:
-                        _,old=self.live_frames.popitem(last=False);self.live_bytes-=len(old[0])
+                    with self.live_lock:
+                        old=self.live_frames.pop(camera,None)
+                        if old:self.live_bytes-=len(old[0])
+                        self.live_frames[camera]=(body,metadata,received);self.live_bytes+=len(body)
+                        while self.live_bytes>self.live_max_bytes:
+                            _,old=self.live_frames.popitem(last=False);self.live_bytes-=len(old[0])
         except (EOFError,OSError,ValueError,KeyError,TypeError):
             pass
         finally:
@@ -206,8 +208,8 @@ class CaptureProcesses:
         if metadata.get('frame_id')==after_frame_id or time.monotonic()-received>max_age_s:return None
         return Frame(decode_image(body),metadata,received,body)
     def configure(self, rows):
-        with self.lock:
-            self.entries=rows
+        with self.config_lock:
+            rows=dict(rows)
             auxiliary={index:dict(cameras={},subscriptions={}) for index in range(self.count)}
             for camera,entry in rows.items():
                 connection=entry['connection'].get('connection')
@@ -223,6 +225,15 @@ class CaptureProcesses:
                 if channel in subscription['channels'] and subscription['channels'][channel]!=value:
                     raise ValueError('ambiguous native acquisition channel')
                 subscription['channels'][channel]=value
+            # Revoke old routes in memory before writing any control files.
+            # Receive validation and cache insertion use the same lock ordering.
+            with self.lock:
+                self.entries=rows
+                with self.live_lock:
+                    for camera in list(self.live_frames):
+                        entry=rows.get(camera)
+                        if not entry or self.live_frames[camera][1].get('source_id')!=entry['connection']['source_id']:
+                            old=self.live_frames.pop(camera);self.live_bytes-=len(old[0])
             for index in range(self.count):
                 cameras={c:v for c,v in rows.items() if self.group(c)==index}
                 cfg=dict(schema_version=1,parent_pid=os.getpid(),cameras=cameras,
@@ -233,63 +244,78 @@ class CaptureProcesses:
                     min_free_mb=self.ingress.min_free//(1024*1024))
                 text=encoded(cfg);path=self.root/('process-'+str(index)+'.json')
                 if self.last.get(index)!=text:atomic_json(path,cfg);self.last[index]=text
-                process=self.processes.get(index)
+                with self.lock:process=self.processes.get(index)
                 if process is not None and process.poll() is not None:
-                    process.wait();self.processes.pop(index)
+                    process.wait()
+                    with self.lock:self.processes.pop(index,None)
                 if (cameras or cfg['auxiliary_subscriptions']) and index not in self.processes:
                     if sys.platform!='linux':raise ValueError('acquisition process groups require Linux')
                     env=dict(os.environ,PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                         OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1')
-                    self.processes[index]=subprocess.Popen([sys.executable,'-m','face_engine.capture_process',
+                    process=subprocess.Popen([sys.executable,'-m','face_engine.capture_process',
                         '--config',str(path)],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL,env=env,start_new_session=sys.platform=='linux')
-                    process=self.processes[index]
+                    with self.lock:self.processes[index]=process
                     thread=threading.Thread(target=self._receive_live,args=(index,process),
                         name='acquisition-live-receive-'+str(index),daemon=True)
                     self.live_threads[index]=thread;thread.start()
-    def remove(self,camera):
-        with self.lock:
-            if camera not in self.entries:return
-            rows=dict(self.entries);rows.pop(camera)
+    def remove_many(self,camera_ids):
+        """Revoke a set of inputs with one group configuration pass."""
+        cameras=set(camera_ids)
+        with self.config_lock:
+            with self.lock:
+                rows={camera:entry for camera,entry in self.entries.items() if camera not in cameras}
+            # Retry control-file writes even when a previous attempt already revoked memory.
             self.configure(rows)
-            with self.live_lock:
-                old=self.live_frames.pop(camera,None)
-                if old:self.live_bytes-=len(old[0])
+    def clear_inputs(self):
+        """Clear all input routes without deleting recorded or pending footage."""
+        self.configure({})
+    def remove(self,camera):
+        self.remove_many((camera,))
     def metrics(self,camera):
         now=time.monotonic()
         with self.lock:
-            if now>=self.next_metrics:
-                result={}
-                for index,process in self.processes.items():
-                    path=self.root/('process-'+str(index)+'.status.json')
-                    try:
-                        data=json.loads(path.read_text());age=max(0,time.time()-data['at_unix_ms']/1000)
-                        if data['pid']!=process.pid:continue
-                        for key,value in data.get('cameras',{}).items():
-                            if self.group(key)!=index:continue
-                            result[key]=dict(value,acquisition_process=process.pid,metrics_age_seconds=round(age,3))
-                            if 'frame_age_seconds' in value:result[key]['frame_age_seconds']=value['frame_age_seconds']+age
-                    except (OSError,ValueError,KeyError):pass
-                self.cached_metrics=result;self.next_metrics=now+1
+            refresh=now>=self.next_metrics
+            if refresh:
+                self.next_metrics=now+1
+                processes=list(self.processes.items())
+        if refresh:
+            result={}
+            for index,process in processes:
+                path=self.root/('process-'+str(index)+'.status.json')
+                try:
+                    data=json.loads(path.read_text());age=max(0,time.time()-data['at_unix_ms']/1000)
+                    if data['pid']!=process.pid:continue
+                    for key,value in data.get('cameras',{}).items():
+                        if self.group(key)!=index:continue
+                        result[key]=dict(value,acquisition_process=process.pid,metrics_age_seconds=round(age,3))
+                        if 'frame_age_seconds' in value:result[key]['frame_age_seconds']=value['frame_age_seconds']+age
+                except (OSError,ValueError,KeyError):pass
+            with self.lock:
+                # A refresh may overlap a control update; discard removed/replaced groups.
+                self.cached_metrics={key:value for key,value in result.items() if key in self.entries
+                    and getattr(self.processes.get(self.group(key)),'pid',None)==value['acquisition_process']}
+        with self.lock:
             return dict(self.cached_metrics.get(camera,dict(state='CONNECTING',frames=0,continuous=True)))
     def close(self):
-        with self.lock:
-            processes=list(self.processes.values());self.entries={}
-        # The pipe receiver must be able to drain while children finish recording.
-        for p in processes:
-            if p.poll() is None:p.terminate()
-        deadline=time.monotonic()+40
-        for p in processes:
-            try:p.wait(timeout=max(.1,deadline-time.monotonic()))
-            except subprocess.TimeoutExpired:
-                if sys.platform=='linux' and os.getpgid(p.pid)==p.pid:os.killpg(p.pid,signal.SIGKILL)
-                else:p.kill()
-                p.wait(timeout=5)
-        with self.lock:
-            self.processes.clear();self.last.clear();self.cached_metrics.clear()
-        for thread in self.live_threads.values():thread.join(2)
-        self.live_threads.clear()
-        with self.live_lock:self.live_frames.clear();self.live_bytes=0
+        with self.config_lock:
+            with self.lock:
+                processes=list(self.processes.values());self.entries={}
+            # The pipe receiver must be able to drain while children finish recording.
+            for p in processes:
+                if p.poll() is None:p.terminate()
+            deadline=time.monotonic()+40
+            for p in processes:
+                try:p.wait(timeout=max(.1,deadline-time.monotonic()))
+                except subprocess.TimeoutExpired:
+                    if sys.platform=='linux' and os.getpgid(p.pid)==p.pid:os.killpg(p.pid,signal.SIGKILL)
+                    else:p.kill()
+                    p.wait(timeout=5)
+            with self.lock:
+                self.processes.clear();self.last.clear();self.cached_metrics.clear()
+            for thread in self.live_threads.values():thread.join(2)
+            self.live_threads.clear()
+            with self.live_lock:self.live_frames.clear();self.live_bytes=0
 
 
 class ProcessCamera:

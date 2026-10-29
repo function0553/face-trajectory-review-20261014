@@ -153,6 +153,8 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 self.next_binding_poll = time.monotonic()+self.binding_interval
                 return
             self.cleanup_pending = False
+        routes = None
+        refresh_phase = 'activity_snapshot'
         try:
             motion_settings,rollout_error=self._motion_video_settings()
             routes = binding_snapshot(self.binding_state, int(time.time()*1000))
@@ -181,6 +183,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                         allowed.append((activity['activity_id'],activity['activity_num'],camera,camera,binding.get('route_rule_id')))
             if self.uuid_sources is not None and self.config.get('uuid_sources',{}).get('continuous'):
                 self.store.set_capture_routes(allowed)
+            refresh_phase = 'camera_catalog'
             catalog = json.loads(Path(self.config['cameras_file']).read_text(encoding='utf-8-sig'))
             if catalog.get('schema_version') != 1:
                 raise ValueError('camera catalog schema_version must be 1')
@@ -195,6 +198,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
             deferred = set()
             if self.uuid_sources is not None:
                 from face_engine.uuid_sources import UUIDSourceUnavailable
+                refresh_phase = 'uuid_sources'
                 requested = set(routes) - set(entries)
                 try:
                     resolved = self.uuid_sources.resolve(requested)
@@ -211,6 +215,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                         raise
                 entries.update(resolved)
                 deferred = requested & self.uuid_sources.known - set(resolved)
+            refresh_phase = 'camera_connections'
             live, signatures, subscriptions = {}, {}, {}
             missing = []
             for camera in routes:
@@ -313,6 +318,17 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                     since[key] = self.route_since.get(key, current_time)
             with self.platform_lock:
                 self.platform_routes, self.route_since = live, since
+            refresh_phase = 'reader_update'
+            retired = [camera for camera in self.cameras
+                       if camera not in signatures or self.reader_signatures[camera] != signatures[camera][0]]
+            if self.capture_processes:
+                from face_engine.capture_process import ProcessCamera
+                grouped = [camera for camera in retired if isinstance(self.cameras[camera], ProcessCamera)]
+                if grouped:
+                    self.capture_processes.remove_many(grouped)
+                    for camera in grouped:
+                        self.cameras.pop(camera)
+                        self.reader_signatures.pop(camera, None)
             for camera in list(self.cameras):
                 if camera not in signatures or self.reader_signatures[camera] != signatures[camera][0]:
                     self.cameras[camera].stop()
@@ -357,6 +373,7 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                     if start_readers:
                         reader.start()
             self.hikvision = list(self.hik_signatures.values())
+            refresh_phase = 'capture_groups'
             if self.capture_processes:
                 process_rows={}
                 for camera,(_,sub,main,args,dynamic) in signatures.items():
@@ -386,19 +403,41 @@ class PlatformMonitoringRuntime(MonitoringRuntime):
                 self.last_frame = {key: value for key, value in self.last_frame.items() if key in keys}
             self.admission.retain_keys(keys)
         except Exception as exc:
+            trace = exc.__traceback__
+            while trace and trace.tb_next:
+                trace = trace.tb_next
             self.binding_status = dict(status='BINDING_SOURCE_UNAVAILABLE', missing_camera_ids=[],
-                error_type=type(exc).__name__, error_errno=getattr(exc, 'errno', None))
+                error_type=type(exc).__name__, error_errno=getattr(exc, 'errno', None),
+                refresh_phase=refresh_phase, physical_inputs_retained=True,
+                error_function=trace.tb_frame.f_code.co_name if trace else None,
+                error_line=trace.tb_lineno if trace else None)
             with self.platform_lock:
-                self.platform_routes.clear()
-                self.route_since.clear()
-            # No stale subscription may continue after a failed snapshot.
-            # Keep any reader that did not stop: quiescence must retry it before
-            # releasing a lease, and polling must never reuse a half-stopped input.
-            self.cleanup_pending = not self._stop_inputs()
+                # A failed control refresh must not tear down every physical
+                # feed. Keep only routes verified by this successful activity
+                # snapshot; an unreadable snapshot admits no routed output.
+                retained = {camera: [context for context in contexts if any(
+                    all(context.get(key) == value for key, value in route.items())
+                    for route in routes.get(camera, ()))]
+                    for camera, contexts in self.platform_routes.items()} if routes is not None else {}
+                self.platform_routes = {camera: contexts for camera, contexts in retained.items() if contexts}
+                keys = {encoded([camera, context]) for camera, contexts in self.platform_routes.items()
+                        for context in contexts}
+                self.route_since = {key: value for key, value in self.route_since.items() if key in keys}
             self.count('platform_binding_errors')
         self.next_binding_poll = time.monotonic()+self.binding_interval
 
     def _stop_inputs(self):
+        from face_engine.capture_process import ProcessCamera
+        grouped = [key for key, reader in self.cameras.items() if isinstance(reader, ProcessCamera)]
+        if grouped:
+            try:
+                self.capture_processes.remove_many(grouped)
+            except Exception:
+                self.count('platform_reader_stop_errors')
+                return False
+            for key in grouped:
+                self.cameras.pop(key, None)
+                self.reader_signatures.pop(key, None)
         rows=[(inputs,signatures,key,reader) for inputs,signatures in
               ((self.cameras,self.reader_signatures),(self.hik_signatures,None))
               for key,reader in list(inputs.items())]
